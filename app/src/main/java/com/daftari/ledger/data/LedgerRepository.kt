@@ -120,6 +120,29 @@ class LedgerRepository(private val db: AppDb) {
             val c = documents.countDocNumber(shopId, docNumber, partyId, -1)
             if (c > 0) throw LedgerException("رقم المستند مستخدم مسبقًا")
         }
+        val cashAccountId = (accounts.byCode(shopId, cashCode) ?: throw LedgerException("حساب نقدي غير موجود")).id
+        val creditSale = paymentMethod == "CREDIT"
+        val docId = documents.insert(
+            DocumentEntity(
+                shopId = shopId, type = type.name, partyId = partyId, cashAccountId = cashAccountId,
+                amountMinor = amountMinor, occurredAt = occurredAt, docNumber = docNumber,
+                notes = notes, paymentMethod = paymentMethod
+            )
+        )
+        val lines = buildLines(docId, type, amountMinor, partyId, creditSale, notes, cashCode, transferToCode, shopId)
+        val dr = lines.sumOf { it.debitMinor }
+        val cr = lines.sumOf { it.creditMinor }
+        if (dr != cr) throw LedgerException("القيد غير متوازن")
+        journal.insertAll(lines)
+        partyId?.let { refreshPartyBalance(it) }
+        audit.insert(AuditLogEntity(action = "CREATE", entity = "document", entityId = docId, detail = type.name))
+        return docId
+    }
+
+    private suspend fun buildLines(
+        docId: Long, type: DocType, amountMinor: Long, partyId: Long?,
+        creditSale: Boolean, notes: String, cashCode: String, transferToCode: String?, shopId: Long
+    ): List<JournalLineEntity> {
         val cash = accounts.byCode(shopId, cashCode) ?: throw LedgerException("حساب نقدي غير موجود")
         val sales = accounts.byCode(shopId, "4000")!!
         val purch = accounts.byCode(shopId, "5000")!!
@@ -127,16 +150,7 @@ class LedgerRepository(private val db: AppDb) {
         val inc = accounts.byCode(shopId, "4100")!!
         val ar = accounts.byCode(shopId, "1100")!!
         val ap = accounts.byCode(shopId, "2000")!!
-
-        val creditSale = paymentMethod == "CREDIT"
-        val docId = documents.insert(
-            DocumentEntity(
-                shopId = shopId, type = type.name, partyId = partyId, cashAccountId = cash.id,
-                amountMinor = amountMinor, occurredAt = occurredAt, docNumber = docNumber,
-                notes = notes, paymentMethod = paymentMethod
-            )
-        )
-        val lines = when (type) {
+        return when (type) {
             DocType.SALE -> if (creditSale && partyId != null) listOf(
                 JournalLineEntity(documentId = docId, accountId = ar.id, partyId = partyId, debitMinor = amountMinor, memo = "بيع آجل"),
                 JournalLineEntity(documentId = docId, accountId = sales.id, creditMinor = amountMinor)
@@ -184,13 +198,31 @@ class LedgerRepository(private val db: AppDb) {
             }
             else -> throw LedgerException("نوع العملية غير مدعوم من هذه الشاشة")
         }
+    }
+
+    suspend fun updateDocument(
+        id: Long, amountMinor: Long, occurredAt: Long, notes: String,
+        docNumber: String, paymentMethod: String
+    ) {
+        if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
+        val d = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
+        val type = runCatching { DocType.valueOf(d.type) }.getOrNull()
+            ?: throw LedgerException("نوع العملية غير معروف")
+        val lines = buildLines(id, type, amountMinor, d.partyId, paymentMethod == "CREDIT", notes, "1000", null, d.shopId)
         val dr = lines.sumOf { it.debitMinor }
         val cr = lines.sumOf { it.creditMinor }
         if (dr != cr) throw LedgerException("القيد غير متوازن")
+        journal.deleteForDoc(id)
         journal.insertAll(lines)
-        partyId?.let { refreshPartyBalance(it) }
-        audit.insert(AuditLogEntity(action = "CREATE", entity = "document", entityId = docId, detail = type.name))
-        return docId
+        documents.update(
+            d.copy(
+                amountMinor = amountMinor, occurredAt = occurredAt, notes = notes,
+                docNumber = docNumber, paymentMethod = paymentMethod,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        d.partyId?.let { refreshPartyBalance(it) }
+        audit.insert(AuditLogEntity(action = "UPDATE", entity = "document", entityId = id, detail = type.name))
     }
 
     suspend fun softDeleteDocument(id: Long) {

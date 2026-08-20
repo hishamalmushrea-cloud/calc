@@ -28,6 +28,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -43,6 +45,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,14 +62,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.PartyKind
 import com.daftari.ledger.security.AppLock
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,7 +121,7 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
             else -> MoreScreen(s, vm, pad)
         }
     }
-    if (addType != null) AddSheet(s, vm, addType!!) { addType = null }
+    if (addType != null) DocSheet(s, vm, addType!!, null) { addType = null }
     if (s.selectedParty != null) PartyDetail(s, vm) { vm.closePartyDialog() }
     if (s.locked) LockDialog(s, vm, activity)
 }
@@ -313,6 +319,7 @@ private fun PartyDetail(s: UiState, vm: MainViewModel, onDismiss: () -> Unit) {
 
 @Composable
 private fun DocsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
+    var editing by remember { mutableStateOf<DocumentEntity?>(null) }
     val fmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
     LazyColumn(Modifier.fillMaxSize().padding(pad).padding(16.dp)) {
         if (s.docs.isEmpty()) item { Text("لا عمليات في هذه الفترة.") }
@@ -323,11 +330,15 @@ private fun DocsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
                     Text(Money(d.amountMinor).format())
                     Text(fmt.format(Date(d.occurredAt)), style = MaterialTheme.typography.bodySmall)
                     if (d.notes.isNotBlank()) Text(d.notes)
-                    TextButton(onClick = { vm.deleteDoc(d.id) }) { Text("أرشفة") }
+                    Row {
+                        TextButton(onClick = { vm.deleteDoc(d.id) }) { Text("أرشفة") }
+                        TextButton(onClick = { editing = d }) { Text("تعديل") }
+                    }
                 }
             }
         }
     }
+    if (editing != null) DocSheet(s, vm, DocType.SALE, editing) { editing = null }
 }
 
 @Composable
@@ -433,46 +444,98 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddSheet(s: UiState, vm: MainViewModel, initialType: DocType, onDismiss: () -> Unit) {
-    var type by remember { mutableStateOf(initialType) }
-    var amount by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var docNo by remember { mutableStateOf("") }
-    var credit by remember { mutableStateOf(false) }
-    var party by remember { mutableStateOf<PartyEntity?>(null) }
-    var partyQuery by remember { mutableStateOf("") }
+private fun DocSheet(
+    s: UiState, vm: MainViewModel, initialType: DocType,
+    existing: DocumentEntity? = null, onDismiss: () -> Unit
+) {
+    val existingType = existing?.type?.let { runCatching { DocType.valueOf(it) }.getOrNull() } ?: initialType
+    var type by remember { mutableStateOf(existingType) }
+    var amount by remember { mutableStateOf(existing?.let { Money(it.amountMinor).toBigDecimal().toPlainString() } ?: "") }
+    var notes by remember { mutableStateOf(existing?.notes ?: "") }
+    var docNo by remember { mutableStateOf(existing?.docNumber ?: "") }
+    var credit by remember { mutableStateOf(existing?.paymentMethod == "CREDIT") }
+    var occurredAt by remember { mutableStateOf(existing?.occurredAt ?: System.currentTimeMillis()) }
+    var party by remember {
+        mutableStateOf(existing?.partyId?.let { pid -> (s.customers + s.suppliers).firstOrNull { it.id == pid } })
+    }
+    var partyQuery by remember { mutableStateOf(party?.name ?: "") }
+    var showDate by remember { mutableStateOf(false) }
+    val dateFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("عملية جديدة") },
+        title = { Text(if (existing == null) "عملية جديدة" else "تعديل عملية") },
         text = {
             Column {
-                FlowTypes(type) { type = it }
+                if (existing == null) {
+                    FlowTypes(type) { type = it }
+                } else {
+                    Text("النوع: ${arabicType(type.name)}", style = MaterialTheme.typography.bodySmall)
+                }
                 OutlinedTextField(amount, { amount = it }, label = { Text("المبلغ") })
-                if (type in listOf(DocType.SALE, DocType.COLLECT, DocType.PURCHASE, DocType.PAY)) {
+                if (existing == null && type in listOf(DocType.SALE, DocType.COLLECT, DocType.PURCHASE, DocType.PAY)) {
                     OutlinedTextField(partyQuery, { partyQuery = it }, label = { Text("الاسم") })
                     val pool = if (type == DocType.SALE || type == DocType.COLLECT) s.customers else s.suppliers
                     pool.filter { it.name.contains(partyQuery, true) }.take(5).forEach {
                         TextButton(onClick = { party = it; partyQuery = it.name }) { Text(it.name) }
                     }
-                    if (type == DocType.SALE || type == DocType.PURCHASE) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("آجل", modifier = Modifier.weight(1f)); Switch(credit, { credit = it })
-                        }
+                    val exact = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
+                    if (partyQuery.isNotBlank() && exact == null && party == null) {
+                        val who = if (type == DocType.SALE || type == DocType.COLLECT) "عميل" else "مورد"
+                        Text("سيُنشأ $who جديد عند الحفظ", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                if (type == DocType.SALE || type == DocType.PURCHASE) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("آجل", modifier = Modifier.weight(1f)); Switch(credit, { credit = it })
                     }
                 }
                 OutlinedTextField(docNo, { docNo = it }, label = { Text("رقم سند (اختياري)") })
                 OutlinedTextField(notes, { notes = it }, label = { Text("ملاحظات") })
+                TextButton(onClick = { showDate = true }) { Text("التاريخ: ${dateFmt.format(Date(occurredAt))}") }
             }
         },
         confirmButton = {
             Button(onClick = {
-                vm.addDoc(type, amount, party?.id, credit, notes, docNo)
+                if (existing == null) {
+                    val pool = if (type == DocType.SALE || type == DocType.COLLECT) s.customers else s.suppliers
+                    val matched = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
+                    val finalPartyId = party?.id ?: matched?.id
+                    val newName = if (finalPartyId == null) partyQuery.trim().takeIf { it.isNotBlank() } else null
+                    vm.addDoc(type, amount, finalPartyId, credit, notes, docNo, newPartyName = newName, occurredAt = occurredAt)
+                } else {
+                    vm.updateDoc(existing.id, amount, notes, docNo, credit, occurredAt)
+                }
                 onDismiss()
             }) { Text("حفظ") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )
+
+    if (showDate) {
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = occurredAt)
+        DatePickerDialog(
+            onDismissRequest = { showDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let { occurredAt = combineWithCurrentTime(it) }
+                    showDate = false
+                }) { Text("موافق") }
+            },
+            dismissButton = { TextButton(onClick = { showDate = false }) { Text("إلغاء") } }
+        ) { DatePicker(state = dateState) }
+    }
+}
+
+private fun combineWithCurrentTime(utcMidnight: Long): Long {
+    val utcCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcMidnight }
+    val cal = Calendar.getInstance()
+    cal.set(Calendar.YEAR, utcCal.get(Calendar.YEAR))
+    cal.set(Calendar.MONTH, utcCal.get(Calendar.MONTH))
+    cal.set(Calendar.DAY_OF_MONTH, utcCal.get(Calendar.DAY_OF_MONTH))
+    return cal.timeInMillis
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -186,19 +186,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addDoc(
         type: DocType, amount: String, partyId: Long?, credit: Boolean,
-        notes: String, docNumber: String, cashCode: String = "1000"
+        notes: String, docNumber: String, cashCode: String = "1000",
+        newPartyName: String? = null, occurredAt: Long = System.currentTimeMillis()
     ) = viewModelScope.launch {
         val shop = _s.value.shop ?: return@launch
         val m = Money.fromMajor(amount) ?: run {
             _s.value = _s.value.copy(message = "أدخل مبلغًا صحيحًا"); return@launch
         }
         try {
+            var pid = partyId
+            if (pid == null && !newPartyName.isNullOrBlank()) {
+                val kind = if (type == DocType.SALE || type == DocType.COLLECT) PartyKind.CUSTOMER else PartyKind.SUPPLIER
+                pid = repo.addParty(shop.id, kind, newPartyName.trim())
+            }
             repo.postDocument(
                 shopId = shop.id,
                 type = type,
                 amountMinor = m.minor,
-                occurredAt = System.currentTimeMillis(),
-                partyId = partyId,
+                occurredAt = occurredAt,
+                partyId = pid,
                 cashCode = cashCode,
                 docNumber = docNumber,
                 notes = notes,
@@ -207,6 +213,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             refreshTotals()
             _s.value = _s.value.copy(message = "تم الحفظ")
+        } catch (e: LedgerException) {
+            _s.value = _s.value.copy(message = e.message)
+        }
+    }
+
+    fun updateDoc(
+        id: Long, amount: String, notes: String, docNumber: String,
+        credit: Boolean, occurredAt: Long
+    ) = viewModelScope.launch {
+        val m = Money.fromMajor(amount) ?: run {
+            _s.value = _s.value.copy(message = "أدخل مبلغًا صحيحًا"); return@launch
+        }
+        try {
+            repo.updateDocument(id, m.minor, occurredAt, notes, docNumber, if (credit) "CREDIT" else "CASH")
+            refreshTotals()
+            _s.value = _s.value.copy(message = "تم التعديل")
         } catch (e: LedgerException) {
             _s.value = _s.value.copy(message = e.message)
         }
