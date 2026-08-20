@@ -22,6 +22,7 @@ abstract class AppDb : RoomDatabase() {
     abstract fun journal(): JournalDao
     abstract fun audit(): AuditDao
     abstract fun settings(): SettingsDao
+    abstract fun closings(): ClosingDao
 
     companion object {
         @Volatile private var I: AppDb? = null
