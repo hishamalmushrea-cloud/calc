@@ -343,14 +343,14 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun setPin(pin: String?) {
         val st = settings.get() ?: SettingsEntity()
-        val hash = pin?.let { it.toByteArray().contentHashCode().toString() }
+        val hash = pin?.let { com.daftari.ledger.security.PinHasher.hash(it) }
         val n = st.copy(pinHash = hash)
         if (settings.get() == null) settings.insert(n) else settings.update(n)
     }
 
     suspend fun pinOk(pin: String): Boolean {
         val h = settings.get()?.pinHash ?: return true
-        return h == pin.toByteArray().contentHashCode().toString()
+        return com.daftari.ledger.security.PinHasher.verify(pin, h)
     }
 
     suspend fun setAutoBackup(on: Boolean) {

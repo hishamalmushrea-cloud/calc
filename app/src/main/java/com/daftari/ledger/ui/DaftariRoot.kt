@@ -1,6 +1,7 @@
 package com.daftari.ledger.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -71,7 +72,7 @@ import java.util.Locale
 @Composable
 fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = null) {
     var tab by remember { mutableIntStateOf(0) }
-    var showAdd by remember { mutableStateOf(false) }
+    var addType by remember { mutableStateOf<DocType?>(null) }
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(s.message) {
         s.message?.let { snack.showSnackbar(it); vm.consumeMessage() }
@@ -87,7 +88,7 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
         },
         snackbarHost = { SnackbarHost(snack) },
         floatingActionButton = {
-            if (tab <= 3) FloatingActionButton(onClick = { showAdd = true }) {
+            if (tab <= 3) FloatingActionButton(onClick = { addType = DocType.SALE }) {
                 Icon(Icons.Default.Add, contentDescription = "إضافة")
             }
         },
@@ -107,20 +108,21 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
         }
     ) { pad ->
         when (tab) {
-            0 -> Dashboard(s, vm, pad)
+            0 -> Dashboard(s, vm, pad) { addType = it }
             1 -> PartiesScreen(s, vm, pad)
             2 -> DocsScreen(s, vm, pad)
             3 -> ReportsScreen(s, vm, pad)
             else -> MoreScreen(s, vm, pad)
         }
     }
-    if (showAdd) AddSheet(s, vm) { showAdd = false }
+    if (addType != null) AddSheet(s, vm, addType!!) { addType = null }
+    if (s.selectedParty != null) PartyDetail(s, vm) { vm.closePartyDialog() }
     if (s.locked) LockDialog(s, vm, activity)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues) {
+private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick: (DocType) -> Unit) {
     val t = s.totals
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -136,6 +138,17 @@ private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues) {
             }
         }
         Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { onQuick(DocType.SALE) }, modifier = Modifier.weight(1f)) { Text("بيع سريع") }
+            Button(onClick = { onQuick(DocType.COLLECT) }, modifier = Modifier.weight(1f)) { Text("تحصيل") }
+            Button(onClick = { onQuick(DocType.EXPENSE) }, modifier = Modifier.weight(1f)) { Text("مصروف") }
+        }
+        Spacer(Modifier.height(8.dp))
+        ComparisonCard(s.totals.sales, s.prevTotals.sales)
+        if (s.agingAlert > 0) {
+            Text("تنبيه: ${s.agingAlert} حساب بديون أقدم من 60 يومًا", color = MaterialTheme.colorScheme.error)
+        }
+        Spacer(Modifier.height(8.dp))
         Metric("لك (عملاء)", s.owedToYou, true)
         Metric("عليك (موردون)", s.youOwe, false)
         Metric("مبيعات الفترة", t.sales, true)
@@ -181,6 +194,21 @@ private fun Metric(title: String, minor: Long, positive: Boolean) {
 }
 
 @Composable
+private fun ComparisonCard(current: Long, previous: Long) {
+    val diff = current - previous
+    val pct = if (previous == 0L) null else (diff * 100) / previous
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.padding(12.dp)) {
+            Text("مقارنة المبيعات بالفترة السابقة", style = MaterialTheme.typography.labelMedium)
+            Text("الحالية: ${Money(current).format()} — السابقة: ${Money(previous).format()}", fontWeight = FontWeight.Bold)
+            val sign = if (diff >= 0) "+" else ""
+            val color = if (diff >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            Text("$sign${Money(diff).format()}${pct?.let { " ($sign$it%)" } ?: ""}", color = color)
+        }
+    }
+}
+
+@Composable
 private fun PartiesScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     var customersTab by remember { mutableStateOf(true) }
     var show by remember { mutableStateOf(false) }
@@ -196,13 +224,16 @@ private fun PartiesScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
         if (list.isEmpty()) Text("لا توجد حسابات بعد. أضف اسمًا للبدء.", modifier = Modifier.padding(24.dp))
         LazyColumn {
             items(list, key = { it.id }) { p ->
-                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Card(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        .clickable { vm.openParty(p) }
+                ) {
                     Column(Modifier.padding(12.dp)) {
                         Text(p.name, fontWeight = FontWeight.Bold)
                         val label = if (p.kind == "CUSTOMER") "لك" else "عليك"
                         Text("$label: ${Money(p.cachedBalanceMinor).format()}")
                         if (p.phone.isNotBlank()) Text(p.phone, style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = { vm.closeParty(p.id) }) { Text("إغلاق الحساب (أرشفة + رصيد جديد)") }
+                        Text("اضغط لعرض الكشف", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -233,6 +264,50 @@ private fun PartyDialog(customer: Boolean, vm: MainViewModel, onDismiss: () -> U
             }) { Text("حفظ") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
+    )
+}
+
+@Composable
+private fun PartyDetail(s: UiState, vm: MainViewModel, onDismiss: () -> Unit) {
+    val p = s.selectedParty ?: return
+    val st = s.partyStats
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(p.name) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("الرصيد: ${Money(p.cachedBalanceMinor).format()}", fontWeight = FontWeight.Bold)
+                if (p.phone.isNotBlank()) Text("الهاتف: ${p.phone}", style = MaterialTheme.typography.bodySmall)
+                if (st == null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("جارٍ التحميل…")
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    Text("مبيعات: ${Money(st.sales).format()}")
+                    Text("تحصيل: ${Money(st.collections).format()}")
+                    Text("نسبة التحصيل: ${st.collectionRate}%")
+                    if (p.kind == "SUPPLIER") {
+                        Text("مشتريات: ${Money(st.purchases).format()}")
+                        Text("سداد: ${Money(st.payments).format()}")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("آخر العمليات", fontWeight = FontWeight.Bold)
+                    if (st.docs.isEmpty()) Text("لا عمليات بعد.")
+                    st.docs.take(5).forEach { d ->
+                        Text("${arabicType(d.type)}  ${Money(d.amountMinor).format()}")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { vm.shareStatement(p) }) { Text("مشاركة الكشف") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { vm.closeParty(p.id); onDismiss() }) { Text("إغلاق الحساب") }
+                TextButton(onClick = onDismiss) { Text("إغلاق") }
+            }
+        }
     )
 }
 
@@ -286,6 +361,7 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     var cash by remember { mutableStateOf("") }
     var closeNotes by remember { mutableStateOf("") }
     var csv by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { vm.refreshBackups() }
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("المحلات", fontWeight = FontWeight.Bold)
         s.shops.forEach { sh ->
@@ -319,6 +395,17 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
             Switch(s.autoBackup, { vm.toggleBackup(it) })
         }
         Button(onClick = { vm.backupNow() }) { Text("نسخة الآن ومشاركة") }
+        Button(onClick = { vm.exportCsv() }) { Text("تصدير CSV كامل ومشاركة") }
+        Spacer(Modifier.height(8.dp))
+        Text("النسخ المحفوظة", fontWeight = FontWeight.Bold)
+        if (s.backups.isEmpty()) Text("لا نسخ بعد.")
+        val backupFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+        s.backups.forEach { f ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(backupFmt.format(Date(f.lastModified())), modifier = Modifier.weight(1f))
+                TextButton(onClick = { vm.restoreBackup(f) }) { Text("استعادة") }
+            }
+        }
         Spacer(Modifier.height(12.dp))
         Text("استيراد CSV", fontWeight = FontWeight.Bold)
         Text("الاسم, النوع, المبلغ, نوع العملية", style = MaterialTheme.typography.bodySmall)
@@ -330,12 +417,19 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
         s.csvPreview.take(20).forEach { r ->
             Text("سطر ${r.line}: ${r.name} ${r.amount} ${r.error ?: "جاهز"}")
         }
+        Spacer(Modifier.height(12.dp))
+        Text("سجل التدقيق", fontWeight = FontWeight.Bold)
+        if (s.audit.isEmpty()) Text("لا سجل بعد.")
+        val auditFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+        s.audit.take(30).forEach { a ->
+            Text("${auditFmt.format(Date(a.at))} — ${a.action} ${a.entity} ${a.detail}", style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
 @Composable
-private fun AddSheet(s: UiState, vm: MainViewModel, onDismiss: () -> Unit) {
-    var type by remember { mutableStateOf(DocType.SALE) }
+private fun AddSheet(s: UiState, vm: MainViewModel, initialType: DocType, onDismiss: () -> Unit) {
+    var type by remember { mutableStateOf(initialType) }
     var amount by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var docNo by remember { mutableStateOf("") }

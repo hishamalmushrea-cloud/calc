@@ -35,4 +35,10 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
         AppDb.get(ctx).close()
         file.copyTo(current, overwrite = true)
     }
+
+    /** قائمة النسخ المتاحة للاستعادة، الأحدث أولًا، مع استبعاد نسخ الحماية قبل الاستعادة. */
+    fun listBackups(): List<File> =
+        File(ctx.filesDir, "backups").listFiles { f ->
+            f.name.endsWith(".db") && !f.name.startsWith("pre-restore-")
+        }?.sortedByDescending { it.lastModified() } ?: emptyList()
 }
