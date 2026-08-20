@@ -307,13 +307,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _s.value = _s.value.copy(backups = app.backup.listBackups())
     }
 
-    fun restoreBackup(f: java.io.File) = viewModelScope.launch {
+    fun restoreBackup(f: java.io.File, password: String? = null) = viewModelScope.launch {
         try {
             val app = getApplication() as DaftariApp
-            app.backup.restoreFrom(f)
+            if (f.name.endsWith(".enc")) app.backup.restoreEncrypted(f, password.orEmpty())
+            else app.backup.restoreFrom(f)
             _s.value = _s.value.copy(message = "تمت الاستعادة. أغلق التطبيق وافتحه من جديد.")
         } catch (e: Exception) {
             _s.value = _s.value.copy(message = "فشل الاستعادة: ${e.message}")
+        }
+    }
+
+    fun backupEncrypted(password: String) = viewModelScope.launch {
+        if (password.isBlank()) {
+            _s.value = _s.value.copy(message = "أدخل كلمة مرور للنسخة المشفرة"); return@launch
+        }
+        try {
+            val app = getApplication() as DaftariApp
+            val f = app.backup.exportEncrypted(password)
+            _s.value = _s.value.copy(shareFile = f, backups = app.backup.listBackups(), message = "نسخة مشفرة جاهزة")
+        } catch (e: Exception) {
+            _s.value = _s.value.copy(message = "فشل إنشاء النسخة: ${e.message}")
         }
     }
 

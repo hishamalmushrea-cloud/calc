@@ -11,34 +11,53 @@ import java.io.File
 class BackupManager(private val ctx: Context, private val db: AppDb) {
     private val gson = Gson()
 
+    private fun dbFile(): File = ctx.getDatabasePath("daftari.db")
+    private fun backupsDir(): File = File(ctx.filesDir, "backups").apply { mkdirs() }
+
+    private fun checkpoint() {
+        db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)")
+    }
+
     suspend fun exportJson(): File = withContext(Dispatchers.IO) {
         val payload = JsonObject().apply {
             addProperty("schemaVersion", 1)
             addProperty("appVersion", "1.0.0")
             addProperty("exportedAt", System.currentTimeMillis())
         }
-        // Room export via attaching raw copy is safer for restore integrity
-        val dbFile = ctx.getDatabasePath("daftari.db")
-        val out = File(ctx.filesDir, "backups").apply { mkdirs() }
-        val dest = File(out, "daftari-backup-${System.currentTimeMillis()}.db")
-        db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)")
-        dbFile.copyTo(dest, overwrite = true)
+        checkpoint()
+        val dest = File(backupsDir(), "daftari-backup-${System.currentTimeMillis()}.db")
+        dbFile().copyTo(dest, overwrite = true)
+        dest
+    }
+
+    suspend fun exportEncrypted(password: String): File = withContext(Dispatchers.IO) {
+        checkpoint()
+        val dest = File(backupsDir(), "daftari-backup-${System.currentTimeMillis()}.enc")
+        EncryptedBackup.encrypt(dbFile(), dest, password)
         dest
     }
 
     suspend fun restoreFrom(file: File) = withContext(Dispatchers.IO) {
         if (!file.exists() || file.length() < 100) error("نسخة احتياطية غير صالحة")
-        val current = ctx.getDatabasePath("daftari.db")
-        val safety = File(ctx.filesDir, "backups/pre-restore-${System.currentTimeMillis()}.db")
-        safety.parentFile?.mkdirs()
+        val current = dbFile()
+        val safety = File(backupsDir(), "pre-restore-${System.currentTimeMillis()}.db")
         if (current.exists()) current.copyTo(safety, overwrite = true)
         AppDb.get(ctx).close()
         file.copyTo(current, overwrite = true)
     }
 
+    suspend fun restoreEncrypted(file: File, password: String) = withContext(Dispatchers.IO) {
+        if (!file.exists() || file.length() < 100) error("نسخة احتياطية غير صالحة")
+        val current = dbFile()
+        val safety = File(backupsDir(), "pre-restore-${System.currentTimeMillis()}.db")
+        if (current.exists()) current.copyTo(safety, overwrite = true)
+        AppDb.get(ctx).close()
+        EncryptedBackup.decrypt(file, current, password)
+    }
+
     /** قائمة النسخ المتاحة للاستعادة، الأحدث أولًا، مع استبعاد نسخ الحماية قبل الاستعادة. */
     fun listBackups(): List<File> =
-        File(ctx.filesDir, "backups").listFiles { f ->
-            f.name.endsWith(".db") && !f.name.startsWith("pre-restore-")
+        backupsDir().listFiles { f ->
+            (f.name.endsWith(".db") || f.name.endsWith(".enc")) && !f.name.startsWith("pre-restore-")
         }?.sortedByDescending { it.lastModified() } ?: emptyList()
 }

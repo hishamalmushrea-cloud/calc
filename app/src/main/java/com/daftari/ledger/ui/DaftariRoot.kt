@@ -361,6 +361,7 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     var cash by remember { mutableStateOf("") }
     var closeNotes by remember { mutableStateOf("") }
     var csv by remember { mutableStateOf("") }
+    var backupPw by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { vm.refreshBackups() }
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("المحلات", fontWeight = FontWeight.Bold)
@@ -395,6 +396,8 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
             Switch(s.autoBackup, { vm.toggleBackup(it) })
         }
         Button(onClick = { vm.backupNow() }) { Text("نسخة الآن ومشاركة") }
+        OutlinedTextField(backupPw, { backupPw = it }, label = { Text("كلمة مرور النسخة (للتشفير)") }, visualTransformation = PasswordVisualTransformation())
+        Button(onClick = { vm.backupEncrypted(backupPw) }) { Text("نسخة مشفرة ومشاركة") }
         Button(onClick = { vm.exportCsv() }) { Text("تصدير CSV كامل ومشاركة") }
         Spacer(Modifier.height(8.dp))
         Text("النسخ المحفوظة", fontWeight = FontWeight.Bold)
@@ -402,8 +405,11 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
         val backupFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
         s.backups.forEach { f ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(backupFmt.format(Date(f.lastModified())), modifier = Modifier.weight(1f))
-                TextButton(onClick = { vm.restoreBackup(f) }) { Text("استعادة") }
+                Text(
+                    backupFmt.format(Date(f.lastModified())) + if (f.name.endsWith(".enc")) " 🔒" else "",
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { vm.restoreBackup(f, backupPw) }) { Text("استعادة") }
             }
         }
         Spacer(Modifier.height(12.dp))
