@@ -2,6 +2,7 @@ package com.daftari.ledger.data
 
 import androidx.room.withTransaction
 import com.daftari.ledger.domain.AccountType
+import com.daftari.ledger.domain.AgingFifo
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.PartyKind
 import kotlinx.coroutines.flow.Flow
@@ -316,43 +317,18 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun aging(shopId: Long, kind: String): List<AgingRow> {
         val now = System.currentTimeMillis()
-        val day = 86_400_000L
         return parties.listAll(shopId).filter { it.kind == kind && it.cachedBalanceMinor > 0 }.map { p ->
-            val docs = documents.listParty(p.id).filter {
-                it.type == DocType.SALE.name || it.type == DocType.PURCHASE.name || it.type == DocType.OPENING.name
-            }
-            val oldest = docs.minByOrNull { it.occurredAt }?.occurredAt ?: p.createdAt
-            val age = ((now - oldest) / day).toInt()
-            val b = p.cachedBalanceMinor
-            when {
-                age <= 30 -> AgingRow(p, b, 0, 0, 0)
-                age <= 60 -> AgingRow(p, 0, b, 0, 0)
-                age <= 90 -> AgingRow(p, 0, 0, b, 0)
-                else -> AgingRow(p, 0, 0, 0, b)
-            }
+            val invoices = documents.listParty(p.id)
+                .filter { it.type == DocType.SALE.name || it.type == DocType.OPENING.name }
+                .map { AgingFifo.Invoice(it.amountMinor, it.occurredAt) }
+            val bk = AgingFifo.allocate(p.cachedBalanceMinor, invoices, now)
+            AgingRow(p, bk.b0, bk.b31, bk.b61, bk.b90)
         }
     }
 
     data class CsvCommit(val created: Int, val skipped: Int)
 
-    fun parseCsv(text: String): List<CsvPreviewRow> {
-        val lines = text.lines().filter { it.isNotBlank() }
-        if (lines.isEmpty()) return emptyList()
-        val start = if (lines.first().contains("name", true) || lines.first().contains("اسم")) 1 else 0
-        return lines.drop(start).mapIndexed { i, line ->
-            val p = line.split(',', ';', '\t').map { it.trim().trim('"') }
-            val name = p.getOrNull(0).orEmpty()
-            val kind = p.getOrNull(1).orEmpty().ifBlank { "CUSTOMER" }
-            val amount = p.getOrNull(2).orEmpty()
-            val type = p.getOrNull(3).orEmpty().ifBlank { "SALE" }
-            val err = when {
-                name.isBlank() -> "اسم فارغ"
-                com.daftari.ledger.domain.Money.fromMajor(amount) == null && amount.isNotBlank() -> "مبلغ غير صالح"
-                else -> null
-            }
-            CsvPreviewRow(start + i + 1, name, kind, amount, type, err)
-        }
-    }
+    fun parseCsv(text: String): List<CsvPreviewRow> = CsvParser.parse(text)
 
     suspend fun importCsv(shopId: Long, rows: List<CsvPreviewRow>): CsvCommit {
         var ok = 0; var skip = 0
