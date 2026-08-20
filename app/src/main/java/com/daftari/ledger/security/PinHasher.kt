@@ -31,19 +31,22 @@ object PinHasher {
     fun verify(pin: String, stored: String): Boolean = when {
         stored.startsWith("$PREFIX$") -> {
             val parts = stored.split('$')
-            if (parts.size != 4) return false
-            val iterations = parts[1].toIntOrNull() ?: return false
-            val salt = parts[2].fromHexOrNull() ?: return false
-            val expected = parts[3].fromHexOrNull() ?: return false
-            MessageDigest.isEqual(pbkdf2(pin, salt, iterations), expected)
+            val iterations = parts.getOrNull(1)?.toIntOrNull()
+            val salt = parts.getOrNull(2)?.fromHexOrNull()
+            val expected = parts.getOrNull(3)?.fromHexOrNull()
+            if (iterations == null || salt == null || expected == null) false
+            else MessageDigest.isEqual(pbkdf2(pin, salt, iterations), expected)
         }
         stored.contains('$') -> {
             // تنسيق وسيط: saltHex$sha256Hex
             val sep = stored.indexOf('$')
-            val salt = stored.substring(0, sep).fromHexOrNull() ?: return false
-            val expected = sha256(salt, pin).toByteArray(Charsets.US_ASCII)
-            val actual = stored.substring(sep + 1).toByteArray(Charsets.US_ASCII)
-            MessageDigest.isEqual(expected, actual)
+            val salt = stored.substring(0, sep).fromHexOrNull()
+            if (salt == null) false
+            else {
+                val expected = sha256(salt, pin).toByteArray(Charsets.US_ASCII)
+                val actual = stored.substring(sep + 1).toByteArray(Charsets.US_ASCII)
+                MessageDigest.isEqual(expected, actual)
+            }
         }
         else -> stored == pin.toByteArray().contentHashCode().toString() // قديم
     }
