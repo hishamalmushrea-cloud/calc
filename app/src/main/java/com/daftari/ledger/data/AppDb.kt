@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         SettingsEntity::class, DailyClosingEntity::class
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDb : RoomDatabase() {
     abstract fun shops(): ShopDao
@@ -22,12 +22,14 @@ abstract class AppDb : RoomDatabase() {
     abstract fun journal(): JournalDao
     abstract fun audit(): AuditDao
     abstract fun settings(): SettingsDao
+    abstract fun closings(): ClosingDao
 
     companion object {
         @Volatile private var I: AppDb? = null
         fun get(ctx: Context): AppDb = I ?: synchronized(this) {
             I ?: Room.databaseBuilder(ctx, AppDb::class.java, "daftari.db")
-                .fallbackToDestructiveMigration()
+                // لا fallbackToDestructiveMigration — أي ترقية تحتاج Migration صريحة
+                .addMigrations(*Migrations.ALL)
                 .build()
                 .also { I = it }
         }

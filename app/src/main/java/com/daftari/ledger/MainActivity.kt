@@ -33,6 +33,15 @@ class MainActivity : FragmentActivity() {
                     startActivity(Intent.createChooser(send, "مشاركة"))
                     vm.consumeShare()
                 }
+                LaunchedEffect(s.shareText) {
+                    val text = s.shareText ?: return@LaunchedEffect
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, text)
+                    }
+                    startActivity(Intent.createChooser(send, "مشاركة الكشف"))
+                    vm.consumeShareText()
+                }
                 DaftariRoot(s, vm, this@MainActivity)
             }
         }

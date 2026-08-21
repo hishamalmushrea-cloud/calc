@@ -2,6 +2,7 @@ package com.daftari.ledger.data
 
 import androidx.room.withTransaction
 import com.daftari.ledger.domain.AccountType
+import com.daftari.ledger.domain.AgingFifo
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.PartyKind
 import kotlinx.coroutines.flow.Flow
@@ -120,6 +121,29 @@ class LedgerRepository(private val db: AppDb) {
             val c = documents.countDocNumber(shopId, docNumber, partyId, -1)
             if (c > 0) throw LedgerException("رقم المستند مستخدم مسبقًا")
         }
+        val cashAccountId = (accounts.byCode(shopId, cashCode) ?: throw LedgerException("حساب نقدي غير موجود")).id
+        val creditSale = paymentMethod == "CREDIT"
+        val docId = documents.insert(
+            DocumentEntity(
+                shopId = shopId, type = type.name, partyId = partyId, cashAccountId = cashAccountId,
+                amountMinor = amountMinor, occurredAt = occurredAt, docNumber = docNumber,
+                notes = notes, paymentMethod = paymentMethod
+            )
+        )
+        val lines = buildLines(docId, type, amountMinor, partyId, creditSale, notes, cashCode, transferToCode, shopId)
+        val dr = lines.sumOf { it.debitMinor }
+        val cr = lines.sumOf { it.creditMinor }
+        if (dr != cr) throw LedgerException("القيد غير متوازن")
+        journal.insertAll(lines)
+        partyId?.let { refreshPartyBalance(it) }
+        audit.insert(AuditLogEntity(action = "CREATE", entity = "document", entityId = docId, detail = type.name))
+        return docId
+    }
+
+    private suspend fun buildLines(
+        docId: Long, type: DocType, amountMinor: Long, partyId: Long?,
+        creditSale: Boolean, notes: String, cashCode: String, transferToCode: String?, shopId: Long
+    ): List<JournalLineEntity> {
         val cash = accounts.byCode(shopId, cashCode) ?: throw LedgerException("حساب نقدي غير موجود")
         val sales = accounts.byCode(shopId, "4000")!!
         val purch = accounts.byCode(shopId, "5000")!!
@@ -127,16 +151,7 @@ class LedgerRepository(private val db: AppDb) {
         val inc = accounts.byCode(shopId, "4100")!!
         val ar = accounts.byCode(shopId, "1100")!!
         val ap = accounts.byCode(shopId, "2000")!!
-
-        val creditSale = paymentMethod == "CREDIT"
-        val docId = documents.insert(
-            DocumentEntity(
-                shopId = shopId, type = type.name, partyId = partyId, cashAccountId = cash.id,
-                amountMinor = amountMinor, occurredAt = occurredAt, docNumber = docNumber,
-                notes = notes, paymentMethod = paymentMethod
-            )
-        )
-        val lines = when (type) {
+        return when (type) {
             DocType.SALE -> if (creditSale && partyId != null) listOf(
                 JournalLineEntity(documentId = docId, accountId = ar.id, partyId = partyId, debitMinor = amountMinor, memo = "بيع آجل"),
                 JournalLineEntity(documentId = docId, accountId = sales.id, creditMinor = amountMinor)
@@ -184,13 +199,31 @@ class LedgerRepository(private val db: AppDb) {
             }
             else -> throw LedgerException("نوع العملية غير مدعوم من هذه الشاشة")
         }
+    }
+
+    suspend fun updateDocument(
+        id: Long, amountMinor: Long, occurredAt: Long, notes: String,
+        docNumber: String, paymentMethod: String
+    ) {
+        if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
+        val d = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
+        val type = runCatching { DocType.valueOf(d.type) }.getOrNull()
+            ?: throw LedgerException("نوع العملية غير معروف")
+        val lines = buildLines(id, type, amountMinor, d.partyId, paymentMethod == "CREDIT", notes, "1000", null, d.shopId)
         val dr = lines.sumOf { it.debitMinor }
         val cr = lines.sumOf { it.creditMinor }
         if (dr != cr) throw LedgerException("القيد غير متوازن")
+        journal.deleteForDoc(id)
         journal.insertAll(lines)
-        partyId?.let { refreshPartyBalance(it) }
-        audit.insert(AuditLogEntity(action = "CREATE", entity = "document", entityId = docId, detail = type.name))
-        return docId
+        documents.update(
+            d.copy(
+                amountMinor = amountMinor, occurredAt = occurredAt, notes = notes,
+                docNumber = docNumber, paymentMethod = paymentMethod,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        d.partyId?.let { refreshPartyBalance(it) }
+        audit.insert(AuditLogEntity(action = "UPDATE", entity = "document", entityId = id, detail = type.name))
     }
 
     suspend fun softDeleteDocument(id: Long) {
@@ -284,43 +317,18 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun aging(shopId: Long, kind: String): List<AgingRow> {
         val now = System.currentTimeMillis()
-        val day = 86_400_000L
         return parties.listAll(shopId).filter { it.kind == kind && it.cachedBalanceMinor > 0 }.map { p ->
-            val docs = documents.listParty(p.id).filter {
-                it.type == DocType.SALE.name || it.type == DocType.PURCHASE.name || it.type == DocType.OPENING.name
-            }
-            val oldest = docs.minByOrNull { it.occurredAt }?.occurredAt ?: p.createdAt
-            val age = ((now - oldest) / day).toInt()
-            val b = p.cachedBalanceMinor
-            when {
-                age <= 30 -> AgingRow(p, b, 0, 0, 0)
-                age <= 60 -> AgingRow(p, 0, b, 0, 0)
-                age <= 90 -> AgingRow(p, 0, 0, b, 0)
-                else -> AgingRow(p, 0, 0, 0, b)
-            }
+            val invoices = documents.listParty(p.id)
+                .filter { it.type == DocType.SALE.name || it.type == DocType.OPENING.name }
+                .map { AgingFifo.Invoice(it.amountMinor, it.occurredAt) }
+            val bk = AgingFifo.allocate(p.cachedBalanceMinor, invoices, now)
+            AgingRow(p, bk.b0, bk.b31, bk.b61, bk.b90)
         }
     }
 
     data class CsvCommit(val created: Int, val skipped: Int)
 
-    fun parseCsv(text: String): List<CsvPreviewRow> {
-        val lines = text.lines().filter { it.isNotBlank() }
-        if (lines.isEmpty()) return emptyList()
-        val start = if (lines.first().contains("name", true) || lines.first().contains("اسم")) 1 else 0
-        return lines.drop(start).mapIndexed { i, line ->
-            val p = line.split(',', ';', '\t').map { it.trim().trim('"') }
-            val name = p.getOrNull(0).orEmpty()
-            val kind = p.getOrNull(1).orEmpty().ifBlank { "CUSTOMER" }
-            val amount = p.getOrNull(2).orEmpty()
-            val type = p.getOrNull(3).orEmpty().ifBlank { "SALE" }
-            val err = when {
-                name.isBlank() -> "اسم فارغ"
-                com.daftari.ledger.domain.Money.fromMajor(amount) == null && amount.isNotBlank() -> "مبلغ غير صالح"
-                else -> null
-            }
-            CsvPreviewRow(start + i + 1, name, kind, amount, type, err)
-        }
-    }
+    fun parseCsv(text: String): List<CsvPreviewRow> = CsvParser.parse(text)
 
     suspend fun importCsv(shopId: Long, rows: List<CsvPreviewRow>): CsvCommit {
         var ok = 0; var skip = 0
@@ -343,14 +351,14 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun setPin(pin: String?) {
         val st = settings.get() ?: SettingsEntity()
-        val hash = pin?.let { it.toByteArray().contentHashCode().toString() }
+        val hash = pin?.let { com.daftari.ledger.security.PinHasher.hash(it) }
         val n = st.copy(pinHash = hash)
         if (settings.get() == null) settings.insert(n) else settings.update(n)
     }
 
     suspend fun pinOk(pin: String): Boolean {
         val h = settings.get()?.pinHash ?: return true
-        return h == pin.toByteArray().contentHashCode().toString()
+        return com.daftari.ledger.security.PinHasher.verify(pin, h)
     }
 
     suspend fun setAutoBackup(on: Boolean) {

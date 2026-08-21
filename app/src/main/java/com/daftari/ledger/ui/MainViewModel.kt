@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.daftari.ledger.DaftariApp
+import com.daftari.ledger.data.AuditLogEntity
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.LedgerException
 import com.daftari.ledger.data.LedgerRepository
@@ -16,7 +17,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 enum class Period { TODAY, YESTERDAY, WEEK, MONTH, YEAR, CUSTOM }
 
@@ -38,8 +42,26 @@ data class UiState(
     val autoBackup: Boolean = false,
     val aging: List<com.daftari.ledger.data.AgingRow> = emptyList(),
     val csvPreview: List<com.daftari.ledger.data.CsvPreviewRow> = emptyList(),
-    val shareFile: java.io.File? = null
+    val shareFile: java.io.File? = null,
+    val prevTotals: LedgerRepository.PeriodTotals = LedgerRepository.PeriodTotals(0, 0, 0, 0, 0, 0, 0, 0),
+    val selectedParty: PartyEntity? = null,
+    val partyStats: PartyStats? = null,
+    val audit: List<AuditLogEntity> = emptyList(),
+    val backups: List<java.io.File> = emptyList(),
+    val shareText: String? = null,
+    val agingAlert: Int = 0
 )
+
+data class PartyStats(
+    val sales: Long = 0,
+    val purchases: Long = 0,
+    val collections: Long = 0,
+    val payments: Long = 0,
+    val docs: List<DocumentEntity> = emptyList()
+) {
+    val collectionRate: Int
+        get() = if (sales == 0L) 0 else ((collections * 100) / sales).toInt().coerceIn(0, 100)
+}
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as DaftariApp).repo
@@ -58,6 +80,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _s.value = _s.value.copy(shops = shops.ifEmpty { listOfNotNull(shop) }, shop = shop, loading = false)
                 shop?.let { bindShop(it.id) }
+            }
+        }
+        viewModelScope.launch {
+            repo.audit.observe().collectLatest { rows ->
+                _s.value = _s.value.copy(audit = rows)
             }
         }
     }
@@ -92,6 +119,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun previousRange(p: Period): Pair<Long, Long> {
+        val (a, b) = range(p)
+        val len = (b - a).coerceAtLeast(1L)
+        return (a - len) to (a - 1)
+    }
+
     private fun bindShop(id: Long) {
         viewModelScope.launch {
             repo.observeCustomers(id).collectLatest { c ->
@@ -122,11 +155,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val (a, b) = range(_s.value.period)
             val t = repo.totals(shop.id, a, b)
             val docs = repo.documents.listPeriod(shop.id, a, b)
+            val (pa, pb) = previousRange(_s.value.period)
+            val pt = repo.totals(shop.id, pa, pb)
+            val agingRows = repo.aging(shop.id, "CUSTOMER")
             _s.value = _s.value.copy(
                 totals = t,
+                prevTotals = pt,
                 docs = docs.sortedByDescending { it.occurredAt },
                 owedToYou = repo.youAreOwed(shop.id),
-                youOwe = repo.youOwe(shop.id)
+                youOwe = repo.youOwe(shop.id),
+                agingAlert = agingRows.count { it.b61 > 0 || it.b90 > 0 }
             )
         }
     }
@@ -148,19 +186,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addDoc(
         type: DocType, amount: String, partyId: Long?, credit: Boolean,
-        notes: String, docNumber: String, cashCode: String = "1000"
+        notes: String, docNumber: String, cashCode: String = "1000",
+        newPartyName: String? = null, occurredAt: Long = System.currentTimeMillis()
     ) = viewModelScope.launch {
         val shop = _s.value.shop ?: return@launch
         val m = Money.fromMajor(amount) ?: run {
             _s.value = _s.value.copy(message = "أدخل مبلغًا صحيحًا"); return@launch
         }
         try {
+            var pid = partyId
+            if (pid == null && !newPartyName.isNullOrBlank()) {
+                val kind = if (type == DocType.SALE || type == DocType.COLLECT) PartyKind.CUSTOMER else PartyKind.SUPPLIER
+                pid = repo.addParty(shop.id, kind, newPartyName.trim())
+            }
             repo.postDocument(
                 shopId = shop.id,
                 type = type,
                 amountMinor = m.minor,
-                occurredAt = System.currentTimeMillis(),
-                partyId = partyId,
+                occurredAt = occurredAt,
+                partyId = pid,
                 cashCode = cashCode,
                 docNumber = docNumber,
                 notes = notes,
@@ -169,6 +213,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             refreshTotals()
             _s.value = _s.value.copy(message = "تم الحفظ")
+        } catch (e: LedgerException) {
+            _s.value = _s.value.copy(message = e.message)
+        }
+    }
+
+    fun updateDoc(
+        id: Long, amount: String, notes: String, docNumber: String,
+        credit: Boolean, occurredAt: Long
+    ) = viewModelScope.launch {
+        val m = Money.fromMajor(amount) ?: run {
+            _s.value = _s.value.copy(message = "أدخل مبلغًا صحيحًا"); return@launch
+        }
+        try {
+            repo.updateDocument(id, m.minor, occurredAt, notes, docNumber, if (credit) "CREDIT" else "CASH")
+            refreshTotals()
+            _s.value = _s.value.copy(message = "تم التعديل")
         } catch (e: LedgerException) {
             _s.value = _s.value.copy(message = e.message)
         }
@@ -227,7 +287,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         try {
             repo.closePartyAccount(id)
             refreshTotals()
-            _s.value = _s.value.copy(message = "أُغلق الحساب مع الاحتفاظ بالسجل")
+            _s.value = _s.value.copy(message = "أُغلق الحساب مع الاحتفاظ بالسجل", selectedParty = null, partyStats = null)
         } catch (e: LedgerException) { _s.value = _s.value.copy(message = e.message) }
     }
 
@@ -259,10 +319,109 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun backupNow() = viewModelScope.launch {
-        val ctx = getApplication<Application>()
-        val db = com.daftari.ledger.data.AppDb.get(ctx)
-        val f = com.daftari.ledger.backup.BackupManager(ctx, db).exportJson()
-        _s.value = _s.value.copy(shareFile = f, message = "نسخة احتياطية جاهزة")
+        val app = getApplication() as DaftariApp
+        val f = app.backup.exportJson()
+        _s.value = _s.value.copy(shareFile = f, backups = app.backup.listBackups(), message = "نسخة احتياطية جاهزة")
+    }
+
+    fun refreshBackups() {
+        val app = getApplication() as DaftariApp
+        _s.value = _s.value.copy(backups = app.backup.listBackups())
+    }
+
+    fun restoreBackup(f: java.io.File, password: String? = null) = viewModelScope.launch {
+        try {
+            val app = getApplication() as DaftariApp
+            if (f.name.endsWith(".enc")) app.backup.restoreEncrypted(f, password.orEmpty())
+            else app.backup.restoreFrom(f)
+            _s.value = _s.value.copy(message = "تمت الاستعادة. أغلق التطبيق وافتحه من جديد.")
+        } catch (e: Exception) {
+            _s.value = _s.value.copy(message = "فشل الاستعادة: ${e.message}")
+        }
+    }
+
+    fun backupEncrypted(password: String) = viewModelScope.launch {
+        if (password.isBlank()) {
+            _s.value = _s.value.copy(message = "أدخل كلمة مرور للنسخة المشفرة"); return@launch
+        }
+        try {
+            val app = getApplication() as DaftariApp
+            val f = app.backup.exportEncrypted(password)
+            _s.value = _s.value.copy(shareFile = f, backups = app.backup.listBackups(), message = "نسخة مشفرة جاهزة")
+        } catch (e: Exception) {
+            _s.value = _s.value.copy(message = "فشل إنشاء النسخة: ${e.message}")
+        }
+    }
+
+    fun openParty(p: PartyEntity) {
+        _s.value = _s.value.copy(selectedParty = p, partyStats = null)
+        loadPartyStats(p)
+    }
+
+    fun closePartyDialog() {
+        _s.value = _s.value.copy(selectedParty = null, partyStats = null)
+    }
+
+    private fun loadPartyStats(p: PartyEntity) {
+        viewModelScope.launch {
+            val docs = repo.documents.listParty(p.id)
+            fun sum(t: DocType) = docs.filter { it.type == t.name }.sumOf { it.amountMinor }
+            val st = PartyStats(
+                sales = sum(DocType.SALE),
+                purchases = sum(DocType.PURCHASE),
+                collections = sum(DocType.COLLECT),
+                payments = sum(DocType.PAY),
+                docs = docs.sortedByDescending { it.occurredAt }
+            )
+            _s.value = _s.value.copy(partyStats = st)
+        }
+    }
+
+    fun shareStatement(p: PartyEntity) = viewModelScope.launch {
+        val docs = repo.documents.listParty(p.id)
+        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val sb = StringBuilder()
+        sb.append("كشف حساب — ${p.name}\n")
+        sb.append("الرصيد: ${Money(p.cachedBalanceMinor).format()}\n\n")
+        sb.append("التاريخ | النوع | المبلغ\n")
+        docs.sortedByDescending { it.occurredAt }.take(50).forEach { d ->
+            sb.append("${fmt.format(Date(d.occurredAt))} | ${docTypeArabic(d.type)} | ${Money(d.amountMinor).format()}\n")
+        }
+        _s.value = _s.value.copy(shareText = sb.toString())
+    }
+
+    fun consumeShareText() { _s.value = _s.value.copy(shareText = null) }
+
+    fun exportCsv() = viewModelScope.launch {
+        val shop = _s.value.shop ?: return@launch
+        try {
+            val docs = repo.documents.listPeriod(shop.id, 0L, Long.MAX_VALUE)
+            val byId = repo.parties.listAll(shop.id).associateBy { it.id }
+            val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+            val sb = StringBuilder("name,kind,amount,type,date,notes\n")
+            docs.sortedByDescending { it.occurredAt }.forEach { d ->
+                val p = d.partyId?.let { byId[it] }
+                sb.append(
+                    listOf(
+                        p?.name ?: "", p?.kind ?: "", Money(d.amountMinor).toBigDecimal().toPlainString(),
+                        d.type, fmt.format(Date(d.occurredAt)), d.notes
+                    ).joinToString(",") { csvCell(it) }
+                ).append("\n")
+            }
+            val f = java.io.File(getApplication<Application>().cacheDir, "daftari-export.csv")
+            f.writeText(sb.toString())
+            _s.value = _s.value.copy(shareFile = f, message = "تم تصدير CSV كامل")
+        } catch (e: Exception) {
+            _s.value = _s.value.copy(message = "فشل التصدير: ${e.message}")
+        }
+    }
+
+    private fun csvCell(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
+
+    private fun docTypeArabic(t: String) = when (t) {
+        "SALE" -> "بيع"; "PURCHASE" -> "شراء"; "EXPENSE" -> "مصروف"; "INCOME" -> "إيراد"
+        "COLLECT" -> "تحصيل"; "PAY" -> "سداد"; "TRANSFER" -> "تحويل"; "OPENING" -> "افتتاحي"
+        else -> t
     }
 
     val repoPublic get() = repo
