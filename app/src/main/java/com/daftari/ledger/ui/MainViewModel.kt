@@ -340,6 +340,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _s.value = _s.value.copy(shareFile = f, message = "تم إنشاء PDF")
     }
 
+    fun exportExcel() {
+        val ctx = getApplication<Application>()
+        try {
+            val f = com.daftari.ledger.export.ExcelReports.writePeriodExcel(ctx, _s.value)
+            _s.value = _s.value.copy(shareFile = f, message = "تم إنشاء Excel")
+        } catch (e: Exception) {
+            _s.value = _s.value.copy(message = "فشل إنشاء Excel: ${e.message}")
+        }
+    }
+
     fun backupNow() = viewModelScope.launch {
         val app = getApplication() as DaftariApp
         val f = app.backup.exportJson()

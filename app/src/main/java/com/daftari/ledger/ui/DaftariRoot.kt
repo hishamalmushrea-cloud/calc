@@ -198,8 +198,21 @@ private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick
         Metric("ربح تقديري", t.estimatedProfit, t.estimatedProfit >= 0)
         Text("الربح تقديري ولا يشمل تكلفة مخزون غير مسجّل.", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(12.dp))
-        Text("حركة الفترة", fontWeight = FontWeight.Bold)
-        MiniBars(listOf("مبيعات" to t.sales, "مصروف" to t.expenses, "تحصيل" to t.collections, "سداد" to t.payments))
+        
+        Text("تحليل العمليات", fontWeight = FontWeight.Bold)
+        DoughnutChart(listOf("مبيعات" to t.sales, "مصروف" to t.expenses, "تحصيل" to t.collections, "سداد" to t.payments))
+        
+        val salesDocs = s.docs.filter { it.type == "SALE" }.sortedBy { it.occurredAt }
+        if (salesDocs.size > 1) {
+            Spacer(Modifier.height(12.dp))
+            Text("حركة المبيعات الأخيرة", fontWeight = FontWeight.Bold)
+            val fmt = remember { java.text.SimpleDateFormat("dd/MM", java.util.Locale.US) }
+            // Group by day for the chart, take last 6 days
+            val grouped = salesDocs.groupBy { fmt.format(java.util.Date(it.occurredAt)) }
+                .map { it.key to it.value.sumOf { doc -> doc.amountMinor } }
+                .takeLast(6)
+            SmoothLineChart(grouped)
+        }
     }
 }
 
@@ -549,8 +562,13 @@ private fun ReportsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
         Metric("سداد", t.payments, false)
         Metric("صافي نقدي", t.cashNet, t.cashNet >= 0)
         Metric("ربح تقديري", t.estimatedProfit, t.estimatedProfit >= 0)
-        MiniBars(listOf("مبيعات" to t.sales, "مصروف" to t.expenses, "مشتريات" to t.purchases))
-        Button(onClick = { vm.exportPdf() }, modifier = Modifier.padding(vertical = 8.dp)) { Text("تصدير PDF ومشاركة") }
+        Spacer(Modifier.height(8.dp))
+        Text("تحليل الدخل والمصروفات", fontWeight = FontWeight.Bold)
+        DoughnutChart(listOf("مبيعات" to t.sales, "مصروف" to t.expenses, "مشتريات" to t.purchases))
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.exportPdf() }, modifier = Modifier.weight(1f)) { Text("PDF") }
+            Button(onClick = { vm.exportExcel() }, modifier = Modifier.weight(1f)) { Text("Excel") }
+        }
         Spacer(Modifier.height(8.dp))
         Text("أعمار ديون العملاء", fontWeight = FontWeight.Bold)
         Text("0–30 | 31–60 | 61–90 | +90", style = MaterialTheme.typography.bodySmall)
