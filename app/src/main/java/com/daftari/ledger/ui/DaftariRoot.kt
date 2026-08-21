@@ -1,5 +1,9 @@
 package com.daftari.ledger.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
@@ -22,6 +27,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
@@ -29,10 +35,16 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -41,6 +53,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -52,6 +66,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +81,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -84,6 +101,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,21 +116,48 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
     }
     Scaffold(
         topBar = {
-            TopAppBar(title = {
-                Column {
-                    Text("دفتري", fontWeight = FontWeight.Bold)
-                    Text(s.shop?.name ?: "—", style = MaterialTheme.typography.bodySmall)
-                }
-            })
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Storefront, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("دفتري", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            Text(s.shop?.name ?: "—", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
+                actions = {
+                    if (s.agingAlert > 0) {
+                        BadgedBox(badge = { Badge { Text("${s.agingAlert}") } }) {
+                            IconButton(onClick = { tab = 3 }) {
+                                Icon(Icons.Default.Notifications, "تنبيهات")
+                            }
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
         },
         snackbarHost = { SnackbarHost(snack) },
         floatingActionButton = {
-            if (tab <= 3) FloatingActionButton(onClick = { addType = DocType.SALE }) {
-                Icon(Icons.Default.Add, contentDescription = "إضافة")
+            if (tab <= 3) FloatingActionButton(
+                onClick = { addType = DocType.SALE },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "إضافة", tint = MaterialTheme.colorScheme.onPrimary)
             }
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 val items = listOf("الرئيسية", "الحسابات", "العمليات", "التقارير", "المزيد")
                 val icons = listOf(Icons.Default.Home, Icons.Default.People, Icons.Default.ReceiptLong, Icons.Default.Assessment, Icons.Default.MoreHoriz)
                 items.forEachIndexed { i, label ->
@@ -120,7 +165,7 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
                         selected = tab == i,
                         onClick = { tab = i },
                         icon = { Icon(icons[i], null) },
-                        label = { Text(label) }
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
@@ -189,7 +234,7 @@ private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick
         if (s.late.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text("أبرز المتأخرين", fontWeight = FontWeight.Bold)
-            s.late.take(3).forEach { l -> LateCard(l, lateFmt) }
+            s.late.take(3).forEachIndexed { i, l -> LateCard(l, i, lateFmt) }
         }
         Spacer(Modifier.height(8.dp))
         Text("مؤشرات الفترة", fontWeight = FontWeight.Bold)
@@ -226,11 +271,14 @@ private fun HeroMetric(title: String, minor: Long, positive: Boolean, subtitle: 
         Column(Modifier.padding(20.dp)) {
             Text(title, style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(6.dp))
-            Text(
-                Money(minor).format(),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = color
+            AnimatedCounter(
+                targetValue = minor,
+                format = { Money(it).format() },
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = color
+                )
             )
             Spacer(Modifier.height(6.dp))
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -248,7 +296,15 @@ private fun SplitMetric(title: String, minor: Long, positive: Boolean, modifier:
         Column(Modifier.padding(14.dp)) {
             Text(title, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(4.dp))
-            Text(Money(minor).format(), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
+            AnimatedCounter(
+                targetValue = minor,
+                format = { Money(it).format() },
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = color
+                )
+            )
         }
     }
 }
@@ -318,8 +374,8 @@ private fun PartiesScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
             }
         }
         LazyColumn {
-            items(list, key = { it.id }) { p ->
-                PartyCard(p) { vm.openParty(p) }
+            itemsIndexed(list, key = { _, it -> it.id }) { i, p ->
+                PartyCard(p, i) { vm.openParty(p) }
             }
         }
     }
@@ -327,32 +383,54 @@ private fun PartiesScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
 }
 
 @Composable
-private fun PartyCard(p: PartyEntity, onClick: () -> Unit) {
+private fun PartyCard(p: PartyEntity, index: Int, onClick: () -> Unit) {
     val balanceColor = partyBalanceColor(p)
-    Card(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onClick)
+    val limitRatio = if (p.creditLimitMinor > 0) (p.cachedBalanceMinor.toFloat() / p.creditLimitMinor).coerceIn(0f, 1.2f) else 0f
+    val limitColor = when {
+        limitRatio >= 1f -> MaterialTheme.colorScheme.error
+        limitRatio >= 0.8f -> Color(0xFFD4A84B)
+        else -> MaterialTheme.colorScheme.primary
+    }
+    AnimatedCard(
+        index = index,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).pulseOnClick().clickable(onClick = onClick)
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(balanceColor.copy(alpha = 0.14f)),
+                Modifier.size(48.dp).clip(CircleShape).background(balanceColor.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(p.name.take(1), fontWeight = FontWeight.Bold, color = balanceColor, fontSize = 18.sp)
+                Text(p.name.take(1), fontWeight = FontWeight.Bold, color = balanceColor, fontSize = 20.sp)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(p.name, fontWeight = FontWeight.Bold)
+                Text(p.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
                 if (p.category.isNotBlank() && p.category != "عادي") {
-                    Text("تصنيف: ${p.category}", style = MaterialTheme.typography.labelSmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
+                        Spacer(Modifier.width(4.dp))
+                        Text(p.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 if (p.creditLimitMinor > 0) {
-                    Text("حد: ${Money(p.creditLimitMinor).format()}", style = MaterialTheme.typography.labelSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { limitRatio.coerceAtMost(1f) },
+                            modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
+                            color = limitColor,
+                            trackColor = limitColor.copy(alpha = 0.15f),
+                            strokeCap = StrokeCap.Round
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("${(limitRatio * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = limitColor)
+                    }
                 }
-                if (p.phone.isNotBlank()) Text(p.phone, style = MaterialTheme.typography.bodySmall)
+                if (p.phone.isNotBlank()) Text(p.phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(Money(p.cachedBalanceMinor).format(), fontWeight = FontWeight.Bold, color = balanceColor)
-                Text(if (p.kind == "CUSTOMER") "لك" else "عليك", style = MaterialTheme.typography.labelSmall)
+                Text(Money(p.cachedBalanceMinor).format(), fontWeight = FontWeight.Bold, color = balanceColor, fontSize = 16.sp)
+                Text(if (p.kind == "CUSTOMER") "لك" else "عليك", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -495,12 +573,16 @@ private fun PartyEditDialog(p: PartyEntity, vm: MainViewModel, onDismiss: () -> 
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DocsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     var editing by remember { mutableStateOf<DocumentEntity?>(null) }
     var query by remember { mutableStateOf("") }
+    var typeFilter by remember { mutableStateOf<String?>(null) }
     val fmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
-    val filtered = if (query.isBlank()) s.docs else s.docs.filter {
+    val dayFmt = remember { SimpleDateFormat("EEEE dd MMMM", Locale("ar")) }
+    val preFiltered = if (typeFilter == null) s.docs else s.docs.filter { it.type == typeFilter }
+    val filtered = if (query.isBlank()) preFiltered else preFiltered.filter {
         it.notes.contains(query, true) ||
             it.docNumber.contains(query, true) ||
             arabicType(it.type).contains(query, true)
@@ -508,10 +590,19 @@ private fun DocsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp)) {
         OutlinedTextField(
             query, { query = it },
-            label = { Text("بحث (ملاحظات / رقم سند / نوع)") },
+            label = { Text("بحث") },
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
             singleLine = true,
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
         )
+        Spacer(Modifier.height(8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(selected = typeFilter == null, onClick = { typeFilter = null }, label = { Text("الكل") })
+            listOf("SALE" to "بيع", "COLLECT" to "تحصيل", "PURCHASE" to "شراء", "EXPENSE" to "مصروف", "PAY" to "سداد").forEach { (code, label) ->
+                FilterChip(selected = typeFilter == code, onClick = { typeFilter = if (typeFilter == code) null else code }, label = { Text(label) })
+            }
+        }
         Spacer(Modifier.height(8.dp))
         LazyColumn(Modifier.fillMaxSize()) {
         if (filtered.isEmpty()) item {
@@ -521,30 +612,57 @@ private fun DocsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
                 Text(if (query.isBlank()) "اضغط زر + لإضافة عملية" else "لا نتائج مطابقة", style = MaterialTheme.typography.bodySmall)
             }
         }
-        items(filtered, key = { it.id }) { d ->
-            val color = when (d.type) {
-                "SALE", "COLLECT", "INCOME" -> MaterialTheme.colorScheme.primary
-                "PURCHASE", "EXPENSE", "PAY" -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
+
+        // Group docs by day
+        val grouped = filtered.groupBy { dayFmt.format(Date(it.occurredAt)) }
+        grouped.forEach { (day, docs) ->
+            item {
+                Text(day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
             }
-            Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(arabicType(d.type), fontWeight = FontWeight.Bold)
-                        Text(fmt.format(Date(d.occurredAt)), style = MaterialTheme.typography.bodySmall)
-                        if (d.notes.isNotBlank()) Text(d.notes)
+            itemsIndexed(docs, key = { _, it -> it.id }) { index, d ->
+                val color = docColor(d.type)
+                val icon = docIcon(d.type)
+                AnimatedCard(index = index, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).pulseOnClick()) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(icon, fontSize = 18.sp)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(arabicType(d.type), fontWeight = FontWeight.SemiBold)
+                            Text(fmt.format(Date(d.occurredAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (d.notes.isNotBlank()) Text(d.notes, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(Money(d.amountMinor).format(), fontWeight = FontWeight.Bold, color = color)
+                            Row {
+                                TextButton(onClick = { editing = d }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("تعديل", style = MaterialTheme.typography.labelSmall) }
+                                TextButton(onClick = { vm.deleteDoc(d.id) }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("أرشفة", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+                            }
+                        }
                     }
-                    Text(Money(d.amountMinor).format(), fontWeight = FontWeight.Bold, color = color)
-                }
-                Row {
-                    TextButton(onClick = { vm.deleteDoc(d.id) }) { Text("أرشفة") }
-                    TextButton(onClick = { editing = d }) { Text("تعديل") }
                 }
             }
         }
         }
     }
     if (editing != null) DocSheet(s, vm, DocType.SALE, editing) { editing = null }
+}
+
+@Composable
+private fun docColor(type: String): Color = when (type) {
+    "SALE", "COLLECT", "INCOME" -> MaterialTheme.colorScheme.primary
+    "PURCHASE", "EXPENSE", "PAY" -> MaterialTheme.colorScheme.error
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+private fun docIcon(type: String): String = when (type) {
+    "SALE" -> "🛒"; "COLLECT" -> "💰"; "PURCHASE" -> "📦"; "EXPENSE" -> "💸"
+    "PAY" -> "🏦"; "INCOME" -> "📈"; "TRANSFER" -> "🔄"; "OPENING" -> "📋"
+    else -> "📄"
 }
 
 @Composable
@@ -577,7 +695,7 @@ private fun ReportsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
         Spacer(Modifier.height(8.dp))
         Text("العملاء المتأخرون", fontWeight = FontWeight.Bold)
         if (s.late.isEmpty()) Text("لا متأخرات.", style = MaterialTheme.typography.bodySmall)
-        s.late.forEach { l -> LateCard(l, lateFmt) }
+        s.late.forEachIndexed { i, l -> LateCard(l, i, lateFmt) }
     }
 }
 
@@ -606,14 +724,14 @@ private fun AgeCell(label: String, minor: Long, warn: Boolean = false) {
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall)
-        Text(Money(minor).format(), fontWeight = FontWeight.Bold, color = color, fontSize = 13.sp)
+                        Text(Money(minor).format(), fontWeight = FontWeight.Bold, color = color, fontSize = 13.sp)
     }
 }
 
 @Composable
-private fun LateCard(l: LedgerRepository.LateRow, fmt: SimpleDateFormat) {
+private fun LateCard(l: LedgerRepository.LateRow, index: Int, fmt: SimpleDateFormat) {
     val color = if (l.daysLate > 60) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    AnimatedCard(index = index, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).pulseOnClick()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(l.party.name, fontWeight = FontWeight.Bold)
