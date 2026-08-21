@@ -200,18 +200,45 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
 private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick: (DocType) -> Unit) {
     val t = s.totals
     val lateFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    var showRangePicker by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Period.entries.filter { it != Period.CUSTOM }.forEach { p ->
-                FilterChip(selected = s.period == p, onClick = { vm.setPeriod(p) }, label = {
-                    Text(
-                        when (p) {
-                            Period.TODAY -> "اليوم"; Period.YESTERDAY -> "أمس"; Period.WEEK -> "الأسبوع"
-                            Period.MONTH -> "الشهر"; Period.YEAR -> "السنة"; else -> ""
+            Period.entries.forEach { p ->
+                val label = when (p) {
+                    Period.TODAY -> "اليوم"; Period.YESTERDAY -> "أمس"; Period.WEEK -> "الأسبوع"
+                    Period.MONTH -> "الشهر"; Period.YEAR -> "السنة"; Period.CUSTOM -> "مخصص"
+                }
+                FilterChip(
+                    selected = s.period == p,
+                    onClick = {
+                        if (p == Period.CUSTOM && (s.customFrom == null || s.customTo == null)) {
+                            // المرّة الأولى: افتح منتقي التاريخين، وسيُضبط الفترة عند الاختيار.
+                            showRangePicker = true
+                        } else {
+                            vm.setPeriod(p)
                         }
-                    )
-                })
+                    },
+                    label = {
+                        val cf = s.customFrom
+                        val ct = s.customTo
+                        if (p == Period.CUSTOM && cf != null && ct != null) {
+                            val fmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+                            Text("${fmt.format(Date(cf))} → ${fmt.format(Date(ct))}")
+                        } else Text(label)
+                    }
+                )
             }
+        }
+        if (showRangePicker) {
+            RangePicker(
+                initialFrom = s.customFrom,
+                initialTo = s.customTo,
+                onDismiss = { showRangePicker = false },
+                onConfirm = { from, to ->
+                    vm.setCustomRange(from, to)
+                    showRangePicker = false
+                }
+            )
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -943,6 +970,57 @@ private fun combineWithCurrentTime(utcMidnight: Long): Long {
     cal.set(Calendar.MONTH, utcCal.get(Calendar.MONTH))
     cal.set(Calendar.DAY_OF_MONTH, utcCal.get(Calendar.DAY_OF_MONTH))
     return cal.timeInMillis
+}
+
+/**
+ * منتقي نطاق زمني مخصص (من/إلى) للوحة الرئيسية.
+ * يعيد تاريخين كبداية/نهاية اليوم بالتوقيت المحلي.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RangePicker(
+    initialFrom: Long?,
+    initialTo: Long?,
+    onDismiss: () -> Unit,
+    onConfirm: (from: Long, to: Long) -> Unit
+) {
+    val today by remember { mutableStateOf(Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis) }
+    val startState = rememberDatePickerState(initialSelectedDateMillis = initialFrom ?: today)
+    val endState = rememberDatePickerState(initialSelectedDateMillis = initialTo ?: System.currentTimeMillis())
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("نطاق الفترة المخصصة") },
+        text = {
+            Column {
+                Text("من", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(4.dp))
+                DatePicker(state = startState, showModeToggle = false)
+                Spacer(Modifier.height(8.dp))
+                Text("إلى", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(4.dp))
+                DatePicker(state = endState, showModeToggle = false)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val from = startState.selectedDateMillis ?: return@TextButton
+                val to = endState.selectedDateMillis ?: return@TextButton
+                val (start, end) = if (from <= to) from to to else to to from
+                onConfirm(combineWithCurrentTime(start), endOfDay(combineWithCurrentTime(end)))
+            }) { Text("تطبيق") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
+    )
+}
+
+/** نهاية اليوم المحلي لتاريخ مختار (23:59:59.999). */
+private fun endOfDay(localMillis: Long): Long {
+    val c = Calendar.getInstance().apply { timeInMillis = localMillis }
+    c.set(Calendar.HOUR_OF_DAY, 23); c.set(Calendar.MINUTE, 59); c.set(Calendar.SECOND, 59); c.set(Calendar.MILLISECOND, 999)
+    return c.timeInMillis
 }
 
 @OptIn(ExperimentalLayoutApi::class)

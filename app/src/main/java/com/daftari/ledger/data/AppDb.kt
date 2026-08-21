@@ -26,12 +26,29 @@ abstract class AppDb : RoomDatabase() {
 
     companion object {
         @Volatile private var I: AppDb? = null
+
         fun get(ctx: Context): AppDb = I ?: synchronized(this) {
-            I ?: Room.databaseBuilder(ctx, AppDb::class.java, "daftari.db")
+            I ?: build(ctx.applicationContext).also { I = it }
+        }
+
+        private fun build(ctx: Context): AppDb =
+            Room.databaseBuilder(ctx, AppDb::class.java, "daftari.db")
                 // لا fallbackToDestructiveMigration — أي ترقية تحتاج Migration صريحة
                 .addMigrations(*Migrations.ALL)
                 .build()
-                .also { I = it }
+
+        /**
+         * بعد استبدال ملف قاعدة البيانات على القرص (استعادة نسخة احتياطية)،
+         * يجب إغلاق الاتصال الحالي وإسقاط الـ singleton حتى يُعاد فتح القاعدة
+         * الجديدة عند أول استخدام بدل الانهطار بقاعدة مغلقة/قديمة.
+         */
+        fun invalidate(ctx: Context) {
+            synchronized(this) {
+                I?.close()
+                I = null
+                // نعيد بناء الاتصال فورًا ليكون جاهزًا قبل الاستخدام التالي.
+                I = build(ctx.applicationContext)
+            }
         }
     }
 }
