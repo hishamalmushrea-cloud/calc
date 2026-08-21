@@ -34,7 +34,8 @@ data class PartyEntity(
     val openingMinor: Long = 0,
     val cachedBalanceMinor: Long = 0,
     val deletedAt: Long? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val creditLimitMinor: Long = 0
 )
 
 @Entity(

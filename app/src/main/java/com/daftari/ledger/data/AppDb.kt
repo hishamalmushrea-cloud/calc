@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         DocumentEntity::class, JournalLineEntity::class, AuditLogEntity::class,
         SettingsEntity::class, DailyClosingEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDb : RoomDatabase() {

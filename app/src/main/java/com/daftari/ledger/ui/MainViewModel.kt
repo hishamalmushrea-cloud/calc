@@ -49,7 +49,8 @@ data class UiState(
     val audit: List<AuditLogEntity> = emptyList(),
     val backups: List<java.io.File> = emptyList(),
     val shareText: String? = null,
-    val agingAlert: Int = 0
+    val agingAlert: Int = 0,
+    val late: List<LedgerRepository.LateRow> = emptyList()
 )
 
 data class PartyStats(
@@ -137,6 +138,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         refreshTotals()
+        loadLate()
     }
 
     fun setPeriod(p: Period) {
@@ -173,12 +175,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.createShop(name)
     }
 
-    fun addParty(kind: PartyKind, name: String, phone: String, openingMajor: String) = viewModelScope.launch {
+    fun addParty(
+        kind: PartyKind, name: String, phone: String, openingMajor: String,
+        category: String, limitMajor: String
+    ) = viewModelScope.launch {
         val shop = _s.value.shop ?: return@launch
         val open = Money.fromMajor(openingMajor)?.minor ?: 0L
+        val limit = Money.fromMajor(limitMajor)?.minor ?: 0L
         try {
-            repo.addParty(shop.id, kind, name, phone, open)
+            repo.addParty(shop.id, kind, name, phone, open, category = category, creditLimitMinor = limit)
             refreshTotals()
+        } catch (e: LedgerException) {
+            _s.value = _s.value.copy(message = e.message)
+        }
+    }
+
+    fun updatePartyExtra(id: Long, category: String, limitMajor: String) = viewModelScope.launch {
+        val limit = Money.fromMajor(limitMajor)?.minor ?: 0L
+        try {
+            repo.updatePartyExtra(id, category, limit)
+            val updated = repo.parties.get(id)
+            _s.value = _s.value.copy(selectedParty = updated ?: _s.value.selectedParty, message = "تم التحديث")
         } catch (e: LedgerException) {
             _s.value = _s.value.copy(message = e.message)
         }
@@ -294,6 +311,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadAging() = viewModelScope.launch {
         val shop = _s.value.shop ?: return@launch
         _s.value = _s.value.copy(aging = repo.aging(shop.id, "CUSTOMER"))
+    }
+
+    fun loadLate() = viewModelScope.launch {
+        val shop = _s.value.shop ?: return@launch
+        _s.value = _s.value.copy(late = repo.lateCustomers(shop.id))
     }
 
     fun previewCsv(text: String) {

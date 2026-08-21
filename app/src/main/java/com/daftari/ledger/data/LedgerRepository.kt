@@ -46,14 +46,17 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun addParty(
         shopId: Long, kind: PartyKind, name: String, phone: String = "",
-        openingMinor: Long = 0, notes: String = ""
+        openingMinor: Long = 0, notes: String = "",
+        category: String = "عادي", creditLimitMinor: Long = 0
     ): Long {
         if (name.isBlank()) throw LedgerException("أدخل اسم الحساب")
         val id = parties.insert(
             PartyEntity(
                 shopId = shopId, kind = kind.name, name = name.trim(),
                 phone = phone.trim(), notes = notes, openingMinor = openingMinor,
-                cachedBalanceMinor = openingMinor
+                cachedBalanceMinor = openingMinor,
+                category = category.trim().ifBlank { "عادي" },
+                creditLimitMinor = creditLimitMinor.coerceAtLeast(0)
             )
         )
         if (openingMinor != 0L) {
@@ -61,6 +64,17 @@ class LedgerRepository(private val db: AppDb) {
         }
         audit.insert(AuditLogEntity(action = "CREATE", entity = "party", entityId = id, detail = name))
         return id
+    }
+
+    suspend fun updatePartyExtra(partyId: Long, category: String, creditLimitMinor: Long) {
+        val p = parties.get(partyId) ?: throw LedgerException("الحساب غير موجود")
+        parties.update(
+            p.copy(
+                category = category.trim().ifBlank { "عادي" },
+                creditLimitMinor = creditLimitMinor.coerceAtLeast(0)
+            )
+        )
+        audit.insert(AuditLogEntity(action = "UPDATE", entity = "party", entityId = partyId, detail = "تصنيف/حد"))
     }
 
     private suspend fun postOpening(shopId: Long, partyId: Long, kind: PartyKind, amount: Long) {
@@ -324,6 +338,29 @@ class LedgerRepository(private val db: AppDb) {
             val bk = AgingFifo.allocate(p.cachedBalanceMinor, invoices, now)
             AgingRow(p, bk.b0, bk.b31, bk.b61, bk.b90)
         }
+    }
+
+    data class LateRow(
+        val party: PartyEntity,
+        val balanceMinor: Long,
+        val lastDate: Long?,
+        val daysLate: Int
+    )
+
+    /** عملاء برصيد مستحق عليهم، مرتبين بعدد أيام التأخير (من آخر بيع/تحصيل). */
+    suspend fun lateCustomers(shopId: Long): List<LateRow> {
+        val now = System.currentTimeMillis()
+        val day = 86_400_000L
+        return parties.listAll(shopId)
+            .filter { it.kind == "CUSTOMER" && it.cachedBalanceMinor > 0 }
+            .map { p ->
+                val docs = documents.listParty(p.id)
+                    .filter { it.type == DocType.SALE.name || it.type == DocType.COLLECT.name }
+                val last = docs.maxOfOrNull { it.occurredAt }
+                val days = last?.let { ((now - it) / day).toInt().coerceAtLeast(0) } ?: 0
+                LateRow(p, p.cachedBalanceMinor, last, days)
+            }
+            .sortedByDescending { it.daysLate }
     }
 
     data class CsvCommit(val created: Int, val skipped: Int)

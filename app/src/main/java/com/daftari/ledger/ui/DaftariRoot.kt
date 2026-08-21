@@ -17,9 +17,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
@@ -55,14 +62,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import com.daftari.ledger.data.AgingRow
 import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
@@ -79,6 +90,8 @@ import java.util.TimeZone
 fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = null) {
     var tab by remember { mutableIntStateOf(0) }
     var addType by remember { mutableStateOf<DocType?>(null) }
+    var quickParty by remember { mutableStateOf<PartyEntity?>(null) }
+    var quickType by remember { mutableStateOf<DocType?>(null) }
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(s.message) {
         s.message?.let { snack.showSnackbar(it); vm.consumeMessage() }
@@ -122,7 +135,18 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
         }
     }
     if (addType != null) DocSheet(s, vm, addType!!, null) { addType = null }
-    if (s.selectedParty != null) PartyDetail(s, vm) { vm.closePartyDialog() }
+    if (s.selectedParty != null) PartyDetail(
+        s, vm,
+        onDismiss = { vm.closePartyDialog() },
+        onQuick = { t ->
+            quickParty = s.selectedParty
+            quickType = t
+            vm.closePartyDialog()
+        }
+    )
+    if (quickParty != null && quickType != null) {
+        DocSheet(s, vm, quickType!!, null, initialParty = quickParty) { quickParty = null; quickType = null }
+    }
     if (s.locked) LockDialog(s, vm, activity)
 }
 
@@ -130,6 +154,7 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
 @Composable
 private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick: (DocType) -> Unit) {
     val t = s.totals
+    val lateFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Period.entries.filter { it != Period.CUSTOM }.forEach { p ->
@@ -150,21 +175,68 @@ private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick
             Button(onClick = { onQuick(DocType.EXPENSE) }, modifier = Modifier.weight(1f)) { Text("مصروف") }
         }
         Spacer(Modifier.height(8.dp))
+        HeroMetric("صافي النقد خلال الفترة", t.cashNet, t.cashNet >= 0, "النقد الداخل ناقص الخارج (مبيعات نقدية + تحصيل + إيراد − مصروف − شراء − سداد)")
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SplitMetric("لك (عملاء)", s.owedToYou, true, Modifier.weight(1f))
+            SplitMetric("عليك (موردون)", s.youOwe, false, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(8.dp))
         ComparisonCard(s.totals.sales, s.prevTotals.sales)
         if (s.agingAlert > 0) {
             Text("تنبيه: ${s.agingAlert} حساب بديون أقدم من 60 يومًا", color = MaterialTheme.colorScheme.error)
         }
+        if (s.late.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("أبرز المتأخرين", fontWeight = FontWeight.Bold)
+            s.late.take(3).forEach { l -> LateCard(l, lateFmt) }
+        }
         Spacer(Modifier.height(8.dp))
-        Metric("لك (عملاء)", s.owedToYou, true)
-        Metric("عليك (موردون)", s.youOwe, false)
-        Metric("مبيعات الفترة", t.sales, true)
-        Metric("مصروفات الفترة", t.expenses, false)
-        Metric("صافي نقدي", t.cashNet, t.cashNet >= 0)
+        Text("مؤشرات الفترة", fontWeight = FontWeight.Bold)
+        Metric("مبيعات", t.sales, true)
+        Metric("مصروفات", t.expenses, false)
         Metric("ربح تقديري", t.estimatedProfit, t.estimatedProfit >= 0)
         Text("الربح تقديري ولا يشمل تكلفة مخزون غير مسجّل.", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(12.dp))
         Text("حركة الفترة", fontWeight = FontWeight.Bold)
         MiniBars(listOf("مبيعات" to t.sales, "مصروف" to t.expenses, "تحصيل" to t.collections, "سداد" to t.payments))
+    }
+}
+
+@Composable
+private fun HeroMetric(title: String, minor: Long, positive: Boolean, subtitle: String) {
+    val color = if (positive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.10f))
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                Money(minor).format(),
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun SplitMetric(title: String, minor: Long, positive: Boolean, modifier: Modifier = Modifier) {
+    val color = if (positive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+    Card(
+        modifier.padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.08f))
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(title, style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(Money(minor).format(), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
+        }
     }
 }
 
@@ -185,16 +257,14 @@ private fun MiniBars(values: List<Pair<String, Long>>) {
 
 @Composable
 private fun Metric(title: String, minor: Long, positive: Boolean) {
+    val color = if (positive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
     Card(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (positive) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-            else MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
-        )
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.06f))
     ) {
-        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(title, modifier = Modifier.weight(1f))
-            Text(Money(minor).format(), fontWeight = FontWeight.Bold)
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text(Money(minor).format(), fontWeight = FontWeight.Bold, color = color)
         }
     }
 }
@@ -227,21 +297,16 @@ private fun PartiesScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
             TextButton(onClick = { show = true }) { Text("إضافة") }
         }
         val list = if (customersTab) s.customers else s.suppliers
-        if (list.isEmpty()) Text("لا توجد حسابات بعد. أضف اسمًا للبدء.", modifier = Modifier.padding(24.dp))
+        if (list.isEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (customersTab) "لا عملاء بعد" else "لا موردين بعد", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text("اضغط زر + لإضافة أول حساب", style = MaterialTheme.typography.bodySmall)
+            }
+        }
         LazyColumn {
             items(list, key = { it.id }) { p ->
-                Card(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                        .clickable { vm.openParty(p) }
-                ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(p.name, fontWeight = FontWeight.Bold)
-                        val label = if (p.kind == "CUSTOMER") "لك" else "عليك"
-                        Text("$label: ${Money(p.cachedBalanceMinor).format()}")
-                        if (p.phone.isNotBlank()) Text(p.phone, style = MaterialTheme.typography.bodySmall)
-                        Text("اضغط لعرض الكشف", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
+                PartyCard(p) { vm.openParty(p) }
             }
         }
     }
@@ -249,10 +314,51 @@ private fun PartiesScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
 }
 
 @Composable
+private fun PartyCard(p: PartyEntity, onClick: () -> Unit) {
+    val balanceColor = partyBalanceColor(p)
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onClick)
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(balanceColor.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(p.name.take(1), fontWeight = FontWeight.Bold, color = balanceColor, fontSize = 18.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(p.name, fontWeight = FontWeight.Bold)
+                if (p.category.isNotBlank() && p.category != "عادي") {
+                    Text("تصنيف: ${p.category}", style = MaterialTheme.typography.labelSmall)
+                }
+                if (p.creditLimitMinor > 0) {
+                    Text("حد: ${Money(p.creditLimitMinor).format()}", style = MaterialTheme.typography.labelSmall)
+                }
+                if (p.phone.isNotBlank()) Text(p.phone, style = MaterialTheme.typography.bodySmall)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(Money(p.cachedBalanceMinor).format(), fontWeight = FontWeight.Bold, color = balanceColor)
+                Text(if (p.kind == "CUSTOMER") "لك" else "عليك", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun partyBalanceColor(p: PartyEntity): Color {
+    if (p.cachedBalanceMinor == 0L) return MaterialTheme.colorScheme.onSurfaceVariant
+    val inFavor = if (p.kind == "CUSTOMER") p.cachedBalanceMinor > 0 else p.cachedBalanceMinor < 0
+    return if (inFavor) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+}
+
+@Composable
 private fun PartyDialog(customer: Boolean, vm: MainViewModel, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var open by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    var limit by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (customer) "عميل جديد" else "مورد جديد") },
@@ -261,11 +367,16 @@ private fun PartyDialog(customer: Boolean, vm: MainViewModel, onDismiss: () -> U
                 OutlinedTextField(name, { name = it }, label = { Text("الاسم") })
                 OutlinedTextField(phone, { phone = it }, label = { Text("الهاتف (اختياري)") })
                 OutlinedTextField(open, { open = it }, label = { Text("رصيد افتتاحي") })
+                OutlinedTextField(category, { category = it }, label = { Text("تصنيف (اختياري)") })
+                OutlinedTextField(limit, { limit = it }, label = { Text("حد الحساب (اختياري)") })
             }
         },
         confirmButton = {
             Button(onClick = {
-                vm.addParty(if (customer) PartyKind.CUSTOMER else PartyKind.SUPPLIER, name, phone, open)
+                vm.addParty(
+                    if (customer) PartyKind.CUSTOMER else PartyKind.SUPPLIER,
+                    name, phone, open, category, limit
+                )
                 onDismiss()
             }) { Text("حفظ") }
         },
@@ -274,15 +385,34 @@ private fun PartyDialog(customer: Boolean, vm: MainViewModel, onDismiss: () -> U
 }
 
 @Composable
-private fun PartyDetail(s: UiState, vm: MainViewModel, onDismiss: () -> Unit) {
+private fun PartyDetail(
+    s: UiState, vm: MainViewModel,
+    onDismiss: () -> Unit, onQuick: (DocType) -> Unit
+) {
     val p = s.selectedParty ?: return
     val st = s.partyStats
+    var editing by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(p.name) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("الرصيد: ${Money(p.cachedBalanceMinor).format()}", fontWeight = FontWeight.Bold)
+                Text("الرصيد", style = MaterialTheme.typography.labelMedium)
+                Text(
+                    Money(p.cachedBalanceMinor).format(),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp,
+                    color = partyBalanceColor(p)
+                )
+                if (p.category.isNotBlank() && p.category != "عادي") {
+                    Text("تصنيف: ${p.category}", style = MaterialTheme.typography.bodySmall)
+                }
+                if (p.creditLimitMinor > 0) {
+                    Text("حد الحساب: ${Money(p.creditLimitMinor).format()}", style = MaterialTheme.typography.bodySmall)
+                    if (p.kind == "CUSTOMER" && p.cachedBalanceMinor >= p.creditLimitMinor) {
+                        Text("تنبيه: بلغ الرصيد حد الحساب", color = MaterialTheme.colorScheme.error)
+                    }
+                }
                 if (p.phone.isNotBlank()) Text("الهاتف: ${p.phone}", style = MaterialTheme.typography.bodySmall)
                 if (st == null) {
                     Spacer(Modifier.height(8.dp))
@@ -303,6 +433,17 @@ private fun PartyDetail(s: UiState, vm: MainViewModel, onDismiss: () -> Unit) {
                         Text("${arabicType(d.type)}  ${Money(d.amountMinor).format()}")
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                Text("إجراء سريع", fontWeight = FontWeight.Bold)
+                Row {
+                    if (p.kind == "CUSTOMER") {
+                        TextButton(onClick = { onQuick(DocType.SALE) }) { Text("بيع") }
+                        TextButton(onClick = { onQuick(DocType.COLLECT) }) { Text("تحصيل") }
+                    } else {
+                        TextButton(onClick = { onQuick(DocType.PURCHASE) }) { Text("شراء") }
+                        TextButton(onClick = { onQuick(DocType.PAY) }) { Text("سداد") }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -310,32 +451,84 @@ private fun PartyDetail(s: UiState, vm: MainViewModel, onDismiss: () -> Unit) {
         },
         dismissButton = {
             Row {
+                TextButton(onClick = { editing = true }) { Text("تعديل") }
                 TextButton(onClick = { vm.closeParty(p.id); onDismiss() }) { Text("إغلاق الحساب") }
                 TextButton(onClick = onDismiss) { Text("إغلاق") }
             }
         }
+    )
+    if (editing) PartyEditDialog(p, vm) { editing = false }
+}
+
+@Composable
+private fun PartyEditDialog(p: PartyEntity, vm: MainViewModel, onDismiss: () -> Unit) {
+    var category by remember { mutableStateOf(p.category) }
+    var limit by remember {
+        mutableStateOf(if (p.creditLimitMinor == 0L) "" else Money(p.creditLimitMinor).toBigDecimal().toPlainString())
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("تعديل ${p.name}") },
+        text = {
+            Column {
+                OutlinedTextField(category, { category = it }, label = { Text("تصنيف") })
+                OutlinedTextField(limit, { limit = it }, label = { Text("حد الحساب") })
+            }
+        },
+        confirmButton = {
+            Button(onClick = { vm.updatePartyExtra(p.id, category, limit); onDismiss() }) { Text("حفظ") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )
 }
 
 @Composable
 private fun DocsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     var editing by remember { mutableStateOf<DocumentEntity?>(null) }
+    var query by remember { mutableStateOf("") }
     val fmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
-    LazyColumn(Modifier.fillMaxSize().padding(pad).padding(16.dp)) {
-        if (s.docs.isEmpty()) item { Text("لا عمليات في هذه الفترة.") }
-        items(s.docs, key = { it.id }) { d ->
+    val filtered = if (query.isBlank()) s.docs else s.docs.filter {
+        it.notes.contains(query, true) ||
+            it.docNumber.contains(query, true) ||
+            arabicType(it.type).contains(query, true)
+    }
+    Column(Modifier.fillMaxSize().padding(pad).padding(16.dp)) {
+        OutlinedTextField(
+            query, { query = it },
+            label = { Text("بحث (ملاحظات / رقم سند / نوع)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyColumn(Modifier.fillMaxSize()) {
+        if (filtered.isEmpty()) item {
+            Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("لا عمليات في هذه الفترة", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(if (query.isBlank()) "اضغط زر + لإضافة عملية" else "لا نتائج مطابقة", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        items(filtered, key = { it.id }) { d ->
+            val color = when (d.type) {
+                "SALE", "COLLECT", "INCOME" -> MaterialTheme.colorScheme.primary
+                "PURCHASE", "EXPENSE", "PAY" -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
             Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(arabicType(d.type), fontWeight = FontWeight.Bold)
-                    Text(Money(d.amountMinor).format())
-                    Text(fmt.format(Date(d.occurredAt)), style = MaterialTheme.typography.bodySmall)
-                    if (d.notes.isNotBlank()) Text(d.notes)
-                    Row {
-                        TextButton(onClick = { vm.deleteDoc(d.id) }) { Text("أرشفة") }
-                        TextButton(onClick = { editing = d }) { Text("تعديل") }
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(arabicType(d.type), fontWeight = FontWeight.Bold)
+                        Text(fmt.format(Date(d.occurredAt)), style = MaterialTheme.typography.bodySmall)
+                        if (d.notes.isNotBlank()) Text(d.notes)
                     }
+                    Text(Money(d.amountMinor).format(), fontWeight = FontWeight.Bold, color = color)
+                }
+                Row {
+                    TextButton(onClick = { vm.deleteDoc(d.id) }) { Text("أرشفة") }
+                    TextButton(onClick = { editing = d }) { Text("تعديل") }
                 }
             }
+        }
         }
     }
     if (editing != null) DocSheet(s, vm, DocType.SALE, editing) { editing = null }
@@ -344,23 +537,75 @@ private fun DocsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
 @Composable
 private fun ReportsScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     val t = s.totals
-    LaunchedEffect(s.shop?.id) { vm.loadAging() }
+    val lateFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    LaunchedEffect(s.shop?.id) { vm.loadAging(); vm.loadLate() }
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("تقرير الفترة", style = MaterialTheme.typography.titleLarge)
-        Text("مبيعات: ${Money(t.sales).format()}")
-        Text("مشتريات: ${Money(t.purchases).format()}")
-        Text("مصروفات: ${Money(t.expenses).format()}")
-        Text("تحصيل: ${Money(t.collections).format()}")
-        Text("سداد: ${Money(t.payments).format()}")
-        Text("صافي نقدي: ${Money(t.cashNet).format()}")
-        Text("ربح تقديري: ${Money(t.estimatedProfit).format()}")
+        Spacer(Modifier.height(8.dp))
+        Metric("مبيعات", t.sales, true)
+        Metric("مشتريات", t.purchases, false)
+        Metric("مصروفات", t.expenses, false)
+        Metric("تحصيل", t.collections, true)
+        Metric("سداد", t.payments, false)
+        Metric("صافي نقدي", t.cashNet, t.cashNet >= 0)
+        Metric("ربح تقديري", t.estimatedProfit, t.estimatedProfit >= 0)
         MiniBars(listOf("مبيعات" to t.sales, "مصروف" to t.expenses, "مشتريات" to t.purchases))
         Button(onClick = { vm.exportPdf() }, modifier = Modifier.padding(vertical = 8.dp)) { Text("تصدير PDF ومشاركة") }
+        Spacer(Modifier.height(8.dp))
         Text("أعمار ديون العملاء", fontWeight = FontWeight.Bold)
-        Text("0–30 | 31–60 | 61–90 | +90")
-        if (s.aging.isEmpty()) Text("لا ديون مستحقة للعرض.")
-        s.aging.forEach { a ->
-            Text("${a.party.name}: ${Money(a.b0).format()} | ${Money(a.b31).format()} | ${Money(a.b61).format()} | ${Money(a.b90).format()}")
+        Text("0–30 | 31–60 | 61–90 | +90", style = MaterialTheme.typography.bodySmall)
+        if (s.aging.isEmpty()) Text("لا ديون مستحقة للعرض.", style = MaterialTheme.typography.bodySmall)
+        s.aging.forEach { a -> AgingCard(a) }
+        Spacer(Modifier.height(8.dp))
+        Text("العملاء المتأخرون", fontWeight = FontWeight.Bold)
+        if (s.late.isEmpty()) Text("لا متأخرات.", style = MaterialTheme.typography.bodySmall)
+        s.late.forEach { l -> LateCard(l, lateFmt) }
+    }
+}
+
+@Composable
+private fun AgingCard(a: AgingRow) {
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.padding(12.dp)) {
+            Text(a.party.name, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                AgeCell("0–30", a.b0)
+                AgeCell("31–60", a.b31)
+                AgeCell("61–90", a.b61)
+                AgeCell("+90", a.b90, warn = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AgeCell(label: String, minor: Long, warn: Boolean = false) {
+    val color = when {
+        minor == 0L -> MaterialTheme.colorScheme.onSurfaceVariant
+        warn -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.primary
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        Text(Money(minor).format(), fontWeight = FontWeight.Bold, color = color, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun LateCard(l: LedgerRepository.LateRow, fmt: SimpleDateFormat) {
+    val color = if (l.daysLate > 60) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(l.party.name, fontWeight = FontWeight.Bold)
+                val lastTxt = l.lastDate?.let { fmt.format(Date(it)) } ?: "—"
+                Text("آخر حركة: $lastTxt", style = MaterialTheme.typography.bodySmall)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(Money(l.balanceMinor).format(), fontWeight = FontWeight.Bold)
+                Text("${l.daysLate} يوم", color = color, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -375,72 +620,93 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
     var backupPw by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { vm.refreshBackups() }
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
-        Text("المحلات", fontWeight = FontWeight.Bold)
-        s.shops.forEach { sh ->
-            TextButton(onClick = { vm.selectShop(sh) }) {
-                Text(if (s.shop?.id == sh.id) "✓ ${sh.name}" else sh.name)
+
+        Section("المحلات", initiallyExpanded = true) {
+            s.shops.forEach { sh ->
+                TextButton(onClick = { vm.selectShop(sh) }) {
+                    Text(if (s.shop?.id == sh.id) "✓ ${sh.name}" else sh.name)
+                }
             }
+            OutlinedTextField(shopName, { shopName = it }, label = { Text("اسم محل جديد") })
+            Button(onClick = { if (shopName.isNotBlank()) { vm.addShop(shopName); shopName = "" } }) { Text("إنشاء محل") }
         }
-        OutlinedTextField(shopName, { shopName = it }, label = { Text("اسم محل جديد") })
-        Button(onClick = { if (shopName.isNotBlank()) { vm.addShop(shopName); shopName = "" } }) { Text("إنشاء محل") }
-        Spacer(Modifier.height(12.dp))
-        Text("إغلاق اليوم", fontWeight = FontWeight.Bold)
-        Text("النقد المتوقع: ${Money(s.totals.cashNet).format()}")
-        OutlinedTextField(cash, { cash = it }, label = { Text("النقد الفعلي") })
-        OutlinedTextField(closeNotes, { closeNotes = it }, label = { Text("ملاحظات") })
-        Button(onClick = { vm.closeDay(cash, closeNotes) }) { Text("إغلاق اليوم") }
-        Spacer(Modifier.height(12.dp))
-        Text("الأمان", fontWeight = FontWeight.Bold)
-        OutlinedTextField(pin, { pin = it }, label = { Text("PIN") }, visualTransformation = PasswordVisualTransformation())
-        Row {
-            Button(onClick = { vm.savePin(pin) }) { Text("حفظ القفل") }
-            TextButton(onClick = { vm.clearPin() }) { Text("إلغاء PIN") }
+
+        Section("إغلاق اليوم") {
+            Text("النقد المتوقع: ${Money(s.totals.cashNet).format()}")
+            OutlinedTextField(cash, { cash = it }, label = { Text("النقد الفعلي") })
+            OutlinedTextField(closeNotes, { closeNotes = it }, label = { Text("ملاحظات") })
+            Button(onClick = { vm.closeDay(cash, closeNotes) }) { Text("إغلاق اليوم") }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("بصمة عند الفتح", modifier = Modifier.weight(1f))
-            Switch(s.biometric, { vm.toggleBio(it) })
-        }
-        Spacer(Modifier.height(12.dp))
-        Text("النسخ الاحتياطي", fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("نسخ تلقائي يومي", modifier = Modifier.weight(1f))
-            Switch(s.autoBackup, { vm.toggleBackup(it) })
-        }
-        Button(onClick = { vm.backupNow() }) { Text("نسخة الآن ومشاركة") }
-        OutlinedTextField(backupPw, { backupPw = it }, label = { Text("كلمة مرور النسخة (للتشفير)") }, visualTransformation = PasswordVisualTransformation())
-        Button(onClick = { vm.backupEncrypted(backupPw) }) { Text("نسخة مشفرة ومشاركة") }
-        Button(onClick = { vm.exportCsv() }) { Text("تصدير CSV كامل ومشاركة") }
-        Spacer(Modifier.height(8.dp))
-        Text("النسخ المحفوظة", fontWeight = FontWeight.Bold)
-        if (s.backups.isEmpty()) Text("لا نسخ بعد.")
-        val backupFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
-        s.backups.forEach { f ->
+
+        Section("الأمان") {
+            OutlinedTextField(pin, { pin = it }, label = { Text("PIN") }, visualTransformation = PasswordVisualTransformation())
+            Row {
+                Button(onClick = { vm.savePin(pin) }) { Text("حفظ القفل") }
+                TextButton(onClick = { vm.clearPin() }) { Text("إلغاء PIN") }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    backupFmt.format(Date(f.lastModified())) + if (f.name.endsWith(".enc")) " 🔒" else "",
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = { vm.restoreBackup(f, backupPw) }) { Text("استعادة") }
+                Text("بصمة عند الفتح", modifier = Modifier.weight(1f))
+                Switch(s.biometric, { vm.toggleBio(it) })
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Text("استيراد CSV", fontWeight = FontWeight.Bold)
-        Text("الاسم, النوع, المبلغ, نوع العملية", style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(csv, { csv = it }, label = { Text("الصق CSV") }, minLines = 4)
-        Row {
-            Button(onClick = { vm.previewCsv(csv) }) { Text("معاينة") }
-            TextButton(onClick = { vm.commitCsv() }, enabled = s.csvPreview.isNotEmpty()) { Text("تنفيذ") }
+
+        Section("النسخ الاحتياطي") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("نسخ تلقائي يومي", modifier = Modifier.weight(1f))
+                Switch(s.autoBackup, { vm.toggleBackup(it) })
+            }
+            Button(onClick = { vm.backupNow() }) { Text("نسخة الآن ومشاركة") }
+            OutlinedTextField(backupPw, { backupPw = it }, label = { Text("كلمة مرور النسخة (للتشفير)") }, visualTransformation = PasswordVisualTransformation())
+            Button(onClick = { vm.backupEncrypted(backupPw) }) { Text("نسخة مشفرة ومشاركة") }
+            Button(onClick = { vm.exportCsv() }) { Text("تصدير CSV كامل ومشاركة") }
+            Spacer(Modifier.height(8.dp))
+            if (s.backups.isEmpty()) Text("لا نسخ بعد.", style = MaterialTheme.typography.bodySmall)
+            val backupFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+            s.backups.forEach { f ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        backupFmt.format(Date(f.lastModified())) + if (f.name.endsWith(".enc")) " 🔒" else "",
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { vm.restoreBackup(f, backupPw) }) { Text("استعادة") }
+                }
+            }
         }
-        s.csvPreview.take(20).forEach { r ->
-            Text("سطر ${r.line}: ${r.name} ${r.amount} ${r.error ?: "جاهز"}")
+
+        Section("استيراد CSV") {
+            Text("الاسم, النوع, المبلغ, نوع العملية", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(csv, { csv = it }, label = { Text("الصق CSV") }, minLines = 4)
+            Row {
+                Button(onClick = { vm.previewCsv(csv) }) { Text("معاينة") }
+                TextButton(onClick = { vm.commitCsv() }, enabled = s.csvPreview.isNotEmpty()) { Text("تنفيذ") }
+            }
+            s.csvPreview.take(20).forEach { r ->
+                Text("سطر ${r.line}: ${r.name} ${r.amount} ${r.error ?: "جاهز"}")
+            }
         }
-        Spacer(Modifier.height(12.dp))
-        Text("سجل التدقيق", fontWeight = FontWeight.Bold)
-        if (s.audit.isEmpty()) Text("لا سجل بعد.")
-        val auditFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
-        s.audit.take(30).forEach { a ->
-            Text("${auditFmt.format(Date(a.at))} — ${a.action} ${a.entity} ${a.detail}", style = MaterialTheme.typography.bodySmall)
+
+        Section("سجل التدقيق") {
+            if (s.audit.isEmpty()) Text("لا سجل بعد.", style = MaterialTheme.typography.bodySmall)
+            val auditFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+            s.audit.take(30).forEach { a ->
+                Text("${auditFmt.format(Date(a.at))} — ${a.action} ${a.entity} ${a.detail}", style = MaterialTheme.typography.bodySmall)
+            }
         }
+    }
+}
+
+@Composable
+private fun Section(title: String, initiallyExpanded: Boolean = false, content: @Composable () -> Unit) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
+        }
+        if (expanded) content()
     }
 }
 
@@ -448,7 +714,9 @@ private fun MoreScreen(s: UiState, vm: MainViewModel, pad: PaddingValues) {
 @Composable
 private fun DocSheet(
     s: UiState, vm: MainViewModel, initialType: DocType,
-    existing: DocumentEntity? = null, onDismiss: () -> Unit
+    existing: DocumentEntity? = null,
+    initialParty: PartyEntity? = null,
+    onDismiss: () -> Unit
 ) {
     val existingType = existing?.type?.let { runCatching { DocType.valueOf(it) }.getOrNull() } ?: initialType
     var type by remember { mutableStateOf(existingType) }
@@ -458,7 +726,10 @@ private fun DocSheet(
     var credit by remember { mutableStateOf(existing?.paymentMethod == "CREDIT") }
     var occurredAt by remember { mutableStateOf(existing?.occurredAt ?: System.currentTimeMillis()) }
     var party by remember {
-        mutableStateOf(existing?.partyId?.let { pid -> (s.customers + s.suppliers).firstOrNull { it.id == pid } })
+        mutableStateOf(
+            initialParty
+                ?: existing?.partyId?.let { pid -> (s.customers + s.suppliers).firstOrNull { it.id == pid } }
+        )
     }
     var partyQuery by remember { mutableStateOf(party?.name ?: "") }
     var showDate by remember { mutableStateOf(false) }
