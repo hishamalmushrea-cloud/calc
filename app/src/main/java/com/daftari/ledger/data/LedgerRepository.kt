@@ -322,13 +322,20 @@ class LedgerRepository(private val db: AppDb) {
         Unit
     }
 
-    suspend fun softDeleteDocument(id: Long) = db.withTransaction {
-        val d = documents.get(id) ?: return@withTransaction
-        if (d.deletedAt != null) return@withTransaction // مؤرشفة مسبقًا
-        documents.update(d.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()))
-        d.partyId?.let { refreshPartyBalance(it) }
-        audit.insert(AuditLogEntity(action = "DELETE", entity = "document", entityId = id))
-        Unit
+    suspend fun softDeleteDocument(id: Long) {
+        db.withTransaction {
+            val d = documents.get(id)
+            if (d != null && d.deletedAt == null) {
+                documents.update(
+                    d.copy(
+                        deletedAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+                d.partyId?.let { refreshPartyBalance(it) }
+                audit.insert(AuditLogEntity(action = "DELETE", entity = "document", entityId = id))
+            }
+        }
     }
 
     suspend fun refreshPartyBalance(partyId: Long) {

@@ -200,6 +200,7 @@ fun DaftariRoot(s: UiState, vm: MainViewModel, activity: FragmentActivity? = nul
 private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick: (DocType) -> Unit) {
     val t = s.totals
     val lateFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    val rangeFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     var showRangePicker by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState())) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -222,8 +223,7 @@ private fun Dashboard(s: UiState, vm: MainViewModel, pad: PaddingValues, onQuick
                         val cf = s.customFrom
                         val ct = s.customTo
                         if (p == Period.CUSTOM && cf != null && ct != null) {
-                            val fmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
-                            Text("${fmt.format(Date(cf))} → ${fmt.format(Date(ct))}")
+                            Text("${rangeFmt.format(Date(cf))} → ${rangeFmt.format(Date(ct))}")
                         } else Text(label)
                     }
                 )
