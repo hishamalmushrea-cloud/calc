@@ -997,11 +997,11 @@ private fun RangePicker(
             Column {
                 Text("من", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(4.dp))
-                DatePicker(state = startState, showModeToggle = false)
+                DatePicker(state = startState)
                 Spacer(Modifier.height(8.dp))
                 Text("إلى", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(4.dp))
-                DatePicker(state = endState, showModeToggle = false)
+                DatePicker(state = endState)
             }
         },
         confirmButton = {
