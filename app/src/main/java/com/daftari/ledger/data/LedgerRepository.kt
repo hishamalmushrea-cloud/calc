@@ -228,7 +228,7 @@ class LedgerRepository(private val db: AppDb) {
         shopId: Long, type: DocType, cashCode: String, transferToCode: String?
     ): JournalLineBuilder.AccountRefs {
         val cash = accounts.byCode(shopId, cashCode) ?: throw LedgerException("حساب نقدي غير موجود")
-        fun must(code: String) = accounts.byCode(shopId, code)
+        suspend fun must(code: String) = accounts.byCode(shopId, code)
             ?: throw LedgerException("حساب النظام $code غير موجود — المحل غير مُهيَّأ بشكل صحيح")
         val dest = if (type == DocType.TRANSFER) {
             val code = transferToCode ?: AccountCodes.BANK
