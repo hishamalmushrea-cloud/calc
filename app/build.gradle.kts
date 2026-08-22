@@ -36,6 +36,12 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// لا يملك CI محاكيًا لتشغيل androidTest، لكن نبني APK الاختبارات مع اختبارات
+// الوحدة حتى يكتشف المترجم أي كسر في اختبارات Room التكاملية.
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    dependsOn("assembleDebugAndroidTest")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
