@@ -159,7 +159,7 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun addParty(
         shopId: Long, kind: PartyKind, name: String, phone: String = "",
         openingMinor: Long = 0, notes: String = "",
-        category: String = "عادي", creditLimitMinor: Long = 0
+        category: String = DEFAULT_PARTY_CATEGORY, creditLimitMinor: Long = 0
     ): Long = db.withTransaction {
         if (name.isBlank()) throw LedgerException("أدخل اسم الحساب")
         val id = parties.insert(
@@ -167,7 +167,7 @@ class LedgerRepository(private val db: AppDb) {
                 shopId = shopId, kind = kind.name, name = name.trim(),
                 phone = phone.trim(), notes = notes, openingMinor = openingMinor,
                 cachedBalanceMinor = openingMinor,
-                category = category.trim().ifBlank { "عادي" },
+                category = category.trim().ifBlank { DEFAULT_PARTY_CATEGORY },
                 creditLimitMinor = creditLimitMinor.coerceAtLeast(0)
             )
         )
@@ -182,7 +182,7 @@ class LedgerRepository(private val db: AppDb) {
         val p = parties.get(partyId) ?: throw LedgerException("الحساب غير موجود")
         parties.update(
             p.copy(
-                category = category.trim().ifBlank { "عادي" },
+                category = category.trim().ifBlank { DEFAULT_PARTY_CATEGORY },
                 creditLimitMinor = creditLimitMinor.coerceAtLeast(0)
             )
         )

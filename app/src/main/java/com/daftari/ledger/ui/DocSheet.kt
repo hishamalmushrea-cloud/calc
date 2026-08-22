@@ -1,0 +1,188 @@
+package com.daftari.ledger.ui
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.daftari.ledger.R
+import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.PartyEntity
+import com.daftari.ledger.domain.DocType
+import com.daftari.ledger.domain.Money
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun DocumentSheet(
+    state: UiState,
+    onEvent: (UiEvent) -> Unit,
+    initialType: DocType,
+    existing: DocumentEntity? = null,
+    initialParty: PartyEntity? = null,
+    onDismiss: () -> Unit
+) {
+    val existingType = existing?.type?.let { runCatching { DocType.valueOf(it) }.getOrNull() } ?: initialType
+    var type by remember { mutableStateOf(existingType) }
+    var amount by remember {
+        mutableStateOf(existing?.let { Money(it.amountMinor).toBigDecimal().toPlainString() }.orEmpty())
+    }
+    var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }
+    var documentNumber by remember { mutableStateOf(existing?.docNumber.orEmpty()) }
+    var credit by remember { mutableStateOf(existing?.paymentMethod == "CREDIT") }
+    var occurredAt by remember { mutableStateOf(existing?.occurredAt ?: System.currentTimeMillis()) }
+    var party by remember {
+        mutableStateOf(
+            initialParty ?: existing?.partyId?.let { id ->
+                (state.customers + state.suppliers).firstOrNull { it.id == id }
+            }
+        )
+    }
+    var partyQuery by remember { mutableStateOf(party?.name.orEmpty()) }
+    var showDate by remember { mutableStateOf(false) }
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(if (existing == null) R.string.new_document else R.string.edit_document)) },
+        text = {
+            Column {
+                if (existing == null) {
+                    DocumentTypeChips(type) { type = it }
+                } else {
+                    Text(
+                        stringResource(R.string.document_type_value, documentTypeLabel(type.name)),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                OutlinedTextField(amount, { amount = it }, label = { Text(stringResource(R.string.amount)) })
+                if (existing == null && type in PARTY_DOCUMENT_TYPES) {
+                    OutlinedTextField(partyQuery, { partyQuery = it; party = null }, label = { Text(stringResource(R.string.name)) })
+                    val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
+                    pool.filter { it.name.contains(partyQuery, true) }.take(5).forEach { candidate ->
+                        TextButton(onClick = { party = candidate; partyQuery = candidate.name }) { Text(candidate.name) }
+                    }
+                    val exact = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
+                    if (partyQuery.isNotBlank() && exact == null && party == null) {
+                        Text(
+                            stringResource(
+                                if (type in CUSTOMER_DOCUMENT_TYPES) R.string.new_customer_on_save
+                                else R.string.new_supplier_on_save
+                            ),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+                if (type == DocType.SALE || type == DocType.PURCHASE) {
+                    Row {
+                        Text(stringResource(R.string.credit), modifier = Modifier.weight(1f))
+                        Switch(credit, { credit = it })
+                    }
+                }
+                OutlinedTextField(
+                    documentNumber,
+                    { documentNumber = it },
+                    label = { Text(stringResource(R.string.document_number_optional)) }
+                )
+                OutlinedTextField(notes, { notes = it }, label = { Text(stringResource(R.string.notes)) })
+                TextButton(onClick = { showDate = true }) {
+                    Text(stringResource(R.string.date_value, dateFormat.format(Date(occurredAt))))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (existing == null) {
+                    val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
+                    val matched = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
+                    val finalPartyId = party?.id ?: matched?.id
+                    onEvent(
+                        UiEvent.AddDocument(
+                            DocumentDraft(
+                                type = type,
+                                amount = amount,
+                                partyId = finalPartyId,
+                                credit = credit,
+                                notes = notes,
+                                documentNumber = documentNumber,
+                                newPartyName = if (finalPartyId == null) partyQuery.trim().takeIf(String::isNotBlank) else null,
+                                occurredAt = occurredAt
+                            )
+                        )
+                    )
+                } else {
+                    onEvent(
+                        UiEvent.UpdateDocument(
+                            existing.id,
+                            amount,
+                            notes,
+                            documentNumber,
+                            credit,
+                            occurredAt
+                        )
+                    )
+                }
+                onDismiss()
+            }) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
+    )
+
+    if (showDate) {
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = occurredAt)
+        DatePickerDialog(
+            onDismissRequest = { showDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let { occurredAt = combineWithCurrentTime(it) }
+                    showDate = false
+                }) { Text(stringResource(R.string.action_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDate = false }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        ) { DatePicker(state = dateState) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DocumentTypeChips(selected: DocType, onSelect: (DocType) -> Unit) {
+    val types = listOf(
+        DocType.SALE to stringResource(R.string.doc_type_sale),
+        DocType.COLLECT to stringResource(R.string.doc_type_collect),
+        DocType.PURCHASE to stringResource(R.string.doc_type_purchase),
+        DocType.PAY to stringResource(R.string.doc_type_pay),
+        DocType.EXPENSE to stringResource(R.string.doc_type_expense),
+        DocType.INCOME to stringResource(R.string.doc_type_income),
+        DocType.TRANSFER to stringResource(R.string.doc_type_transfer)
+    )
+    FlowRow {
+        types.forEach { (type, label) ->
+            FilterChip(selected == type, { onSelect(type) }, label = { Text(label) })
+        }
+    }
+}
+
+private val CUSTOMER_DOCUMENT_TYPES = setOf(DocType.SALE, DocType.COLLECT)
+private val PARTY_DOCUMENT_TYPES = setOf(DocType.SALE, DocType.COLLECT, DocType.PURCHASE, DocType.PAY)

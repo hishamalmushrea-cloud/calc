@@ -12,6 +12,7 @@ import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import com.daftari.ledger.ui.DaftariRoot
 import com.daftari.ledger.ui.MainViewModel
+import com.daftari.ledger.ui.UiEvent
 import com.daftari.ledger.ui.theme.DaftariTheme
 
 class MainActivity : FragmentActivity() {
@@ -38,8 +39,8 @@ class MainActivity : FragmentActivity() {
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    startActivity(Intent.createChooser(send, "مشاركة"))
-                    vm.consumeShare()
+                    startActivity(Intent.createChooser(send, getString(R.string.action_share)))
+                    vm.onEvent(UiEvent.ConsumeShareFile)
                 }
 
                 // مشاركة نص (كشف حساب)
@@ -49,14 +50,14 @@ class MainActivity : FragmentActivity() {
                         type = "text/plain"
                         putExtra(Intent.EXTRA_TEXT, text)
                     }
-                    startActivity(Intent.createChooser(send, "مشاركة الكشف"))
-                    vm.consumeShareText()
+                    startActivity(Intent.createChooser(send, getString(R.string.action_share_statement)))
+                    vm.onEvent(UiEvent.ConsumeShareText)
                 }
 
                 // بعد استعادة نسخة احتياطية: إعادة تشغيل التطبيق نظيفة لتُبنى على القاعدة الجديدة.
                 LaunchedEffect(s.restartRequested) {
                     if (s.restartRequested) {
-                        vm.consumeRestart()
+                        vm.onEvent(UiEvent.ConsumeRestart)
                         restartApp()
                     }
                 }

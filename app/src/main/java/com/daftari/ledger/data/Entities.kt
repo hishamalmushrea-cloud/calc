@@ -6,6 +6,8 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+const val DEFAULT_PARTY_CATEGORY = "عادي"
+
 @Entity(tableName = "shops")
 data class ShopEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -31,7 +33,7 @@ data class PartyEntity(
     val phone: String = "",
     val address: String = "",
     val notes: String = "",
-    val category: String = "عادي",
+    val category: String = DEFAULT_PARTY_CATEGORY,
     val openingMinor: Long = 0,
     val cachedBalanceMinor: Long = 0,
     val deletedAt: Long? = null,

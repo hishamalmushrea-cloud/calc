@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Daftari</string>
+    <string name="default_shop_name">Main shop</string>
+    <string name="action_add">Add</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_archive">Archive</string>
+    <string name="action_apply">Apply</string>
+    <string name="action_ok">OK</string>
+    <string name="action_execute">Import</string>
+    <string name="action_preview">Preview</string>
+    <string name="action_restore">Restore</string>
+    <string name="action_share">Share</string>
+    <string name="action_share_statement">Share statement</string>
+    <string name="notifications">Alerts</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_accounts">Accounts</string>
+    <string name="nav_documents">Transactions</string>
+    <string name="nav_reports">Reports</string>
+    <string name="nav_more">More</string>
+    <string name="period_today">Today</string>
+    <string name="period_yesterday">Yesterday</string>
+    <string name="period_week">Week</string>
+    <string name="period_month">Month</string>
+    <string name="period_year">Year</string>
+    <string name="period_custom">Custom</string>
+    <string name="custom_range_title">Custom date range</string>
+    <string name="range_from">From</string>
+    <string name="range_to">To</string>
+    <string name="quick_sale">Quick sale</string>
+    <string name="cash_net_title">Net cash for the period</string>
+    <string name="cash_net_subtitle">Cash received minus cash paid</string>
+    <string name="owed_to_you">Receivables</string>
+    <string name="you_owe">Payables</string>
+    <plurals name="aging_alert"><item quantity="one">Alert: one account has debt older than 60 days</item><item quantity="other">Alert: %d accounts have debt older than 60 days</item></plurals>
+    <string name="top_late_customers">Most overdue</string>
+    <string name="period_indicators">Period indicators</string>
+    <string name="sales">Sales</string>
+    <string name="purchases">Purchases</string>
+    <string name="expenses">Expenses</string>
+    <string name="collections">Collections</string>
+    <string name="payments">Payments</string>
+    <string name="cash_net">Net cash</string>
+    <string name="estimated_profit">Estimated profit</string>
+    <string name="profit_disclaimer">Estimated profit excludes unrecorded inventory costs.</string>
+    <string name="operations_analysis">Transaction analysis</string>
+    <string name="recent_sales_movement">Recent sales movement</string>
+    <string name="sales_comparison">Sales compared with the previous period</string>
+    <string name="current_previous_values">Current: %1$s — Previous: %2$s</string>
+    <string name="customers">Customers</string>
+    <string name="suppliers">Suppliers</string>
+    <string name="no_customers">No customers yet</string>
+    <string name="no_suppliers">No suppliers yet</string>
+    <string name="add_first_account_hint">Tap + to add the first account</string>
+    <string name="customer_new">New customer</string>
+    <string name="supplier_new">New supplier</string>
+    <string name="name">Name</string>
+    <string name="phone_optional">Phone (optional)</string>
+    <string name="opening_balance">Opening balance</string>
+    <string name="category_optional">Category (optional)</string>
+    <string name="credit_limit_optional">Credit limit (optional)</string>
+    <string name="party_you_are_owed">Receivable</string>
+    <string name="party_you_owe">Payable</string>
+    <string name="normal_category">Standard</string>
+    <string name="balance">Balance</string>
+    <string name="category_value">Category: %1$s</string>
+    <string name="credit_limit_value">Credit limit: %1$s</string>
+    <string name="credit_limit_alert">Alert: balance reached the credit limit</string>
+    <string name="phone_value">Phone: %1$s</string>
+    <string name="loading">Loading…</string>
+    <string name="sales_value">Sales: %1$s</string>
+    <string name="collections_value">Collections: %1$s</string>
+    <string name="collection_rate">Collection rate: %1$d%%</string>
+    <string name="purchases_value">Purchases: %1$s</string>
+    <string name="payments_value">Payments: %1$s</string>
+    <string name="recent_operations">Recent transactions</string>
+    <string name="no_operations_yet">No transactions yet.</string>
+    <string name="quick_action">Quick action</string>
+    <string name="close_account">Close account</string>
+    <string name="edit_party_title">Edit %1$s</string>
+    <string name="category">Category</string>
+    <string name="credit_limit">Credit limit</string>
+    <string name="search">Search</string>
+    <string name="all">All</string>
+    <string name="no_operations_period">No transactions in this period</string>
+    <string name="add_operation_hint">Tap + to add a transaction</string>
+    <string name="no_matching_results">No matching results</string>
+    <string name="period_report">Period report</string>
+    <string name="income_expense_analysis">Income and expense analysis</string>
+    <string name="customer_debt_aging">Customer debt aging</string>
+    <string name="aging_buckets">0–30 | 31–60 | 61–90 | 90+</string>
+    <string name="no_due_debts">No due debts to display.</string>
+    <string name="late_customers">Overdue customers</string>
+    <string name="no_late_customers">No overdue balances.</string>
+    <string name="age_0_30">0–30</string><string name="age_31_60">31–60</string><string name="age_61_90">61–90</string><string name="age_over_90">90+</string>
+    <string name="last_activity">Last activity: %1$s</string>
+    <plurals name="late_days"><item quantity="one">One day</item><item quantity="other">%d days</item></plurals>
+    <string name="section_shops">Shops</string>
+    <string name="new_shop_name">New shop name</string>
+    <string name="create_shop">Create shop</string>
+    <string name="section_day_close">Day close</string>
+    <string name="expected_cash">Expected cash: %1$s</string>
+    <string name="actual_cash">Actual cash</string>
+    <string name="notes">Notes</string>
+    <string name="section_security">Security</string>
+    <string name="pin">PIN</string>
+    <string name="save_lock">Save lock</string>
+    <string name="remove_pin">Remove PIN</string>
+    <string name="biometric_on_open">Use biometrics to unlock</string>
+    <string name="section_backup">Backup</string>
+    <string name="daily_auto_backup">Daily automatic backup</string>
+    <string name="backup_now_share">Back up now and share</string>
+    <string name="backup_password">Backup password (for encryption)</string>
+    <string name="encrypted_backup_share">Encrypted backup and share</string>
+    <string name="export_csv_share">Export full CSV and share</string>
+    <string name="no_backups">No backups yet.</string>
+    <string name="section_csv_import">Import CSV</string>
+    <string name="csv_format_hint">name, kind, amount, transaction type</string>
+    <string name="paste_csv">Paste CSV</string>
+    <string name="csv_row">Row %1$d: %2$s %3$s %4$s</string>
+    <string name="csv_ready">Ready</string>
+    <string name="section_audit">Audit log</string>
+    <string name="no_audit">No audit entries yet.</string>
+    <string name="new_document">New transaction</string>
+    <string name="edit_document">Edit transaction</string>
+    <string name="document_type_value">Type: %1$s</string>
+    <string name="amount">Amount</string>
+    <string name="new_customer_on_save">A new customer will be created on save</string>
+    <string name="new_supplier_on_save">A new supplier will be created on save</string>
+    <string name="credit">On credit</string>
+    <string name="document_number_optional">Document number (optional)</string>
+    <string name="date_value">Date: %1$s</string>
+    <string name="lock_title">Daftari lock</string>
+    <string name="unlock_biometric">Unlock with biometrics</string>
+    <string name="unlock">Unlock</string>
+    <string name="biometric_prompt_title">Unlock Daftari</string>
+    <string name="doc_type_sale">Sale</string><string name="doc_type_purchase">Purchase</string><string name="doc_type_expense">Expense</string><string name="doc_type_income">Income</string><string name="doc_type_collect">Collection</string><string name="doc_type_pay">Payment</string><string name="doc_type_transfer">Transfer</string><string name="doc_type_opening">Opening</string><string name="doc_type_unknown">Transaction</string>
+    <string name="chart_no_data">No data</string><string name="chart_no_activity">No activity</string><string name="chart_total">Total</string>
+    <string name="statement_title">Account statement — %1$s</string><string name="statement_balance">Balance: %1$s</string><string name="statement_columns">Date | Type | Amount</string>
+    <string name="msg_updated">Updated</string><string name="msg_invalid_amount">Enter a valid amount</string><string name="msg_saved">Saved</string><string name="msg_edited">Changes saved</string><string name="msg_archived">Archived. You can review the audit log.</string>
+    <string name="msg_unlocked">Unlocked</string><string name="msg_wrong_pin">Incorrect PIN</string><string name="msg_pin_too_short">Use at least four digits</string><string name="msg_pin_saved">Lock PIN saved</string><string name="msg_pin_removed">Lock removed</string>
+    <string name="msg_enter_actual_cash">Enter actual cash</string><string name="msg_day_closed">Day closed</string><string name="msg_account_closed">Account closed; history was preserved</string>
+    <string name="msg_import_result">Imported %1$d rows; skipped %2$d</string><string name="msg_import_failed">Import failed; no partial data was saved</string>
+    <string name="msg_pdf_ready">PDF created</string><string name="msg_pdf_failed">Could not create PDF: %1$s</string><string name="msg_excel_ready">Excel file created</string><string name="msg_excel_failed">Could not create Excel file: %1$s</string>
+    <string name="msg_backup_ready">Backup ready</string><string name="msg_restore_restarting">Restore complete. Restarting…</string><string name="msg_restore_failed">Restore failed: %1$s</string><string name="msg_enter_backup_password">Enter a password for the encrypted backup</string><string name="msg_encrypted_backup_ready">Encrypted backup ready</string><string name="msg_backup_failed">Could not create backup: %1$s</string><string name="msg_csv_exported">Full CSV exported</string><string name="msg_export_failed">Export failed: %1$s</string>
+</resources>
