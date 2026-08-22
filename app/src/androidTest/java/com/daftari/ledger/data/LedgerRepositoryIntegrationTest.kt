@@ -42,23 +42,23 @@ class LedgerRepositoryIntegrationTest {
     fun softDeletedCreditSaleIsExcludedFromPartyBalance() = runBlocking {
         val partyId = repo.addParty(shopId, PartyKind.CUSTOMER, "عميل")
         val documentId = repo.postDocument(
-            shopId, DocType.SALE, 12_500, System.currentTimeMillis(),
+            shopId, DocType.SALE, 12_500L, System.currentTimeMillis(),
             partyId = partyId, paymentMethod = "CREDIT"
         )
-        assertEquals(12_500, repo.parties.get(partyId)?.cachedBalanceMinor)
+        assertEquals(12_500L, repo.parties.get(partyId)?.cachedBalanceMinor)
 
         repo.softDeleteDocument(documentId)
 
-        assertEquals(0, repo.parties.get(partyId)?.cachedBalanceMinor)
+        assertEquals(0L, repo.parties.get(partyId)?.cachedBalanceMinor)
         assertEquals(0, repo.documents.listParty(partyId).size)
-        assertEquals(0, repo.journal.partyNetDebit(partyId))
+        assertEquals(0L, repo.journal.partyNetDebit(partyId))
     }
 
     @Test
     fun closePartyArchivesHistoryAndKeepsBalanceAsOpeningEntry() = runBlocking {
         val partyId = repo.addParty(shopId, PartyKind.CUSTOMER, "عميل")
         repo.postDocument(
-            shopId, DocType.SALE, 7_500, System.currentTimeMillis(),
+            shopId, DocType.SALE, 7_500L, System.currentTimeMillis(),
             partyId = partyId, paymentMethod = "CREDIT"
         )
 
@@ -66,25 +66,25 @@ class LedgerRepositoryIntegrationTest {
 
         val party = requireNotNull(repo.parties.get(partyId))
         val remaining = repo.documents.listParty(partyId)
-        assertEquals(7_500, party.openingMinor)
-        assertEquals(7_500, party.cachedBalanceMinor)
+        assertEquals(7_500L, party.openingMinor)
+        assertEquals(7_500L, party.cachedBalanceMinor)
         assertEquals(1, remaining.size)
         assertEquals(DocType.OPENING.name, remaining.single().type)
-        assertEquals(7_500, repo.journal.partyNetDebit(partyId))
+        assertEquals(7_500L, repo.journal.partyNetDebit(partyId))
     }
 
     @Test
     fun invalidPostRollsBackDocumentInsertion() = runBlocking {
-        val before = repo.documents.listPeriod(shopId, 0, Long.MAX_VALUE).size
+        val before = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size
 
         assertThrows(LedgerException::class.java) {
             runBlocking {
                 repo.postDocument(
-                    shopId, DocType.COLLECT, 1_000, System.currentTimeMillis(), partyId = null
+                    shopId, DocType.COLLECT, 1_000L, System.currentTimeMillis(), partyId = null
                 )
             }
         }
 
-        assertEquals(before, repo.documents.listPeriod(shopId, 0, Long.MAX_VALUE).size)
+        assertEquals(before, repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size)
     }
 }
