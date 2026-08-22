@@ -49,9 +49,15 @@ val verifyAndroidTestCompile by tasks.registering {
             isIgnoreExitValue = true
         }
         if (result.exitValue != 0) {
+            val diagnostic = output.toString().takeLast(12000)
             System.getenv("GITHUB_STEP_SUMMARY")?.let { summary ->
-                file(summary).appendText("\n### androidTest compiler output\n```text\n${output.toString().takeLast(30000)}\n```\n")
+                file(summary).appendText("\n### androidTest compiler output\n```text\n$diagnostic\n```\n")
             }
+            val annotation = diagnostic
+                .replace("%", "%25")
+                .replace("\r", "%0D")
+                .replace("\n", "%0A")
+            println("::error title=androidTest compiler output::$annotation")
             throw GradleException("androidTest compilation failed")
         }
     }
