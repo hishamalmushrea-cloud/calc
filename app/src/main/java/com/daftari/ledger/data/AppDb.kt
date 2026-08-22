@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -11,7 +12,7 @@ import androidx.room.RoomDatabase
         DocumentEntity::class, JournalLineEntity::class, AuditLogEntity::class,
         SettingsEntity::class, DailyClosingEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDb : RoomDatabase() {
@@ -31,10 +32,24 @@ abstract class AppDb : RoomDatabase() {
             I ?: build(ctx.applicationContext).also { I = it }
         }
 
+        private val searchIndexCallback = object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                super.onCreate(db)
+                PartySearchIndex.ensure(db)
+            }
+
+            override fun onOpen(db: SupportSQLiteDatabase) {
+                super.onOpen(db)
+                // يصلح تلقائيًا أي تثبيت قديم فُقد منه جدول FTS دون لمس البيانات.
+                PartySearchIndex.ensure(db)
+            }
+        }
+
         private fun build(ctx: Context): AppDb =
             Room.databaseBuilder(ctx, AppDb::class.java, "daftari.db")
                 // لا fallbackToDestructiveMigration — أي ترقية تحتاج Migration صريحة
                 .addMigrations(*Migrations.ALL)
+                .addCallback(searchIndexCallback)
                 .build()
 
         /**

@@ -1,5 +1,6 @@
 package com.daftari.ledger.data
 
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -132,6 +133,26 @@ data class DailyClosingEntity(
     val differenceMinor: Long,
     val notes: String = "",
     val closedAt: Long = System.currentTimeMillis()
+)
+
+data class PartyStatsAggregate(
+    val sales: Long,
+    val purchases: Long,
+    val collections: Long,
+    val payments: Long
+)
+
+/** صف واحد من استعلام الشيخوخة الموحّد؛ تُجمع الصفوف حسب الطرف في المستودع. */
+data class AgingDocumentRow(
+    @Embedded val party: PartyEntity,
+    val invoiceAmountMinor: Long?,
+    val invoiceOccurredAt: Long?
+)
+
+/** آخر حركة بيع/تحصيل محسوبة في SQL بدل استعلام مستقل لكل عميل. */
+data class PartyLastActivityRow(
+    @Embedded val party: PartyEntity,
+    val lastDate: Long?
 )
 
 data class AgingRow(

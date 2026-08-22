@@ -302,7 +302,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun consumeShare() { _s.update { it.copy(shareFile = null) } }
     fun consumeRestart() { _s.update { it.copy(restartRequested = false) } }
 
-    suspend fun searchParties(q: String) = _s.value.shop?.let { repo.parties.search(it.id, q) }.orEmpty()
+    suspend fun searchParties(q: String) = _s.value.shop?.let { repo.searchParties(it.id, q) }.orEmpty()
 
     fun unlock(pin: String) = viewModelScope.launch {
         if (repo.pinOk(pin)) _s.update { it.copy(locked = false, message = "تم الفتح") }
@@ -400,7 +400,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun backupNow() = viewModelScope.launch {
         val app = getApplication() as DaftariApp
-        val f = app.backup.exportJson()
+        val f = app.backup.exportDatabase()
         _s.update { it.copy(shareFile = f, backups = app.backup.listBackups(), message = "نسخة احتياطية جاهزة") }
     }
 
@@ -445,14 +445,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun loadPartyStats(p: PartyEntity) {
         viewModelScope.launch {
-            val docs = repo.documents.listParty(p.id)
-            fun sum(t: DocType) = docs.filter { it.type == t.name }.sumOf { it.amountMinor }
+            val (totals, recentDocs) = repo.partyStats(p.id)
             val st = PartyStats(
-                sales = sum(DocType.SALE),
-                purchases = sum(DocType.PURCHASE),
-                collections = sum(DocType.COLLECT),
-                payments = sum(DocType.PAY),
-                docs = docs.sortedByDescending { it.occurredAt }
+                sales = totals.sales,
+                purchases = totals.purchases,
+                collections = totals.collections,
+                payments = totals.payments,
+                docs = recentDocs
             )
             _s.update { it.copy(partyStats = st) }
         }

@@ -3,7 +3,9 @@ package com.daftari.ledger.data
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Update
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -22,8 +24,9 @@ interface ShopDao {
 interface PartyDao {
     @Query("SELECT * FROM parties WHERE shopId = :shopId AND kind = :kind AND deletedAt IS NULL ORDER BY name")
     fun observe(shopId: Long, kind: String): Flow<List<PartyEntity>>
-    @Query("SELECT * FROM parties WHERE shopId = :shopId AND deletedAt IS NULL AND name LIKE '%' || :q || '%' ORDER BY name LIMIT 50")
-    suspend fun search(shopId: Long, q: String): List<PartyEntity>
+    /** بحث FTS سريع؛ يُبنى الاستعلام ومعاملاته في [LedgerRepository.searchParties]. */
+    @RawQuery
+    suspend fun searchFts(query: SupportSQLiteQuery): List<PartyEntity>
     @Query("SELECT * FROM parties WHERE id = :id")
     suspend fun get(id: Long): PartyEntity?
     @Insert suspend fun insert(p: PartyEntity): Long
@@ -72,6 +75,58 @@ interface DocumentDao {
     suspend fun search(shopId: Long, q: String): List<DocumentEntity>
     @Query("SELECT * FROM documents WHERE partyId = :partyId AND deletedAt IS NULL ORDER BY occurredAt ASC")
     suspend fun listParty(partyId: Long): List<DocumentEntity>
+
+    @Query("SELECT * FROM documents WHERE partyId = :partyId AND deletedAt IS NULL ORDER BY occurredAt DESC LIMIT :limit")
+    suspend fun recentParty(partyId: Long, limit: Int): List<DocumentEntity>
+
+    @Query(
+        """
+        SELECT
+            COALESCE(SUM(CASE WHEN type = 'SALE' THEN amountMinor ELSE 0 END), 0) AS sales,
+            COALESCE(SUM(CASE WHEN type = 'PURCHASE' THEN amountMinor ELSE 0 END), 0) AS purchases,
+            COALESCE(SUM(CASE WHEN type = 'COLLECT' THEN amountMinor ELSE 0 END), 0) AS collections,
+            COALESCE(SUM(CASE WHEN type = 'PAY' THEN amountMinor ELSE 0 END), 0) AS payments
+        FROM documents
+        WHERE partyId = :partyId AND deletedAt IS NULL
+        """
+    )
+    suspend fun partyStats(partyId: Long): PartyStatsAggregate
+
+    @Query(
+        """
+        SELECT p.*,
+               d.amountMinor AS invoiceAmountMinor,
+               d.occurredAt AS invoiceOccurredAt
+        FROM parties p
+        LEFT JOIN documents d
+          ON d.partyId = p.id
+         AND d.deletedAt IS NULL
+         AND d.type IN ('SALE', 'OPENING')
+        WHERE p.shopId = :shopId
+          AND p.kind = :kind
+          AND p.deletedAt IS NULL
+          AND p.cachedBalanceMinor > 0
+        ORDER BY p.id, d.occurredAt
+        """
+    )
+    suspend fun agingDocuments(shopId: Long, kind: String): List<AgingDocumentRow>
+
+    @Query(
+        """
+        SELECT p.*, MAX(d.occurredAt) AS lastDate
+        FROM parties p
+        LEFT JOIN documents d
+          ON d.partyId = p.id
+         AND d.deletedAt IS NULL
+         AND d.type IN ('SALE', 'COLLECT')
+        WHERE p.shopId = :shopId
+          AND p.kind = 'CUSTOMER'
+          AND p.deletedAt IS NULL
+          AND p.cachedBalanceMinor > 0
+        GROUP BY p.id
+        """
+    )
+    suspend fun customersWithLastActivity(shopId: Long): List<PartyLastActivityRow>
 }
 
 @Dao

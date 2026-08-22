@@ -4,6 +4,7 @@
 
 1. **نسخة عادية** — `daftari-backup-<timestamp>.db`
    نسخة خام ثنائية من ملف قاعدة بيانات SQLite (بعد `PRAGMA wal_checkpoint(FULL)`).
+   تنفذها الدالة `BackupManager.exportDatabase()`؛ لا يوجد مسار JSON في الكود.
 2. **نسخة مشفّرة** — `daftari-backup-<timestamp>.enc`
    نفس الملف لكنه مشفّر بـ AES/GCM مع اشتقاق المفتاح من كلمة المرور عبر PBKDF2
    (راجع `EncryptedBackup.kt`).

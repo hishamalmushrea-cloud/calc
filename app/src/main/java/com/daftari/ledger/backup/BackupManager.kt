@@ -17,7 +17,7 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
         c.use { if (it.moveToFirst()) it.getString(0) }
     }
 
-    suspend fun exportJson(): File = withContext(Dispatchers.IO) {
+    suspend fun exportDatabase(): File = withContext(Dispatchers.IO) {
         checkpoint()
         val dest = File(backupsDir(), "daftari-backup-${System.currentTimeMillis()}.db")
         dbFile().copyTo(dest, overwrite = true)

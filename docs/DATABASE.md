@@ -1,27 +1,32 @@
 # قاعدة البيانات (Room / SQLite)
 
-## الجداول
-- shops
-- parties (customer/supplier) + shopId
-- accounts (chart of accounts per shop)
-- categories (expense/income)
-- payment_methods
-- documents (transactions header)
-- journal_lines (debit/credit, accountId, partyId nullable)
-- fiscal_years
-- audit_logs
-- settings
-- backups_meta
-- daily_closings
+## الجداول الفعلية
+- `shops`
+- `parties` (عميل/مورد مرتبط بـ `shopId`)
+- `accounts` (دليل الحسابات لكل محل)
+- `documents` (رأس العملية)
+- `journal_lines` (مدين/دائن، وحساب وطرف اختياري)
+- `audit_logs`
+- `app_settings`
+- `daily_closings`
+- `parties_fts` — جدول FTS4 مساعد للبحث، تتم مزامنته بمحفزات SQLite.
 
-## مفاتيح
-- PK Long autoGenerate
-- FK مع ON DELETE RESTRICT للقيود (لا حذف سلسلة يدمّر الأستاذ)
-- Soft delete: `deletedAt` nullable
-- فهارس: shopId+date, partyId, documentNumber, accountId
+## المفاتيح والسياسات
+- مفاتيح أساسية `Long` مع `autoGenerate` للجداول التشغيلية.
+- علاقات مهمة بـ `ON DELETE RESTRICT`، والعمليات تستخدم الأرشفة الناعمة
+  (`deletedAt`) بدل الحذف المدمر.
+- فهارس على `shopId` و`partyId` و`occurredAt` و`docNumber` ونوع العملية.
+- بحث الحسابات يستخدم FTS4 وبحث البادئة بدل `LIKE '%query%'`.
 
 ## الترحيل
-Database version 1. أي تغيير لاحق Migration لا destructive fallback في الإنتاج.
+إصدار قاعدة البيانات الحالي **3**:
+- `1 → 2`: إضافة `creditLimitMinor`.
+- `2 → 3`: إنشاء فهرس FTS ومحفزات مزامنته.
+
+كل المسارات موجودة في `Migrations.ALL` ولا يوجد
+`fallbackToDestructiveMigration`. تُختبر الترحيلات بـ `MigrationTestHelper`
+مقابل المخططات المحفوظة في `app/schemas`.
 
 ## المال
-`amountMinor INTEGER NOT NULL` — Long.
+كل مبلغ يخزن كـ `INTEGER NOT NULL` ويُمثّل في Kotlin بـ `Long` بوحدة العملة
+الصغرى؛ لا تُستخدم أعداد عائمة للحسابات.

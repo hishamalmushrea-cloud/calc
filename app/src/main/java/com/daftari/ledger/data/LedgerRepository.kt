@@ -1,6 +1,7 @@
 package com.daftari.ledger.data
 
 import androidx.room.withTransaction
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.daftari.ledger.domain.AccountType
 import com.daftari.ledger.domain.AgingFifo
 import com.daftari.ledger.domain.DocType
@@ -377,6 +378,32 @@ class LedgerRepository(private val db: AppDb) {
     fun observeCustomers(shopId: Long): Flow<List<PartyEntity>> = parties.observe(shopId, "CUSTOMER")
     fun observeSuppliers(shopId: Long): Flow<List<PartyEntity>> = parties.observe(shopId, "SUPPLIER")
 
+    /** بحث بادئة FTS4؛ لا يستخدم LIKE الذي يبدأ بعلامة % ولا يفقد الفهرس. */
+    suspend fun searchParties(shopId: Long, input: String): List<PartyEntity> {
+        val match = input.trim()
+            .split(Regex("\\s+"))
+            .filter { it.isNotBlank() }
+            .joinToString(" AND ") { token ->
+                val escaped = token.replace("\"", "\"\"")
+                "\"$escaped\"*"
+            }
+        if (match.isBlank()) return parties.listAll(shopId).take(50)
+        return parties.searchFts(
+            SimpleSQLiteQuery(
+                """
+                SELECT p.* FROM parties p
+                JOIN parties_fts f ON CAST(f.partyId AS INTEGER) = p.id
+                WHERE parties_fts MATCH ?
+                  AND p.shopId = ?
+                  AND p.deletedAt IS NULL
+                ORDER BY p.name
+                LIMIT 50
+                """.trimIndent(),
+                arrayOf(match, shopId)
+            )
+        )
+    }
+
     val closings = db.closings()
 
     suspend fun closeDay(shopId: Long, cashActualMinor: Long, notes: String): Long = db.withTransaction {
@@ -427,15 +454,25 @@ class LedgerRepository(private val db: AppDb) {
         Unit
     }
 
+    /**
+     * يجلب كل فواتير الأطراف المؤهلة باستعلام JOIN واحد ثم يطبق FIFO في الذاكرة.
+     * بذلك نحافظ على دقة التخصيص المحاسبي من دون نمط N+1.
+     */
     suspend fun aging(shopId: Long, kind: String): List<AgingRow> {
         val now = System.currentTimeMillis()
-        return parties.listAll(shopId).filter { it.kind == kind && it.cachedBalanceMinor > 0 }.map { p ->
-            val invoices = documents.listParty(p.id)
-                .filter { it.type == DocType.SALE.name || it.type == DocType.OPENING.name }
-                .map { AgingFifo.Invoice(it.amountMinor, it.occurredAt) }
-            val bk = AgingFifo.allocate(p.cachedBalanceMinor, invoices, now)
-            AgingRow(p, bk.b0, bk.b31, bk.b61, bk.b90)
-        }
+        return documents.agingDocuments(shopId, kind)
+            .groupBy { it.party.id }
+            .values
+            .map { rows ->
+                val party = rows.first().party
+                val invoices = rows.mapNotNull { row ->
+                    val amount = row.invoiceAmountMinor ?: return@mapNotNull null
+                    val occurredAt = row.invoiceOccurredAt ?: return@mapNotNull null
+                    AgingFifo.Invoice(amount, occurredAt)
+                }
+                val bucket = AgingFifo.allocate(party.cachedBalanceMinor, invoices, now)
+                AgingRow(party, bucket.b0, bucket.b31, bucket.b61, bucket.b90)
+            }
     }
 
     data class LateRow(
@@ -445,21 +482,21 @@ class LedgerRepository(private val db: AppDb) {
         val daysLate: Int
     )
 
-    /** عملاء برصيد مستحق عليهم، مرتبين بعدد أيام التأخير (من آخر بيع/تحصيل). */
+    /** عملاء برصيد مستحق عليهم، باستعلام JOIN/GROUP BY واحد لآخر حركة. */
     suspend fun lateCustomers(shopId: Long): List<LateRow> {
         val now = System.currentTimeMillis()
         val day = 86_400_000L
-        return parties.listAll(shopId)
-            .filter { it.kind == "CUSTOMER" && it.cachedBalanceMinor > 0 }
-            .map { p ->
-                val docs = documents.listParty(p.id)
-                    .filter { it.type == DocType.SALE.name || it.type == DocType.COLLECT.name }
-                val last = docs.maxOfOrNull { it.occurredAt }
-                val days = last?.let { ((now - it) / day).toInt().coerceAtLeast(0) } ?: 0
-                LateRow(p, p.cachedBalanceMinor, last, days)
+        return documents.customersWithLastActivity(shopId)
+            .map { row ->
+                val days = row.lastDate?.let { ((now - it) / day).toInt().coerceAtLeast(0) } ?: 0
+                LateRow(row.party, row.party.cachedBalanceMinor, row.lastDate, days)
             }
             .sortedByDescending { it.daysLate }
     }
+
+    /** إحصاءات الطرف بتجميع SQL، مع قائمة حديثة محدودة للعرض. */
+    suspend fun partyStats(partyId: Long, recentLimit: Int = 50): Pair<PartyStatsAggregate, List<DocumentEntity>> =
+        documents.partyStats(partyId) to documents.recentParty(partyId, recentLimit)
 
     data class CsvCommit(val created: Int, val skipped: Int)
 
@@ -469,7 +506,7 @@ class LedgerRepository(private val db: AppDb) {
         var ok = 0; var skip = 0
         rows.forEach { r ->
             if (r.error != null) { skip++; return@forEach }
-            val existing = parties.search(shopId, r.name).firstOrNull { it.name == r.name }
+            val existing = searchParties(shopId, r.name).firstOrNull { it.name == r.name }
             val kind = if (r.kind.contains("مورد") || r.kind.equals("SUPPLIER", true)) PartyKind.SUPPLIER else PartyKind.CUSTOMER
             val pid = existing?.id ?: addParty(shopId, kind, r.name)
             val money = com.daftari.ledger.domain.Money.fromMajor(r.amount)
