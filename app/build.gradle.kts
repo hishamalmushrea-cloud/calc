@@ -39,7 +39,7 @@ ksp {
 }
 
 // يتحقق CI مؤقتًا من تجميع اختبارات الترحيل ونسخة R8 المحسّنة مع اختبارات الوحدة.
-tasks.named("testDebugUnitTest") {
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
     dependsOn("assembleDebugAndroidTest", "assembleRelease")
 }
 
