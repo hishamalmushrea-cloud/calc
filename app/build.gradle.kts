@@ -38,42 +38,6 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
-// مهمة تشخيص مؤقتة: تنشر أخطاء مترجم androidTest في ملخص GitHub Actions.
-val verifyAndroidTestCompile by tasks.registering {
-    doLast {
-        val output = java.io.ByteArrayOutputStream()
-        val result = project.exec {
-            commandLine("./gradlew", ":app:compileDebugAndroidTestKotlin", "--no-daemon", "--stacktrace", "--console=plain")
-            standardOutput = output
-            errorOutput = output
-            isIgnoreExitValue = true
-        }
-        if (result.exitValue != 0) {
-            val diagnostic = output.toString().takeLast(12000)
-            System.getenv("GITHUB_STEP_SUMMARY")?.let { summary ->
-                file(summary).appendText("\n### androidTest compiler output\n```text\n$diagnostic\n```\n")
-            }
-            val important = diagnostic.lineSequence()
-                .filter { line ->
-                    line.startsWith("e:") || line.contains(" error:") || line.contains("FAILED") ||
-                        line.contains("What went wrong") || line.contains("Compilation error") || line.contains("Caused by:")
-                }
-                .joinToString("\n")
-                .takeLast(4000)
-                .ifBlank { diagnostic.takeLast(4000) }
-            val annotation = important
-                .replace("%", "%25")
-                .replace("\r", "%0D")
-                .replace("\n", "%0A")
-            println("::error file=app/build.gradle.kts,line=1,title=androidTest compiler output::$annotation")
-            throw GradleException("androidTest compilation failed")
-        }
-    }
-}
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
-    dependsOn(verifyAndroidTestCompile)
-}
-
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
