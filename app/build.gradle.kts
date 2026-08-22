@@ -38,9 +38,26 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
-// يتحقق CI مؤقتًا من تجميع اختبارات الترحيل ونسخة R8 المحسّنة مع اختبارات الوحدة.
+// مهمة تشخيص مؤقتة: تنشر أخطاء مترجم androidTest في ملخص GitHub Actions.
+val verifyAndroidTestCompile by tasks.registering {
+    doLast {
+        val output = java.io.ByteArrayOutputStream()
+        val result = project.exec {
+            commandLine("./gradlew", ":app:assembleDebugAndroidTest", "--no-daemon", "--stacktrace", "--console=plain")
+            standardOutput = output
+            errorOutput = output
+            isIgnoreExitValue = true
+        }
+        if (result.exitValue != 0) {
+            System.getenv("GITHUB_STEP_SUMMARY")?.let { summary ->
+                file(summary).appendText("\n### androidTest compiler output\n```text\n${output.toString().takeLast(30000)}\n```\n")
+            }
+            throw GradleException("androidTest compilation failed")
+        }
+    }
+}
 tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
-    dependsOn("assembleRelease")
+    dependsOn(verifyAndroidTestCompile)
 }
 
 dependencies {
