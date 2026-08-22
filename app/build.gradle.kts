@@ -43,7 +43,7 @@ val verifyAndroidTestCompile by tasks.registering {
     doLast {
         val output = java.io.ByteArrayOutputStream()
         val result = project.exec {
-            commandLine("./gradlew", ":app:assembleDebugAndroidTest", "--no-daemon", "--stacktrace", "--console=plain")
+            commandLine("./gradlew", ":app:compileDebugAndroidTestKotlin", "--no-daemon", "--stacktrace", "--console=plain")
             standardOutput = output
             errorOutput = output
             isIgnoreExitValue = true
