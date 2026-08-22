@@ -105,6 +105,43 @@ class JournalLineBuilderTest {
         }
     }
 
+    @Test fun cashPurchaseAndIncomeAreBalanced() {
+        val purchase = JournalLineBuilder.build(1, DocType.PURCHASE, 600, partyId = null, credit = false, notes = "", refs = refs)
+        val income = JournalLineBuilder.build(2, DocType.INCOME, 700, partyId = null, credit = false, notes = "", refs = refs)
+
+        assertBalanced(purchase)
+        assertBalanced(income)
+        assertEquals(600, purchase.first { it.accountId == refs.purchasesId }.debitMinor)
+        assertEquals(600, purchase.first { it.accountId == refs.cashId }.creditMinor)
+        assertEquals(700, income.first { it.accountId == refs.cashId }.debitMinor)
+        assertEquals(700, income.first { it.accountId == refs.incomeId }.creditMinor)
+    }
+
+    @Test fun payIsBalancedAndPostsToAccountsPayable() {
+        val lines = JournalLineBuilder.build(1, DocType.PAY, 750, partyId = 18, credit = false, notes = "", refs = refs)
+
+        assertBalanced(lines)
+        val payable = lines.first { it.accountId == refs.apId }
+        assertEquals(18L, payable.partyId)
+        assertEquals(750, payable.debitMinor)
+        assertEquals(750, lines.first { it.accountId == refs.cashId }.creditMinor)
+    }
+
+    @Test fun transferRequiresDestinationAccount() {
+        assertThrows(LedgerException::class.java) {
+            JournalLineBuilder.build(
+                1, DocType.TRANSFER, 100, partyId = null, credit = false, notes = "",
+                refs = refs.copy(destId = null)
+            )
+        }
+    }
+
+    @Test fun unsupportedDocumentTypeIsRejected() {
+        assertThrows(LedgerException::class.java) {
+            JournalLineBuilder.build(1, DocType.OPENING, 100, partyId = null, credit = false, notes = "", refs = refs)
+        }
+    }
+
     @Test fun negativeAmountRejected() {
         assertThrows(LedgerException::class.java) {
             JournalLineBuilder.build(1, DocType.SALE, -5, partyId = null, credit = false, notes = "", refs = refs)
