@@ -48,6 +48,7 @@ import com.daftari.ledger.domain.PartyKind
 @Composable
 internal fun PartiesScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: PaddingValues) {
     var customersTab by remember { mutableStateOf(true) }
+    var query by remember { mutableStateOf("") }
     var showAdd by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
         Row {
@@ -57,7 +58,17 @@ internal fun PartiesScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { showAdd = true }) { Text(stringResource(R.string.action_add)) }
         }
-        val parties = if (customersTab) state.customers else state.suppliers
+        OutlinedTextField(
+            query,
+            { query = it },
+            label = { Text(stringResource(R.string.search_name_phone)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        val source = if (customersTab) state.customers else state.suppliers
+        val parties = if (query.isBlank()) source else source.filter {
+            it.name.contains(query, true) || it.phone.contains(query, true)
+        }
         if (parties.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -70,7 +81,13 @@ internal fun PartiesScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
         }
         LazyColumn {
             itemsIndexed(parties, key = { _, party -> party.id }) { index, party ->
-                PartyCard(party, index) { onEvent(UiEvent.OpenParty(party)) }
+                PartyCard(
+                    party,
+                    index,
+                    onClick = { onEvent(UiEvent.OpenParty(party)) },
+                    onCall = { onEvent(UiEvent.CallPhone(party.phone)) },
+                    onWhatsApp = { onEvent(UiEvent.OpenWhatsApp(party.phone)) }
+                )
             }
         }
     }
@@ -78,7 +95,13 @@ internal fun PartiesScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
 }
 
 @Composable
-private fun PartyCard(party: PartyEntity, index: Int, onClick: () -> Unit) {
+private fun PartyCard(
+    party: PartyEntity,
+    index: Int,
+    onClick: () -> Unit,
+    onCall: () -> Unit,
+    onWhatsApp: () -> Unit
+) {
     val balanceColor = partyBalanceColor(party)
     val ratio = if (party.creditLimitMinor > 0) {
         (party.cachedBalanceMinor.toFloat() / party.creditLimitMinor).coerceIn(0f, 1.2f)
@@ -125,6 +148,14 @@ private fun PartyCard(party: PartyEntity, index: Int, onClick: () -> Unit) {
                 }
                 if (party.phone.isNotBlank()) {
                     Text(party.phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row {
+                        TextButton(onClick = onCall, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Text(stringResource(R.string.action_call), style = MaterialTheme.typography.labelSmall)
+                        }
+                        TextButton(onClick = onWhatsApp, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Text(stringResource(R.string.action_whatsapp), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             }
             Column(horizontalAlignment = Alignment.End) {

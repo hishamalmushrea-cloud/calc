@@ -216,4 +216,41 @@
     <string name="sheet_accounts">الحسابات</string>
     <string name="report_line">%1$s: %2$s</string>
     <string name="report_receivables_payables">لك: %1$s  عليك: %2$s</string>
+
+    <string name="action_undo">تراجع</string>
+    <string name="action_remove">إزالة</string>
+    <string name="action_call">اتصال</string>
+    <string name="action_whatsapp">واتساب</string>
+    <string name="search_name_phone">بحث بالاسم أو رقم الهاتف</string>
+    <string name="due_date_value">تاريخ الاستحقاق: %1$s</string>
+    <string name="due_notification_channel">استحقاقات الحسابات</string>
+    <string name="due_notification_title">حسابات مستحقة اليوم</string>
+    <string name="due_notification_body">يوجد %1$d عملاء لديهم مبيعات آجلة مستحقة</string>
+    <string name="archive_confirm_title">أرشفة العملية؟</string>
+    <string name="archive_confirm_body">ستختفي العملية من الحساب، ويمكن التراجع مباشرة بعد الأرشفة.</string>
+    <string name="receipt_pdf">سند PDF</string>
+    <string name="receipt_title">سند %1$s</string>
+    <string name="receipt_number">رقم السند: %1$s</string>
+    <string name="receipt_party">الحساب: %1$s</string>
+    <string name="statement_columns_running">التاريخ | النوع | المبلغ | الرصيد الجاري</string>
+    <string name="statement_line_running">%1$s — %2$s — الرصيد %3$s</string>
+    <string name="msg_archive_undone">تم التراجع عن الأرشفة</string>
+    <string name="msg_receipt_ready">تم إنشاء السند</string>
+    <string name="msg_receipt_failed">فشل إنشاء السند: %1$s</string>
+
+    <string name="section_cloud_backup">النسخ السحابي الاختياري</string>
+    <string name="cloud_folder_not_selected">لم يتم اختيار مجلد سحابي. يمكنك اختيار Google Drive من منتقي النظام.</string>
+    <string name="cloud_folder_selected">تم ربط مجلد سحابي عبر منتقي النظام.</string>
+    <string name="choose_cloud_folder">اختيار مجلد Google Drive/ملفات</string>
+    <string name="webdav_url">رابط مجلد WebDAV</string>
+    <string name="webdav_user">اسم مستخدم WebDAV</string>
+    <string name="webdav_password">كلمة مرور WebDAV</string>
+    <string name="cloud_backup_now">نسخ إلى السحابة الآن</string>
+    <string name="restore_cloud_file">استعادة ملف من السحابة</string>
+    <string name="restore_latest_webdav">استعادة أحدث WebDAV</string>
+    <string name="msg_cloud_folder_saved">تم ربط المجلد السحابي</string>
+    <string name="msg_webdav_saved">تم حفظ إعداد WebDAV مشفرًا</string>
+    <string name="msg_cloud_backup_ready">اكتمل النسخ السحابي</string>
+    <string name="msg_cloud_not_configured">تم إنشاء نسخة محلية؛ لم تُضبط وجهة سحابية</string>
+    <string name="msg_cloud_backup_failed">فشل النسخ السحابي: %1$s</string>
 </resources>

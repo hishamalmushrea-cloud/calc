@@ -3,6 +3,7 @@ package com.daftari.ledger.ui
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import com.daftari.ledger.backup.CloudBackupManager
 import com.daftari.ledger.data.AgingRow
 import com.daftari.ledger.data.AuditLogEntity
 import com.daftari.ledger.data.CsvPreviewRow
@@ -10,6 +11,7 @@ import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.data.ShopEntity
+import com.daftari.ledger.data.StatementLine
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.PartyKind
 import java.io.File
@@ -56,6 +58,9 @@ data class UiState(
     val shareText: String? = null,
     val agingAlert: Int = 0,
     val late: List<LedgerRepository.LateRow> = emptyList(),
+    val nextDocumentNumber: Long = 1,
+    val undoDocumentId: Long? = null,
+    val cloudSettings: CloudBackupManager.Settings = CloudBackupManager.Settings(),
     val restartRequested: Boolean = false
 )
 
@@ -64,7 +69,8 @@ data class PartyStats(
     val purchases: Long = 0,
     val collections: Long = 0,
     val payments: Long = 0,
-    val docs: List<DocumentEntity> = emptyList()
+    val docs: List<DocumentEntity> = emptyList(),
+    val statementLines: List<StatementLine> = emptyList()
 ) {
     val collectionRate: Int
         get() = if (sales == 0L) 0 else ((collections * 100) / sales).toInt().coerceIn(0, 100)
@@ -78,7 +84,8 @@ data class DocumentDraft(
     val notes: String,
     val documentNumber: String,
     val newPartyName: String? = null,
-    val occurredAt: Long = System.currentTimeMillis()
+    val occurredAt: Long = System.currentTimeMillis(),
+    val dueAt: Long? = null
 )
 
 sealed interface UiEvent {
@@ -102,9 +109,12 @@ sealed interface UiEvent {
         val notes: String,
         val documentNumber: String,
         val credit: Boolean,
-        val occurredAt: Long
+        val occurredAt: Long,
+        val dueAt: Long?
     ) : UiEvent
     data class DeleteDocument(val id: Long) : UiEvent
+    data object UndoDeleteDocument : UiEvent
+    data class ShareReceipt(val document: DocumentEntity) : UiEvent
     data class Unlock(val pin: String) : UiEvent
     data object BiometricUnlocked : UiEvent
     data class SavePin(val pin: String) : UiEvent
@@ -126,10 +136,27 @@ sealed interface UiEvent {
     data object ClosePartyDialog : UiEvent
     data class ShareStatement(val party: PartyEntity) : UiEvent
     data object ExportCsv : UiEvent
+    data object ChooseCloudFolder : UiEvent
+    data class CloudFolderSelected(val uri: String) : UiEvent
+    data object ClearCloudFolder : UiEvent
+    data class SaveWebDav(val url: String, val user: String, val password: String) : UiEvent
+    data object ClearWebDav : UiEvent
+    data object CloudBackupNow : UiEvent
+    data object ChooseCloudRestoreFile : UiEvent
+    data class RestoreCloudFile(val uri: String) : UiEvent
+    data object RestoreLatestWebDav : UiEvent
+    data class CallPhone(val phone: String) : UiEvent
+    data class OpenWhatsApp(val phone: String) : UiEvent
     data object ConsumeMessage : UiEvent
     data object ConsumeShareFile : UiEvent
     data object ConsumeShareText : UiEvent
     data object ConsumeRestart : UiEvent
+}
+
+sealed interface UiEffect {
+    data object PickCloudFolder : UiEffect
+    data object PickBackupFile : UiEffect
+    data class OpenUri(val uri: String) : UiEffect
 }
 
 private val EMPTY_TOTALS = LedgerRepository.PeriodTotals(0, 0, 0, 0, 0, 0, 0, 0)

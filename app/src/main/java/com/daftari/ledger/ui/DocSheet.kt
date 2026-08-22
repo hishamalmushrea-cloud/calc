@@ -48,9 +48,14 @@ internal fun DocumentSheet(
         mutableStateOf(existing?.let { Money(it.amountMinor).toBigDecimal().toPlainString() }.orEmpty())
     }
     var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }
-    var documentNumber by remember { mutableStateOf(existing?.docNumber.orEmpty()) }
+    var documentNumber by remember {
+        mutableStateOf(existing?.docNumber ?: state.nextDocumentNumber.toString())
+    }
     var credit by remember { mutableStateOf(existing?.paymentMethod == "CREDIT") }
     var occurredAt by remember { mutableStateOf(existing?.occurredAt ?: System.currentTimeMillis()) }
+    var dueAt by remember {
+        mutableStateOf(existing?.dueAt ?: (occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS).takeIf { credit })
+    }
     var party by remember {
         mutableStateOf(
             initialParty ?: existing?.partyId?.let { id ->
@@ -60,6 +65,7 @@ internal fun DocumentSheet(
     }
     var partyQuery by remember { mutableStateOf(party?.name.orEmpty()) }
     var showDate by remember { mutableStateOf(false) }
+    var showDueDate by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
 
     AlertDialog(
@@ -96,7 +102,18 @@ internal fun DocumentSheet(
                 if (type == DocType.SALE || type == DocType.PURCHASE) {
                     Row {
                         Text(stringResource(R.string.credit), modifier = Modifier.weight(1f))
-                        Switch(credit, { credit = it })
+                        Switch(credit, { enabled ->
+                            credit = enabled
+                            if (enabled && type == DocType.SALE && dueAt == null) {
+                                dueAt = occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS
+                            }
+                            if (!enabled) dueAt = null
+                        })
+                    }
+                    if (type == DocType.SALE && credit) {
+                        TextButton(onClick = { showDueDate = true }) {
+                            Text(stringResource(R.string.due_date_value, dateFormat.format(Date(requireNotNull(dueAt)))))
+                        }
                     }
                 }
                 OutlinedTextField(
@@ -126,7 +143,8 @@ internal fun DocumentSheet(
                                 notes = notes,
                                 documentNumber = documentNumber,
                                 newPartyName = if (finalPartyId == null) partyQuery.trim().takeIf(String::isNotBlank) else null,
-                                occurredAt = occurredAt
+                                occurredAt = occurredAt,
+                                dueAt = dueAt
                             )
                         )
                     )
@@ -138,7 +156,8 @@ internal fun DocumentSheet(
                             notes,
                             documentNumber,
                             credit,
-                            occurredAt
+                            occurredAt,
+                            dueAt
                         )
                     )
                 }
@@ -163,6 +182,21 @@ internal fun DocumentSheet(
             }
         ) { DatePicker(state = dateState) }
     }
+    if (showDueDate) {
+        val dueState = rememberDatePickerState(initialSelectedDateMillis = dueAt)
+        DatePickerDialog(
+            onDismissRequest = { showDueDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dueState.selectedDateMillis?.let { dueAt = combineWithCurrentTime(it) }
+                    showDueDate = false
+                }) { Text(stringResource(R.string.action_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDueDate = false }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        ) { DatePicker(state = dueState) }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -184,5 +218,7 @@ private fun DocumentTypeChips(selected: DocType, onSelect: (DocType) -> Unit) {
     }
 }
 
+private const val DEFAULT_DUE_DAYS = 30L
+private const val DAY_MILLIS = 86_400_000L
 private val CUSTOMER_DOCUMENT_TYPES = setOf(DocType.SALE, DocType.COLLECT)
 private val PARTY_DOCUMENT_TYPES = setOf(DocType.SALE, DocType.COLLECT, DocType.PURCHASE, DocType.PAY)

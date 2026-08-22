@@ -39,6 +39,9 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
     var closeNotes by remember { mutableStateOf("") }
     var csv by remember { mutableStateOf("") }
     var backupPassword by remember { mutableStateOf("") }
+    var webDavUrl by remember(state.cloudSettings.webDavUrl) { mutableStateOf(state.cloudSettings.webDavUrl) }
+    var webDavUser by remember(state.cloudSettings.webDavUser) { mutableStateOf(state.cloudSettings.webDavUser) }
+    var webDavPassword by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { onEvent(UiEvent.RefreshBackups) }
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState())) {
         Section(stringResource(R.string.section_shops), initiallyExpanded = true) {
@@ -111,6 +114,67 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                         Text(stringResource(R.string.action_restore))
                     }
                 }
+            }
+        }
+
+        Section(stringResource(R.string.section_cloud_backup)) {
+            Text(
+                stringResource(
+                    if (state.cloudSettings.treeUri.isBlank()) R.string.cloud_folder_not_selected
+                    else R.string.cloud_folder_selected
+                ),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Row {
+                Button(onClick = { onEvent(UiEvent.ChooseCloudFolder) }) {
+                    Text(stringResource(R.string.choose_cloud_folder))
+                }
+                if (state.cloudSettings.treeUri.isNotBlank()) {
+                    TextButton(onClick = { onEvent(UiEvent.ClearCloudFolder) }) {
+                        Text(stringResource(R.string.action_remove))
+                    }
+                }
+            }
+            OutlinedTextField(
+                webDavUrl,
+                { webDavUrl = it },
+                label = { Text(stringResource(R.string.webdav_url)) },
+                singleLine = true
+            )
+            OutlinedTextField(
+                webDavUser,
+                { webDavUser = it },
+                label = { Text(stringResource(R.string.webdav_user)) },
+                singleLine = true
+            )
+            OutlinedTextField(
+                webDavPassword,
+                { webDavPassword = it },
+                label = { Text(stringResource(R.string.webdav_password)) },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true
+            )
+            Row {
+                Button(onClick = { onEvent(UiEvent.SaveWebDav(webDavUrl, webDavUser, webDavPassword)) }) {
+                    Text(stringResource(R.string.action_save))
+                }
+                if (state.cloudSettings.webDavUrl.isNotBlank()) {
+                    TextButton(onClick = { onEvent(UiEvent.ClearWebDav) }) {
+                        Text(stringResource(R.string.action_remove))
+                    }
+                }
+            }
+            Button(onClick = { onEvent(UiEvent.CloudBackupNow) }) {
+                Text(stringResource(R.string.cloud_backup_now))
+            }
+            Row {
+                TextButton(onClick = { onEvent(UiEvent.ChooseCloudRestoreFile) }) {
+                    Text(stringResource(R.string.restore_cloud_file))
+                }
+                TextButton(
+                    onClick = { onEvent(UiEvent.RestoreLatestWebDav) },
+                    enabled = state.cloudSettings.webDavUrl.isNotBlank()
+                ) { Text(stringResource(R.string.restore_latest_webdav)) }
             }
         }
 

@@ -1,6 +1,7 @@
 package com.daftari.ledger.backup
 
 import android.content.Context
+import android.net.Uri
 import com.daftari.ledger.data.AppDb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,6 +70,21 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
 
     suspend fun restoreFrom(file: File) {
         replaceDb(file)
+    }
+
+    suspend fun restoreFromUri(uri: Uri) {
+        val temporary = withContext(Dispatchers.IO) {
+            File.createTempFile("document-restore-", ".db", backupsDir()).also { file ->
+                ctx.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use { output -> input.copyTo(output) }
+                } ?: error("تعذر فتح ملف النسخة")
+            }
+        }
+        try {
+            replaceDb(temporary)
+        } finally {
+            withContext(Dispatchers.IO) { temporary.delete() }
+        }
     }
 
     suspend fun restoreEncrypted(file: File, password: String) {

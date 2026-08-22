@@ -10,9 +10,15 @@ import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import android.util.LayoutDirection
 import com.daftari.ledger.R
+import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.PartyEntity
+import com.daftari.ledger.data.ShopEntity
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.ui.UiState
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * تصدير PDF مع دعم RTL وتشكيل العربية عبر StaticLayout
@@ -42,6 +48,38 @@ object PdfReports {
 
     fun writeStatement(ctx: Context, title: String, lines: List<String>): File =
         writeLines(ctx, "daftari-statement.pdf", listOf(title) + lines)
+
+    fun writeDocumentReceipt(
+        ctx: Context,
+        document: DocumentEntity,
+        party: PartyEntity?,
+        shop: ShopEntity?
+    ): File {
+        val format = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val type = ctx.getString(documentTypeString(document.type))
+        val lines = listOf(
+            ctx.getString(R.string.receipt_title, type),
+            shop?.name.orEmpty(),
+            ctx.getString(R.string.receipt_number, document.docNumber.ifBlank { "—" }),
+            ctx.getString(R.string.date_value, format.format(Date(document.occurredAt))),
+            ctx.getString(R.string.receipt_party, party?.name ?: "—"),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.amount), Money(document.amountMinor).format()),
+            ctx.getString(R.string.notes) + ": " + document.notes
+        )
+        return writeLines(ctx, "daftari-receipt-${document.id}.pdf", lines)
+    }
+
+    private fun documentTypeString(type: String): Int = when (type) {
+        "SALE" -> R.string.doc_type_sale
+        "PURCHASE" -> R.string.doc_type_purchase
+        "EXPENSE" -> R.string.doc_type_expense
+        "INCOME" -> R.string.doc_type_income
+        "COLLECT" -> R.string.doc_type_collect
+        "PAY" -> R.string.doc_type_pay
+        "TRANSFER" -> R.string.doc_type_transfer
+        "OPENING" -> R.string.doc_type_opening
+        else -> R.string.doc_type_unknown
+    }
 
     private fun writeLines(ctx: Context, name: String, lines: List<String>): File {
         val doc = PdfDocument()

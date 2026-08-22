@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +50,7 @@ import java.util.Locale
 @Composable
 internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: PaddingValues) {
     var editing by remember { mutableStateOf<DocumentEntity?>(null) }
+    var pendingArchive by remember { mutableStateOf<DocumentEntity?>(null) }
     var query by remember { mutableStateOf("") }
     var typeFilter by remember { mutableStateOf<String?>(null) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
@@ -132,11 +135,15 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                                 Text(Money(document.amountMinor).format(), fontWeight = FontWeight.Bold, color = color)
                                 Row {
                                     TextButton(
+                                        onClick = { onEvent(UiEvent.ShareReceipt(document)) },
+                                        contentPadding = PaddingValues(horizontal = 4.dp)
+                                    ) { Text(stringResource(R.string.receipt_pdf), style = MaterialTheme.typography.labelSmall) }
+                                    TextButton(
                                         onClick = { editing = document },
                                         contentPadding = PaddingValues(horizontal = 6.dp)
                                     ) { Text(stringResource(R.string.action_edit), style = MaterialTheme.typography.labelSmall) }
                                     TextButton(
-                                        onClick = { onEvent(UiEvent.DeleteDocument(document.id)) },
+                                        onClick = { pendingArchive = document },
                                         contentPadding = PaddingValues(horizontal = 6.dp)
                                     ) {
                                         Text(
@@ -155,5 +162,21 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
     }
     editing?.let { document ->
         DocumentSheet(state, onEvent, DocType.SALE, document) { editing = null }
+    }
+    pendingArchive?.let { document ->
+        AlertDialog(
+            onDismissRequest = { pendingArchive = null },
+            title = { Text(stringResource(R.string.archive_confirm_title)) },
+            text = { Text(stringResource(R.string.archive_confirm_body)) },
+            confirmButton = {
+                Button(onClick = {
+                    onEvent(UiEvent.DeleteDocument(document.id))
+                    pendingArchive = null
+                }) { Text(stringResource(R.string.action_archive)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingArchive = null }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
     }
 }

@@ -263,7 +263,8 @@ class LedgerRepository(private val db: AppDb) {
         docNumber: String = "",
         notes: String = "",
         paymentMethod: String = "CASH",
-        transferToCode: String? = null
+        transferToCode: String? = null,
+        dueAt: Long? = null
     ): Long = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val st = settings.get()
@@ -273,9 +274,13 @@ class LedgerRepository(private val db: AppDb) {
                 throw LedgerException("التاريخ خارج السنة المالية")
             }
         }
-        if (docNumber.isNotBlank() && st?.uniqueDocPerParty != false) {
-            val c = documents.countDocNumber(shopId, docNumber, partyId, -1)
-            if (c > 0) throw LedgerException("رقم المستند مستخدم مسبقًا")
+        val shop = shops.get(shopId) ?: throw LedgerException("المحل غير موجود")
+        val finalDocumentNumber = if (docNumber.isBlank() && type != DocType.OPENING) {
+            shop.nextDocumentNumber.toString()
+        } else docNumber.trim()
+        if (finalDocumentNumber.isNotBlank() && st?.uniqueDocPerParty != false) {
+            val count = documents.countDocNumber(shopId, finalDocumentNumber, partyId, -1)
+            if (count > 0) throw LedgerException("رقم المستند مستخدم مسبقًا")
         }
         // نجمع المعرفات ونبني القيد قبل أي إدراج حتى لا يبقى مستند بلا قيود.
         val refs = refsFor(shopId, type, cashCode, transferToCode)
@@ -283,10 +288,19 @@ class LedgerRepository(private val db: AppDb) {
         val docId = documents.insert(
             DocumentEntity(
                 shopId = shopId, type = type.name, partyId = partyId, cashAccountId = refs.cashId,
-                amountMinor = amountMinor, occurredAt = occurredAt, docNumber = docNumber,
-                notes = notes, paymentMethod = paymentMethod
+                amountMinor = amountMinor,
+                occurredAt = occurredAt,
+                dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
+                docNumber = finalDocumentNumber,
+                notes = notes,
+                paymentMethod = paymentMethod
             )
         )
+        if (finalDocumentNumber.isNotBlank() && type != DocType.OPENING) {
+            val numeric = finalDocumentNumber.toLongOrNull()
+            val next = maxOf(shop.nextDocumentNumber + if (docNumber.isBlank()) 1 else 0, (numeric ?: 0L) + 1)
+            if (next != shop.nextDocumentNumber) shops.update(shop.copy(nextDocumentNumber = next))
+        }
         val lines = JournalLineBuilder.build(docId, type, amountMinor, partyId, credit, notes, refs)
         journal.insertAll(lines)
         partyId?.let { refreshPartyBalance(it) }
@@ -296,7 +310,7 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun updateDocument(
         id: Long, amountMinor: Long, occurredAt: Long, notes: String,
-        docNumber: String, paymentMethod: String
+        docNumber: String, paymentMethod: String, dueAt: Long? = null
     ) = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val d = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
@@ -313,8 +327,12 @@ class LedgerRepository(private val db: AppDb) {
         journal.insertAll(lines)
         documents.update(
             d.copy(
-                amountMinor = amountMinor, occurredAt = occurredAt, notes = notes,
-                docNumber = docNumber, paymentMethod = paymentMethod,
+                amountMinor = amountMinor,
+                occurredAt = occurredAt,
+                dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
+                notes = notes,
+                docNumber = docNumber,
+                paymentMethod = paymentMethod,
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -336,6 +354,15 @@ class LedgerRepository(private val db: AppDb) {
                 d.partyId?.let { refreshPartyBalance(it) }
                 audit.insert(AuditLogEntity(action = "DELETE", entity = "document", entityId = id))
             }
+        }
+    }
+
+    suspend fun restoreDocument(id: Long) = db.withTransaction {
+        val document = documents.get(id) ?: return@withTransaction
+        if (document.deletedAt != null) {
+            documents.update(document.copy(deletedAt = null, updatedAt = System.currentTimeMillis()))
+            document.partyId?.let { refreshPartyBalance(it) }
+            audit.insert(AuditLogEntity(action = "RESTORE", entity = "document", entityId = id))
         }
     }
 
@@ -486,7 +513,7 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun lateCustomers(shopId: Long): List<LateRow> {
         val now = System.currentTimeMillis()
         val day = 86_400_000L
-        return documents.customersWithLastActivity(shopId)
+        return documents.overdueCustomers(shopId, now)
             .map { row ->
                 val days = row.lastDate?.let { ((now - it) / day).toInt().coerceAtLeast(0) } ?: 0
                 LateRow(row.party, row.party.cachedBalanceMinor, row.lastDate, days)
@@ -497,6 +524,18 @@ class LedgerRepository(private val db: AppDb) {
     /** إحصاءات الطرف بتجميع SQL، مع قائمة حديثة محدودة للعرض. */
     suspend fun partyStats(partyId: Long, recentLimit: Int = 50): Pair<PartyStatsAggregate, List<DocumentEntity>> =
         documents.partyStats(partyId) to documents.recentParty(partyId, recentLimit)
+
+    suspend fun statement(party: PartyEntity): List<StatementLine> {
+        var running = 0L
+        return documents.statementRows(party.id).map { row ->
+            val delta = if (party.kind == PartyKind.CUSTOMER.name) row.netDebitDelta else -row.netDebitDelta
+            running = Math.addExact(running, delta)
+            StatementLine(row.document, delta, running)
+        }
+    }
+
+    suspend fun overdueParties(now: Long = System.currentTimeMillis()): List<OverduePartyRow> =
+        documents.overdueParties(now)
 
     data class CsvCommit(val created: Int, val skipped: Int)
 

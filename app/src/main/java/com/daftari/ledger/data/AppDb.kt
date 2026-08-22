@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DocumentEntity::class, JournalLineEntity::class, AuditLogEntity::class,
         SettingsEntity::class, DailyClosingEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDb : RoomDatabase() {

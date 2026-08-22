@@ -32,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -58,18 +59,29 @@ import com.daftari.ledger.security.AppLock
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DaftariRoot(state: UiState, viewModel: MainViewModel, activity: FragmentActivity? = null) {
-    var tab by remember { mutableIntStateOf(0) }
+fun DaftariRoot(
+    state: UiState,
+    viewModel: MainViewModel,
+    activity: FragmentActivity? = null,
+    initialTab: Int = 0
+) {
+    var tab by remember { mutableIntStateOf(initialTab) }
     var addType by remember { mutableStateOf<DocType?>(null) }
     var quickParty by remember { mutableStateOf<PartyEntity?>(null) }
     var quickType by remember { mutableStateOf<DocType?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val message = state.message?.asString()
+    val undoLabel = stringResource(R.string.action_undo)
     val onEvent = viewModel::onEvent
 
     LaunchedEffect(message) {
         message?.let {
-            snackbar.showSnackbar(it)
+            val result = snackbar.showSnackbar(
+                message = it,
+                actionLabel = if (state.undoDocumentId != null) undoLabel else null,
+                withDismissAction = true
+            )
+            if (result == SnackbarResult.ActionPerformed) onEvent(UiEvent.UndoDeleteDocument)
             onEvent(UiEvent.ConsumeMessage)
         }
     }

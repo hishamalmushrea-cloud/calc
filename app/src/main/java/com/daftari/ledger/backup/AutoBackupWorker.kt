@@ -29,7 +29,8 @@ class AutoBackupWorker(
             val settings = runCatching { db.settings().get() }.getOrNull()
             val keep = (settings?.autoBackupKeep ?: 7).coerceAtLeast(1)
             val mgr = BackupManager(applicationContext, db)
-            mgr.exportDatabase()
+            val file = mgr.exportDatabase()
+            CloudBackupManager(applicationContext, mgr).upload(file)
             rotate(mgr, keep)
             Result.success()
         } catch (_: Exception) {

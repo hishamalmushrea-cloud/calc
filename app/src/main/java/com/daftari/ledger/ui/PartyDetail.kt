@@ -65,6 +65,14 @@ internal fun PartyDetail(
                 }
                 if (party.phone.isNotBlank()) {
                     Text(stringResource(R.string.phone_value, party.phone), style = MaterialTheme.typography.bodySmall)
+                    Row {
+                        TextButton(onClick = { onEvent(UiEvent.CallPhone(party.phone)) }) {
+                            Text(stringResource(R.string.action_call))
+                        }
+                        TextButton(onClick = { onEvent(UiEvent.OpenWhatsApp(party.phone)) }) {
+                            Text(stringResource(R.string.action_whatsapp))
+                        }
+                    }
                 }
                 if (stats == null) {
                     Spacer(Modifier.height(8.dp))
@@ -80,9 +88,16 @@ internal fun PartyDetail(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.recent_operations), fontWeight = FontWeight.Bold)
-                    if (stats.docs.isEmpty()) Text(stringResource(R.string.no_operations_yet))
-                    stats.docs.take(5).forEach { document ->
-                        Text("${documentTypeLabel(document.type)}  ${Money(document.amountMinor).format()}")
+                    if (stats.statementLines.isEmpty()) Text(stringResource(R.string.no_operations_yet))
+                    stats.statementLines.takeLast(5).asReversed().forEach { line ->
+                        Text(
+                            stringResource(
+                                R.string.statement_line_running,
+                                documentTypeLabel(line.document.type),
+                                Money(line.document.amountMinor).format(),
+                                Money(line.runningBalanceMinor).format()
+                            )
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))

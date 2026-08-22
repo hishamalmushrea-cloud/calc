@@ -4,7 +4,9 @@ import android.app.Application
 import com.daftari.ledger.DaftariApp
 import com.daftari.ledger.R
 import com.daftari.ledger.data.LedgerRepository
+import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.PartyEntity
+import com.daftari.ledger.data.ShopEntity
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.export.ExcelReports
 import com.daftari.ledger.export.PdfReports
@@ -40,22 +42,29 @@ internal class MainUiServices(
     }
 
     suspend fun statement(party: PartyEntity): String {
-        val docs = repo.documents.listParty(party.id)
+        val lines = repo.statement(party)
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         return buildString {
             append(app.getString(R.string.statement_title, party.name)).append('\n')
             append(app.getString(R.string.statement_balance, Money(party.cachedBalanceMinor).format())).append("\n\n")
-            append(app.getString(R.string.statement_columns)).append('\n')
-            docs.sortedByDescending { it.occurredAt }.take(50).forEach { document ->
-                append(dateFormat.format(Date(document.occurredAt)))
+            append(app.getString(R.string.statement_columns_running)).append('\n')
+            lines.takeLast(50).asReversed().forEach { line ->
+                append(dateFormat.format(Date(line.document.occurredAt)))
                     .append(" | ")
-                    .append(app.getString(documentTypeString(document.type)))
+                    .append(app.getString(documentTypeString(line.document.type)))
                     .append(" | ")
-                    .append(Money(document.amountMinor).format())
+                    .append(Money(line.document.amountMinor).format())
+                    .append(" | ")
+                    .append(Money(line.runningBalanceMinor).format())
                     .append('\n')
             }
         }
     }
+
+    suspend fun receipt(document: DocumentEntity, party: PartyEntity?, shop: ShopEntity?): File =
+        withContext(Dispatchers.IO) {
+            PdfReports.writeDocumentReceipt(app, document, party, shop)
+        }
 
     suspend fun exportCsv(shopId: Long): File = withContext(Dispatchers.IO) {
         val docs = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE)

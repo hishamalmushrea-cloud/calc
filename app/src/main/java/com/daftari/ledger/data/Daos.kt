@@ -113,12 +113,15 @@ interface DocumentDao {
 
     @Query(
         """
-        SELECT p.*, MAX(d.occurredAt) AS lastDate
+        SELECT p.*, MIN(d.dueAt) AS lastDate
         FROM parties p
-        LEFT JOIN documents d
+        JOIN documents d
           ON d.partyId = p.id
          AND d.deletedAt IS NULL
-         AND d.type IN ('SALE', 'COLLECT')
+         AND d.type = 'SALE'
+         AND d.paymentMethod = 'CREDIT'
+         AND d.dueAt IS NOT NULL
+         AND d.dueAt <= :now
         WHERE p.shopId = :shopId
           AND p.kind = 'CUSTOMER'
           AND p.deletedAt IS NULL
@@ -126,7 +129,41 @@ interface DocumentDao {
         GROUP BY p.id
         """
     )
-    suspend fun customersWithLastActivity(shopId: Long): List<PartyLastActivityRow>
+    suspend fun overdueCustomers(shopId: Long, now: Long): List<PartyLastActivityRow>
+
+    @Query(
+        """
+        SELECT d.*,
+               COALESCE(SUM(j.debitMinor - j.creditMinor), 0) AS netDebitDelta
+        FROM documents d
+        JOIN journal_lines j ON j.documentId = d.id AND j.partyId = :partyId
+        WHERE d.partyId = :partyId AND d.deletedAt IS NULL
+        GROUP BY d.id
+        ORDER BY d.occurredAt, d.id
+        """
+    )
+    suspend fun statementRows(partyId: Long): List<PartyStatementRow>
+
+    @Query(
+        """
+        SELECT p.id AS partyId, p.name AS partyName,
+               COUNT(d.id) AS documentCount,
+               COALESCE(SUM(d.amountMinor), 0) AS totalMinor,
+               MIN(d.dueAt) AS oldestDueAt
+        FROM parties p
+        JOIN documents d ON d.partyId = p.id
+        WHERE d.deletedAt IS NULL
+          AND d.type = 'SALE'
+          AND d.paymentMethod = 'CREDIT'
+          AND d.dueAt IS NOT NULL
+          AND d.dueAt <= :now
+          AND p.deletedAt IS NULL
+          AND p.cachedBalanceMinor > 0
+        GROUP BY p.id
+        ORDER BY oldestDueAt
+        """
+    )
+    suspend fun overdueParties(now: Long): List<OverduePartyRow>
 }
 
 @Dao

@@ -1,6 +1,7 @@
 package com.daftari.ledger.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,8 +19,11 @@ import com.daftari.ledger.domain.PartyKind
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
@@ -31,8 +35,10 @@ import kotlinx.coroutines.sync.withLock
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as DaftariApp).repo
     private val services = MainUiServices(app, repo)
-    private val mutableState = MutableStateFlow(UiState())
+    private val mutableState = MutableStateFlow(UiState(cloudSettings = app.cloudBackup.settings()))
     val state: StateFlow<UiState> = mutableState.asStateFlow()
+    private val mutableEffects = MutableSharedFlow<UiEffect>(extraBufferCapacity = 4)
+    val effects: SharedFlow<UiEffect> = mutableEffects.asSharedFlow()
 
     private val totalsMutex = Mutex()
     private var shopBindJob: Job? = null
@@ -86,6 +92,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.AddDocument -> addDocument(event.draft)
             is UiEvent.UpdateDocument -> updateDocument(event)
             is UiEvent.DeleteDocument -> deleteDocument(event.id)
+            UiEvent.UndoDeleteDocument -> undoDeleteDocument()
+            is UiEvent.ShareReceipt -> shareReceipt(event.document)
             is UiEvent.Unlock -> unlock(event.pin)
             UiEvent.BiometricUnlocked -> mutableState.update { it.copy(locked = false) }
             is UiEvent.SavePin -> savePin(event.pin)
@@ -107,6 +115,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.ClosePartyDialog -> mutableState.update { it.copy(selectedParty = null, partyStats = null) }
             is UiEvent.ShareStatement -> shareStatement(event.party)
             UiEvent.ExportCsv -> exportCsv()
+            UiEvent.ChooseCloudFolder -> mutableEffects.tryEmit(UiEffect.PickCloudFolder)
+            is UiEvent.CloudFolderSelected -> saveCloudFolder(event.uri)
+            UiEvent.ClearCloudFolder -> clearCloudFolder()
+            is UiEvent.SaveWebDav -> saveWebDav(event.url, event.user, event.password)
+            UiEvent.ClearWebDav -> clearWebDav()
+            UiEvent.CloudBackupNow -> cloudBackupNow()
+            UiEvent.ChooseCloudRestoreFile -> mutableEffects.tryEmit(UiEffect.PickBackupFile)
+            is UiEvent.RestoreCloudFile -> restoreCloudFile(event.uri)
+            UiEvent.RestoreLatestWebDav -> restoreLatestWebDav()
+            is UiEvent.CallPhone -> mutableEffects.tryEmit(UiEffect.OpenUri("tel:${Uri.encode(event.phone)}"))
+            is UiEvent.OpenWhatsApp -> mutableEffects.tryEmit(UiEffect.OpenUri("https://wa.me/${event.phone.filter(Char::isDigit)}"))
             UiEvent.ConsumeMessage -> mutableState.update { it.copy(message = null) }
             UiEvent.ConsumeShareFile -> mutableState.update { it.copy(shareFile = null) }
             UiEvent.ConsumeShareText -> mutableState.update { it.copy(shareText = null) }
@@ -165,7 +184,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         prevTotals = previous,
                         docs = docs.sortedByDescending { document -> document.occurredAt },
                         owedToYou = repo.youAreOwed(shop.id),
-                        youOwe = repo.youOwe(shop.id)
+                        youOwe = repo.youOwe(shop.id),
+                        nextDocumentNumber = repo.shops.get(shop.id)?.nextDocumentNumber ?: it.nextDocumentNumber
                     )
                 }
             }
@@ -238,7 +258,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 docNumber = draft.documentNumber,
                 notes = draft.notes,
                 paymentMethod = if (draft.credit) "CREDIT" else "CASH",
-                transferToCode = if (draft.type == DocType.TRANSFER) AccountCodes.BANK else null
+                transferToCode = if (draft.type == DocType.TRANSFER) AccountCodes.BANK else null,
+                dueAt = draft.dueAt
             )
             refreshAll()
             message(R.string.msg_saved)
@@ -256,7 +277,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 event.occurredAt,
                 event.notes,
                 event.documentNumber,
-                if (event.credit) "CREDIT" else "CASH"
+                if (event.credit) "CREDIT" else "CASH",
+                event.dueAt
             )
             refreshAll()
             message(R.string.msg_edited)
@@ -268,7 +290,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun deleteDocument(id: Long) = viewModelScope.launch {
         repo.softDeleteDocument(id)
         refreshAll()
-        message(R.string.msg_archived)
+        mutableState.update { it.copy(message = text(R.string.msg_archived), undoDocumentId = id) }
+    }
+
+    private fun undoDeleteDocument() = viewModelScope.launch {
+        val id = state.value.undoDocumentId ?: return@launch
+        repo.restoreDocument(id)
+        refreshAll()
+        mutableState.update { it.copy(message = text(R.string.msg_archive_undone), undoDocumentId = null) }
+    }
+
+    private fun shareReceipt(document: com.daftari.ledger.data.DocumentEntity) {
+        val party = document.partyId?.let { id -> (state.value.customers + state.value.suppliers).firstOrNull { it.id == id } }
+        createFile(R.string.msg_receipt_ready, R.string.msg_receipt_failed) {
+            services.receipt(document, party, state.value.shop)
+        }
     }
 
     private fun unlock(pin: String) = viewModelScope.launch {
@@ -376,6 +412,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutableState.update { it.copy(selectedParty = party, partyStats = null) }
         viewModelScope.launch {
             val (totals, recent) = repo.partyStats(party.id)
+            val statement = repo.statement(party)
             mutableState.update {
                 it.copy(
                     partyStats = PartyStats(
@@ -383,7 +420,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         totals.purchases,
                         totals.collections,
                         totals.payments,
-                        recent
+                        recent,
+                        statement
                     )
                 )
             }
@@ -397,6 +435,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun exportCsv() {
         val shop = state.value.shop ?: return
         createFile(R.string.msg_csv_exported, R.string.msg_export_failed) { services.exportCsv(shop.id) }
+    }
+
+    private fun saveCloudFolder(uri: String) {
+        val app = getApplication<DaftariApp>()
+        app.cloudBackup.saveTreeUri(Uri.parse(uri))
+        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings(), message = text(R.string.msg_cloud_folder_saved)) }
+    }
+
+    private fun clearCloudFolder() {
+        val app = getApplication<DaftariApp>()
+        app.cloudBackup.clearTreeUri()
+        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings()) }
+    }
+
+    private fun saveWebDav(url: String, user: String, password: String) {
+        val app = getApplication<DaftariApp>()
+        app.cloudBackup.saveWebDav(url, user, password)
+        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings(), message = text(R.string.msg_webdav_saved)) }
+    }
+
+    private fun clearWebDav() {
+        val app = getApplication<DaftariApp>()
+        app.cloudBackup.clearWebDav()
+        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings()) }
+    }
+
+    private fun cloudBackupNow() = viewModelScope.launch {
+        try {
+            val app = getApplication<DaftariApp>()
+            val (_, result) = app.cloudBackup.backupNow()
+            mutableState.update {
+                it.copy(
+                    backups = app.backup.listBackups(),
+                    message = text(if (result.anyUploaded) R.string.msg_cloud_backup_ready else R.string.msg_cloud_not_configured)
+                )
+            }
+        } catch (error: Exception) {
+            message(R.string.msg_cloud_backup_failed, error.message.orEmpty())
+        }
+    }
+
+    private fun restoreCloudFile(uri: String) = viewModelScope.launch {
+        try {
+            getApplication<DaftariApp>().cloudBackup.restoreFromUri(Uri.parse(uri))
+            mutableState.update { it.copy(restartRequested = true, message = text(R.string.msg_restore_restarting)) }
+        } catch (error: Exception) {
+            message(R.string.msg_restore_failed, error.message.orEmpty())
+        }
+    }
+
+    private fun restoreLatestWebDav() = viewModelScope.launch {
+        try {
+            getApplication<DaftariApp>().cloudBackup.restoreLatestWebDav()
+            mutableState.update { it.copy(restartRequested = true, message = text(R.string.msg_restore_restarting)) }
+        } catch (error: Exception) {
+            message(R.string.msg_restore_failed, error.message.orEmpty())
+        }
     }
 
     private fun createFile(@StringRes success: Int, @StringRes failure: Int, block: suspend () -> File) =

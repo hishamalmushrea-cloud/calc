@@ -27,5 +27,28 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    /** v3 → v4: استحقاق المبيعات الآجلة وتسلسل أرقام السندات. */
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE shops ADD COLUMN nextDocumentNumber INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE documents ADD COLUMN dueAt INTEGER")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_dueAt ON documents(dueAt)")
+            db.execSQL(
+                """
+                UPDATE shops
+                SET nextDocumentNumber = MAX(
+                    1,
+                    COALESCE((
+                        SELECT MAX(CAST(docNumber AS INTEGER)) + 1
+                        FROM documents
+                        WHERE documents.shopId = shops.id
+                          AND docNumber GLOB '[0-9]*'
+                    ), 1)
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

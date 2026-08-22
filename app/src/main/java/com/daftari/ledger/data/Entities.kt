@@ -17,7 +17,8 @@ data class ShopEntity(
     val currencyCode: String = "SAR",
     val fractionDigits: Int = 2,
     val archived: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val nextDocumentNumber: Long = 1
 )
 
 @Entity(
@@ -59,7 +60,7 @@ data class AccountEntity(
 @Entity(
     tableName = "documents",
     foreignKeys = [ForeignKey(entity = ShopEntity::class, parentColumns = ["id"], childColumns = ["shopId"], onDelete = ForeignKey.RESTRICT)],
-    indices = [Index("shopId"), Index("occurredAt"), Index("partyId"), Index("docNumber"), Index("type")]
+    indices = [Index("shopId"), Index("occurredAt"), Index("partyId"), Index("docNumber"), Index("type"), Index("dueAt")]
 )
 data class DocumentEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -70,6 +71,7 @@ data class DocumentEntity(
     val counterAccountId: Long? = null,
     val amountMinor: Long,
     val occurredAt: Long,
+    val dueAt: Long? = null,
     val docNumber: String = "",
     val notes: String = "",
     val paymentMethod: String = "CASH",
@@ -155,6 +157,25 @@ data class AgingDocumentRow(
 data class PartyLastActivityRow(
     @Embedded val party: PartyEntity,
     val lastDate: Long?
+)
+
+data class PartyStatementRow(
+    @Embedded val document: DocumentEntity,
+    val netDebitDelta: Long
+)
+
+data class StatementLine(
+    val document: DocumentEntity,
+    val deltaMinor: Long,
+    val runningBalanceMinor: Long
+)
+
+data class OverduePartyRow(
+    val partyId: Long,
+    val partyName: String,
+    val documentCount: Int,
+    val totalMinor: Long,
+    val oldestDueAt: Long
 )
 
 data class AgingRow(
