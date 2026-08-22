@@ -1,6 +1,7 @@
 package com.daftari.ledger.export
 
 import android.content.Context
+import com.daftari.ledger.R
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.ui.UiState
 import java.io.File
@@ -26,57 +27,62 @@ object ExcelReports {
 
         val byId = (s.customers + s.suppliers).associateBy { it.id }
 
-        // --- Build sheet data ---
         val summaryRows = mutableListOf<List<String>>()
-        summaryRows += listOf("البند", "المبلغ")
-        summaryRows += listOf("مبيعات", Money(s.totals.sales).format())
-        summaryRows += listOf("مشتريات", Money(s.totals.purchases).format())
-        summaryRows += listOf("مصروفات", Money(s.totals.expenses).format())
-        summaryRows += listOf("إيرادات أخرى", Money(s.totals.income).format())
-        summaryRows += listOf("تحصيل", Money(s.totals.collections).format())
-        summaryRows += listOf("سداد", Money(s.totals.payments).format())
-        summaryRows += listOf("صافي نقدي", Money(s.totals.cashNet).format())
-        summaryRows += listOf("ربح تقديري", Money(s.totals.estimatedProfit).format())
+        summaryRows += listOf(ctx.getString(R.string.report_item), ctx.getString(R.string.report_value))
+        summaryRows += listOf(ctx.getString(R.string.sales), Money(s.totals.sales).format())
+        summaryRows += listOf(ctx.getString(R.string.purchases), Money(s.totals.purchases).format())
+        summaryRows += listOf(ctx.getString(R.string.expenses), Money(s.totals.expenses).format())
+        summaryRows += listOf(ctx.getString(R.string.other_income), Money(s.totals.income).format())
+        summaryRows += listOf(ctx.getString(R.string.collections), Money(s.totals.collections).format())
+        summaryRows += listOf(ctx.getString(R.string.payments), Money(s.totals.payments).format())
+        summaryRows += listOf(ctx.getString(R.string.cash_net), Money(s.totals.cashNet).format())
+        summaryRows += listOf(ctx.getString(R.string.estimated_profit), Money(s.totals.estimatedProfit).format())
 
         val docsRows = mutableListOf<List<String>>()
-        docsRows += listOf("التاريخ", "النوع", "المبلغ", "الطرف", "ملاحظات", "رقم السند")
-        s.docs.sortedByDescending { it.occurredAt }.forEach { d ->
-            val p = d.partyId?.let { byId[it] }
+        docsRows += listOf(
+            ctx.getString(R.string.date), ctx.getString(R.string.type), ctx.getString(R.string.report_value),
+            ctx.getString(R.string.party), ctx.getString(R.string.notes), ctx.getString(R.string.document_number)
+        )
+        s.docs.sortedByDescending { it.occurredAt }.forEach { document ->
+            val party = document.partyId?.let { byId[it] }
             docsRows += listOf(
-                fmt.format(Date(d.occurredAt)),
-                docTypeArabic(d.type),
-                Money(d.amountMinor).format(),
-                p?.name.orEmpty(),
-                d.notes,
-                d.docNumber
+                fmt.format(Date(document.occurredAt)),
+                ctx.getString(documentTypeString(document.type)),
+                Money(document.amountMinor).format(),
+                party?.name.orEmpty(),
+                document.notes,
+                document.docNumber
             )
         }
 
         val partiesRows = mutableListOf<List<String>>()
-        partiesRows += listOf("الاسم", "النوع", "التصنيف", "الرصيد", "الهاتف")
-        (s.customers + s.suppliers).sortedBy { it.name }.forEach { p ->
+        partiesRows += listOf(
+            ctx.getString(R.string.name), ctx.getString(R.string.type), ctx.getString(R.string.category),
+            ctx.getString(R.string.balance), ctx.getString(R.string.phone_optional)
+        )
+        (s.customers + s.suppliers).sortedBy { it.name }.forEach { party ->
             partiesRows += listOf(
-                p.name,
-                if (p.kind == "CUSTOMER") "عميل" else "مورد",
-                p.category,
-                Money(p.cachedBalanceMinor).format(),
-                p.phone
+                party.name,
+                ctx.getString(if (party.kind == "CUSTOMER") R.string.customer else R.string.supplier),
+                party.category,
+                Money(party.cachedBalanceMinor).format(),
+                party.phone
             )
         }
 
         val sheets = listOf(
-            "الملخص" to summaryRows,
-            "العمليات" to docsRows,
-            "الحسابات" to partiesRows
+            ctx.getString(R.string.sheet_summary) to summaryRows,
+            ctx.getString(R.string.sheet_documents) to docsRows,
+            ctx.getString(R.string.sheet_accounts) to partiesRows
         )
-
-        writeXlsx(f, sheets)
+        val rightToLeft = ctx.resources.configuration.layoutDirection == android.util.LayoutDirection.RTL
+        writeXlsx(f, sheets, rightToLeft)
         return f
     }
 
     // ──────── XLSX Writer (zero dependencies) ────────
 
-    private fun writeXlsx(file: File, sheets: List<Pair<String, List<List<String>>>>) {
+    private fun writeXlsx(file: File, sheets: List<Pair<String, List<List<String>>>>, rightToLeft: Boolean) {
         ZipOutputStream(FileOutputStream(file)).use { zip ->
 
             // [Content_Types].xml
@@ -169,7 +175,7 @@ $ssEntries
                 zip.putEntry("xl/worksheets/sheet${i + 1}.xml")
                 val sb = StringBuilder()
                 sb.append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
-                sb.append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView rightToLeft="true" tabSelected="${if (i == 0) "1" else "0"}" workbookViewId="0"/></sheetViews><sheetData>""")
+                sb.append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView rightToLeft="${if (rightToLeft) "1" else "0"}" tabSelected="${if (i == 0) "1" else "0"}" workbookViewId="0"/></sheetViews><sheetData>""")
                 rows.forEachIndexed { r, row ->
                     sb.append("""<row r="${r + 1}">""")
                     row.forEachIndexed { c, cell ->
@@ -205,9 +211,15 @@ $ssEntries
         closeEntry()
     }
 
-    private fun docTypeArabic(t: String) = when (t) {
-        "SALE" -> "بيع"; "PURCHASE" -> "شراء"; "EXPENSE" -> "مصروف"; "INCOME" -> "إيراد"
-        "COLLECT" -> "تحصيل"; "PAY" -> "سداد"; "TRANSFER" -> "تحويل"; "OPENING" -> "افتتاحي"
-        else -> t
+    private fun documentTypeString(type: String): Int = when (type) {
+        "SALE" -> R.string.doc_type_sale
+        "PURCHASE" -> R.string.doc_type_purchase
+        "EXPENSE" -> R.string.doc_type_expense
+        "INCOME" -> R.string.doc_type_income
+        "COLLECT" -> R.string.doc_type_collect
+        "PAY" -> R.string.doc_type_pay
+        "TRANSFER" -> R.string.doc_type_transfer
+        "OPENING" -> R.string.doc_type_opening
+        else -> R.string.doc_type_unknown
     }
 }

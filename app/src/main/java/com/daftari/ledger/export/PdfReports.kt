@@ -8,6 +8,8 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
 import android.text.TextPaint
+import android.util.LayoutDirection
+import com.daftari.ledger.R
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.ui.UiState
 import java.io.File
@@ -24,16 +26,16 @@ object PdfReports {
     fun writePeriodReport(ctx: Context, s: UiState): File {
         val t = s.totals
         val lines = listOf(
-            "دفتري — تقرير مالي",
+            ctx.getString(R.string.report_financial_title),
             s.shop?.name.orEmpty(),
-            "مبيعات: ${Money(t.sales).format()}",
-            "مشتريات: ${Money(t.purchases).format()}",
-            "مصروفات: ${Money(t.expenses).format()}",
-            "تحصيل: ${Money(t.collections).format()}",
-            "سداد: ${Money(t.payments).format()}",
-            "صافي نقدي: ${Money(t.cashNet).format()}",
-            "ربح تقديري: ${Money(t.estimatedProfit).format()}",
-            "لك: ${Money(s.owedToYou).format()}  عليك: ${Money(s.youOwe).format()}"
+            ctx.getString(R.string.sales_value, Money(t.sales).format()),
+            ctx.getString(R.string.purchases_value, Money(t.purchases).format()),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.expenses), Money(t.expenses).format()),
+            ctx.getString(R.string.collections_value, Money(t.collections).format()),
+            ctx.getString(R.string.payments_value, Money(t.payments).format()),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.cash_net), Money(t.cashNet).format()),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.estimated_profit), Money(t.estimatedProfit).format()),
+            ctx.getString(R.string.report_receivables_payables, Money(s.owedToYou).format(), Money(s.youOwe).format())
         )
         return writeLines(ctx, "daftari-report.pdf", lines)
     }
@@ -50,6 +52,11 @@ object PdfReports {
             isAntiAlias = true; textSize = 13f; color = Color.BLACK
         }
         val width = (PAGE_W - MARGIN * 2).toInt()
+        val textDirection = if (ctx.resources.configuration.layoutDirection == LayoutDirection.RTL) {
+            TextDirectionHeuristics.RTL
+        } else {
+            TextDirectionHeuristics.LTR
+        }
         var page = doc.startPage(PdfDocument.PageInfo.Builder(PAGE_W, PAGE_H, 1).create())
         var canvas: Canvas = page.canvas
         var y = MARGIN
@@ -58,7 +65,7 @@ object PdfReports {
             val paint = if (i == 0) titlePaint else bodyPaint
             val layout = StaticLayout.Builder.obtain(line, 0, line.length, paint, width)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                .setTextDirection(TextDirectionHeuristics.RTL)
+                .setTextDirection(textDirection)
                 .setLineSpacing(4f, 1f)
                 .setIncludePad(false)
                 .build()

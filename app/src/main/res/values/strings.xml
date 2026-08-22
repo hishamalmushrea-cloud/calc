@@ -200,4 +200,20 @@
     <string name="msg_backup_failed">فشل إنشاء النسخة: %1$s</string>
     <string name="msg_csv_exported">تم تصدير CSV كامل</string>
     <string name="msg_export_failed">فشل التصدير: %1$s</string>
+
+    <string name="report_financial_title">دفتري — تقرير مالي</string>
+    <string name="report_item">البند</string>
+    <string name="report_value">المبلغ</string>
+    <string name="other_income">إيرادات أخرى</string>
+    <string name="date">التاريخ</string>
+    <string name="type">النوع</string>
+    <string name="party">الطرف</string>
+    <string name="document_number">رقم السند</string>
+    <string name="customer">عميل</string>
+    <string name="supplier">مورد</string>
+    <string name="sheet_summary">الملخص</string>
+    <string name="sheet_documents">العمليات</string>
+    <string name="sheet_accounts">الحسابات</string>
+    <string name="report_line">%1$s: %2$s</string>
+    <string name="report_receivables_payables">لك: %1$s  عليك: %2$s</string>
 </resources>

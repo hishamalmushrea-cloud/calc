@@ -16,7 +16,6 @@ import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.PartyKind
 import java.io.File
-import java.util.Calendar
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -133,46 +132,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshInsights()
     }
 
-    private fun range(period: Period): Pair<Long, Long> {
-        val calendar = Calendar.getInstance()
-        fun startDay(value: Calendar) = value.apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        val now = System.currentTimeMillis()
-        return when (period) {
-            Period.TODAY -> startDay(calendar) to now
-            Period.YESTERDAY -> {
-                calendar.add(Calendar.DAY_OF_YEAR, -1)
-                val start = startDay(calendar)
-                calendar.add(Calendar.DAY_OF_YEAR, 1)
-                start to startDay(calendar) - 1
-            }
-            Period.WEEK -> {
-                calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-                startDay(calendar) to now
-            }
-            Period.MONTH -> {
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                startDay(calendar) to now
-            }
-            Period.YEAR -> {
-                calendar.set(Calendar.DAY_OF_YEAR, 1)
-                startDay(calendar) to now
-            }
-            Period.CUSTOM -> (state.value.customFrom ?: startDay(Calendar.getInstance())) to
-                (state.value.customTo ?: now)
-        }
-    }
-
-    private fun previousRange(period: Period): Pair<Long, Long> {
-        val (from, to) = range(period)
-        val length = (to - from).coerceAtLeast(1L)
-        return (from - length) to (from - 1)
-    }
-
     private fun setPeriod(period: Period) {
         mutableState.update { it.copy(period = period) }
         refreshTotals()
@@ -194,8 +153,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val period = state.value.period
         viewModelScope.launch {
             totalsMutex.withLock {
-                val (from, to) = range(period)
-                val (previousFrom, previousTo) = previousRange(period)
+                val currentRange = PeriodRanges.current(period, state.value.customFrom, state.value.customTo)
+                val (from, to) = currentRange
+                val (previousFrom, previousTo) = PeriodRanges.previous(currentRange)
                 val totals = repo.totals(shop.id, from, to)
                 val docs = repo.documents.listPeriod(shop.id, from, to)
                 val previous = repo.totals(shop.id, previousFrom, previousTo)
