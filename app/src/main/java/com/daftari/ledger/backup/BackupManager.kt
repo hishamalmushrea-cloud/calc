@@ -38,11 +38,22 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
      * الملف الجديد. يبقى على المستدعي إعادة تشغيل واجهة التطبيق بعد ذلك
      * (انظر [AppDb.invalidate]) لأن الـ Repository الحالي يحمل مرجعًا قديمًا.
      */
+    /** يتحقق من أن الملف قاعدة SQLite قبل لمس قاعدة المستخدم الحالية. */
+    private fun requireSqliteDatabase(file: File) {
+        if (!file.isFile || file.length() < 100) error("نسخة احتياطية غير صالحة")
+        val header = ByteArray(SQLITE_HEADER.size)
+        file.inputStream().use { input ->
+            if (input.read(header) != header.size || !header.contentEquals(SQLITE_HEADER)) {
+                error("الملف ليس نسخة قاعدة بيانات دفتري صالحة")
+            }
+        }
+    }
+
     private suspend fun replaceDb(file: File) {
-        if (!file.exists() || file.length() < 100) error("نسخة احتياطية غير صالحة")
+        withContext(Dispatchers.IO) { requireSqliteDatabase(file) }
         val current = dbFile()
         withContext(Dispatchers.IO) {
-            // نسخة أمان قبل الاستبدال.
+            // لا نأخذ نسخة الأمان إلا بعد التحقق من النسخة الواردة.
             val safety = File(backupsDir(), "pre-restore-${System.currentTimeMillis()}.db")
             if (current.exists()) current.copyTo(safety, overwrite = true)
         }
@@ -61,19 +72,18 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
     }
 
     suspend fun restoreEncrypted(file: File, password: String) {
-        if (!file.exists() || file.length() < 100) error("نسخة احتياطية غير صالحة")
-        val current = dbFile()
-        withContext(Dispatchers.IO) {
-            val safety = File(backupsDir(), "pre-restore-${System.currentTimeMillis()}.db")
-            if (current.exists()) current.copyTo(safety, overwrite = true)
+        if (!file.isFile || file.length() < 100) error("نسخة احتياطية غير صالحة")
+        // فك التشفير في ملف مؤقت أولًا: كلمة مرور خاطئة أو ملف معطوب لا يجوز
+        // أن يمس قاعدة البيانات الحالية أو ينشئ نسخة أمان مضللة.
+        val temporary = withContext(Dispatchers.IO) {
+            File.createTempFile("restore-", ".db", backupsDir())
         }
-        db.close()
-        withContext(Dispatchers.IO) {
-            File(current.path + "-wal").delete()
-            File(current.path + "-shm").delete()
-            EncryptedBackup.decrypt(file, current, password)
+        try {
+            withContext(Dispatchers.IO) { EncryptedBackup.decrypt(file, temporary, password) }
+            replaceDb(temporary)
+        } finally {
+            withContext(Dispatchers.IO) { temporary.delete() }
         }
-        AppDb.invalidate(ctx)
     }
 
     /**
@@ -91,4 +101,8 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
     fun listSafetyCopies(): List<File> =
         backupsDir().listFiles { f -> f.isFile && f.name.startsWith("pre-restore-") }
             ?.sortedByDescending { it.lastModified() } ?: emptyList()
+
+    private companion object {
+        val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+    }
 }

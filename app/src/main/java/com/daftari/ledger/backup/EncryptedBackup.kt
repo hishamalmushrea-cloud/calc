@@ -23,6 +23,7 @@ import javax.crypto.spec.SecretKeySpec
  */
 object EncryptedBackup {
     private val MAGIC = "DFTBENC1".toByteArray(Charsets.US_ASCII)
+    private const val FORMAT_VERSION = 1
     private const val SALT_BYTES = 16
     private const val IV_BYTES = 12
     private const val TAG_BITS = 128
@@ -40,7 +41,7 @@ object EncryptedBackup {
         FileOutputStream(dest).use { fos ->
             val dos = DataOutputStream(fos)
             dos.write(MAGIC)
-            dos.writeInt(1) // version
+            dos.writeInt(FORMAT_VERSION)
             dos.writeInt(salt.size); dos.write(salt)
             dos.writeInt(iv.size); dos.write(iv)
             dos.flush()
@@ -64,9 +65,13 @@ object EncryptedBackup {
                 val magic = ByteArray(MAGIC.size)
                 dis.readFully(magic)
                 if (!magic.contentEquals(MAGIC)) error("نسخة غير صالحة")
-                dis.readInt() // version
-                val salt = ByteArray(dis.readInt()); dis.readFully(salt)
-                val iv = ByteArray(dis.readInt()); dis.readFully(iv)
+                if (dis.readInt() != FORMAT_VERSION) error("إصدار النسخة المشفرة غير مدعوم")
+                val saltLength = dis.readInt()
+                if (saltLength !in 8..64) error("رأس النسخة المشفرة غير صالح")
+                val salt = ByteArray(saltLength); dis.readFully(salt)
+                val ivLength = dis.readInt()
+                if (ivLength !in 12..32) error("رأس النسخة المشفرة غير صالح")
+                val iv = ByteArray(ivLength); dis.readFully(iv)
                 val key = deriveKey(password, salt)
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                 cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
