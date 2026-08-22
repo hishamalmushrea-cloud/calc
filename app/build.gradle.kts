@@ -38,6 +38,11 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// يتحقق CI مؤقتًا من تجميع اختبارات الترحيل ونسخة R8 المحسّنة مع اختبارات الوحدة.
+tasks.named("testDebugUnitTest") {
+    dependsOn("assembleDebugAndroidTest", "assembleRelease")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
