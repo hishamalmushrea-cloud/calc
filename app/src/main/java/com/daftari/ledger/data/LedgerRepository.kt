@@ -6,6 +6,9 @@ import com.daftari.ledger.domain.AccountType
 import com.daftari.ledger.domain.AgingFifo
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.PartyKind
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 
 class LedgerException(msg: String) : Exception(msg)
@@ -130,6 +133,7 @@ class LedgerRepository(private val db: AppDb) {
     val categories = db.categories()
     val audit = db.audit()
     val settings = db.settings()
+    val dailyBooks = db.dailyBooks()
 
     suspend fun ensureSettings() {
         if (settings.get() == null) settings.insert(SettingsEntity())
@@ -313,7 +317,8 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun updateDocument(
         id: Long, amountMinor: Long, occurredAt: Long, notes: String,
-        docNumber: String, paymentMethod: String, dueAt: Long? = null, categoryId: Long? = null
+        docNumber: String, paymentMethod: String, dueAt: Long? = null,
+        categoryId: Long? = null, cashCode: String = AccountCodes.CASH
     ) = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val d = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
@@ -324,7 +329,7 @@ class LedgerRepository(private val db: AppDb) {
             val c = documents.countDocNumber(d.shopId, docNumber, d.partyId, id)
             if (c > 0) throw LedgerException("رقم المستند مستخدم مسبقًا")
         }
-        val refs = refsFor(d.shopId, type, AccountCodes.CASH, null)
+        val refs = refsFor(d.shopId, type, cashCode, null)
         val lines = JournalLineBuilder.build(id, type, amountMinor, d.partyId, paymentMethod == "CREDIT", notes, refs)
         journal.deleteForDoc(id)
         journal.insertAll(lines)
@@ -334,6 +339,7 @@ class LedgerRepository(private val db: AppDb) {
                 occurredAt = occurredAt,
                 dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
                 categoryId = categoryId.takeIf { type == DocType.EXPENSE || type == DocType.INCOME },
+                cashAccountId = refs.cashId,
                 notes = notes,
                 docNumber = docNumber,
                 paymentMethod = paymentMethod,
@@ -562,6 +568,224 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun overdueParties(now: Long = System.currentTimeMillis()): List<OverduePartyRow> =
         documents.overdueParties(now)
+
+    suspend fun salesBookDays(shopId: Long, from: Long, to: Long): List<DailyBookSummary> {
+        val zone = ZoneId.systemDefault()
+        val startDate = Instant.ofEpochMilli(from).atZone(zone).toLocalDate()
+        val endDate = Instant.ofEpochMilli(to).atZone(zone).toLocalDate()
+        val docsByDay = documents.listSalesBookPeriod(shopId, from, to).groupBy {
+            startOfDay(it.occurredAt, zone)
+        }
+        val books = dailyBooks.listPeriod(shopId, startOfDay(from, zone), endOfDay(to, zone))
+            .associateBy { it.dayStart }
+        val result = mutableListOf<DailyBookSummary>()
+        var date = startDate
+        while (!date.isAfter(endDate)) {
+            val day = date.atStartOfDay(zone).toInstant().toEpochMilli()
+            val docs = docsByDay[day].orEmpty()
+            val sales = docs.filter { it.type == DocType.SALE.name }
+            val outflows = docs.filter { it.type == DocType.EXPENSE.name }
+            val book = books[day]
+            val payments = sales.groupBy { it.paymentMethod }.map { (method, entries) ->
+                PaymentTotal(method, entries.sumOf { it.amountMinor }, entries.size)
+            }.sortedByDescending { it.amountMinor }
+            val status = when {
+                book?.status == "CLOSED" -> "CLOSED"
+                docs.isNotEmpty() || !book?.notes.isNullOrBlank() -> "HAS_RECORDS"
+                else -> "EMPTY"
+            }
+            result += DailyBookSummary(
+                dayStart = day,
+                salesMinor = sales.sumOf { it.amountMinor },
+                outflowsMinor = outflows.sumOf { it.amountMinor },
+                cashSalesMinor = sales.filter { it.paymentMethod != "CREDIT" }.sumOf { it.amountMinor },
+                cashOutflowsMinor = outflows.filter { it.paymentMethod != "CREDIT" }.sumOf { it.amountMinor },
+                saleCount = sales.size,
+                outflowCount = outflows.size,
+                notes = book?.notes.orEmpty(),
+                status = status,
+                closedAt = book?.closedAt,
+                payments = payments
+            )
+            date = date.plusDays(1)
+        }
+        return result
+    }
+
+    suspend fun salesBookPeriodSummary(shopId: Long, from: Long, to: Long): SalesBookPeriodSummary {
+        val days = salesBookDays(shopId, from, to)
+        val active = days.filter { it.transactionCount > 0 }
+        val sales = days.sumOf { it.salesMinor }
+        val outflows = days.sumOf { it.outflowsMinor }
+        val paymentTotals = days.flatMap { it.payments }.groupBy { it.method }.map { (method, rows) ->
+            PaymentTotal(method, rows.sumOf { it.amountMinor }, rows.sumOf { it.count })
+        }.sortedByDescending { it.amountMinor }
+        return SalesBookPeriodSummary(
+            salesMinor = sales,
+            outflowsMinor = outflows,
+            netCashMovementMinor = days.sumOf { it.netCashMovementMinor },
+            saleCount = days.sumOf { it.saleCount },
+            outflowCount = days.sumOf { it.outflowCount },
+            activeDays = active.size,
+            dailyAverageSalesMinor = if (active.isEmpty()) 0 else sales / active.size,
+            bestDay = active.maxByOrNull { it.salesMinor },
+            weakestDay = active.minByOrNull { it.salesMinor },
+            paymentTotals = paymentTotals
+        )
+    }
+
+    suspend fun salesBookEntries(shopId: Long, dayStart: Long): List<DocumentEntity> =
+        documents.listSalesBookPeriod(shopId, dayStart, endOfDay(dayStart)).sortedByDescending { it.occurredAt }
+
+    suspend fun searchSalesBook(
+        shopId: Long,
+        from: Long,
+        to: Long,
+        query: String,
+        entryType: String?,
+        paymentMethod: String?,
+        categoryId: Long?
+    ): List<DocumentEntity> = documents.searchSalesBook(
+        shopId = shopId,
+        from = from,
+        to = to,
+        query = query.trim(),
+        amountMinor = com.daftari.ledger.domain.Money.fromMajor(query)?.minor,
+        entryType = entryType,
+        paymentMethod = paymentMethod,
+        categoryId = categoryId
+    )
+
+    suspend fun postSalesBookEntry(shopId: Long, input: SalesBookEntryInput): Long {
+        ensureSalesDayOpen(shopId, input.occurredAt)
+        val type = runCatching { DocType.valueOf(input.type) }.getOrNull()
+        if (type != DocType.SALE && type != DocType.EXPENSE) throw LedgerException("نوع إدخال الدفتر غير صالح")
+        if (input.amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
+        val method = input.paymentMethod.uppercase()
+        if (type == DocType.EXPENSE && method == "CREDIT") {
+            throw LedgerException("المخرج الآجل يُسجل كشراء من شاشة العمليات")
+        }
+        var partyId = input.partyId
+        if (type == DocType.SALE && method == "CREDIT" && partyId == null) {
+            val name = input.newPartyName?.trim().orEmpty()
+            if (name.isBlank()) throw LedgerException("اختر العميل للبيع الآجل")
+            partyId = addParty(shopId, PartyKind.CUSTOMER, name)
+        }
+        val cashCode = if (method == "CASH") AccountCodes.CASH else AccountCodes.BANK
+        val id = postDocument(
+            shopId = shopId,
+            type = type,
+            amountMinor = input.amountMinor,
+            occurredAt = input.occurredAt,
+            partyId = partyId,
+            cashCode = cashCode,
+            docNumber = input.documentNumber,
+            notes = input.notes,
+            paymentMethod = method,
+            dueAt = input.dueAt,
+            categoryId = input.categoryId
+        )
+        touchSalesDay(shopId, input.occurredAt)
+        return id
+    }
+
+    suspend fun updateSalesBookEntry(id: Long, input: SalesBookEntryInput) {
+        val current = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
+        ensureSalesDayOpen(current.shopId, current.occurredAt)
+        ensureSalesDayOpen(current.shopId, input.occurredAt)
+        val method = input.paymentMethod.uppercase()
+        if (current.type == DocType.EXPENSE.name && method == "CREDIT") {
+            throw LedgerException("المخرج الآجل يُسجل كشراء من شاشة العمليات")
+        }
+        updateDocument(
+            id = id,
+            amountMinor = input.amountMinor,
+            occurredAt = input.occurredAt,
+            notes = input.notes,
+            docNumber = input.documentNumber,
+            paymentMethod = method,
+            dueAt = input.dueAt,
+            categoryId = input.categoryId,
+            cashCode = if (method == "CASH") AccountCodes.CASH else AccountCodes.BANK
+        )
+        touchSalesDay(current.shopId, current.occurredAt)
+        touchSalesDay(current.shopId, input.occurredAt)
+    }
+
+    suspend fun archiveSalesBookEntry(id: Long) {
+        val current = documents.get(id) ?: return
+        ensureSalesDayOpen(current.shopId, current.occurredAt)
+        softDeleteDocument(id)
+        touchSalesDay(current.shopId, current.occurredAt)
+    }
+
+    suspend fun duplicateSalesBookEntry(id: Long, occurredAt: Long): Long {
+        val source = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
+        return postSalesBookEntry(
+            source.shopId,
+            SalesBookEntryInput(
+                type = source.type,
+                amountMinor = source.amountMinor,
+                occurredAt = occurredAt,
+                categoryId = source.categoryId,
+                paymentMethod = source.paymentMethod,
+                partyId = source.partyId,
+                notes = source.notes,
+                dueAt = source.dueAt?.let { occurredAt + (it - source.occurredAt).coerceAtLeast(0) }
+            )
+        )
+    }
+
+    suspend fun saveSalesDayNotes(shopId: Long, dayStart: Long, notes: String) {
+        val current = dailyBooks.get(shopId, dayStart)
+        if (current?.status == "CLOSED") throw LedgerException("أعد فتح اليوم قبل تعديل ملاحظاته")
+        dailyBooks.upsert(
+            (current ?: DailyBookEntity(shopId = shopId, dayStart = dayStart)).copy(
+                notes = notes,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun closeSalesDay(shopId: Long, dayStart: Long) {
+        val current = dailyBooks.get(shopId, dayStart)
+        val now = System.currentTimeMillis()
+        dailyBooks.upsert(
+            (current ?: DailyBookEntity(shopId = shopId, dayStart = dayStart)).copy(
+                status = "CLOSED",
+                closedAt = now,
+                updatedAt = now
+            )
+        )
+        audit.insert(AuditLogEntity(action = "CLOSE_SALES_DAY", entity = "daily_book", entityId = current?.id, detail = dayStart.toString()))
+    }
+
+    suspend fun reopenSalesDay(shopId: Long, dayStart: Long) {
+        val current = dailyBooks.get(shopId, dayStart) ?: DailyBookEntity(shopId = shopId, dayStart = dayStart)
+        val now = System.currentTimeMillis()
+        dailyBooks.upsert(current.copy(status = "OPEN", reopenedAt = now, updatedAt = now))
+        audit.insert(AuditLogEntity(action = "REOPEN_SALES_DAY", entity = "daily_book", entityId = current.id.takeIf { it != 0L }, detail = dayStart.toString()))
+    }
+
+    private suspend fun ensureSalesDayOpen(shopId: Long, time: Long) {
+        val day = startOfDay(time, ZoneId.systemDefault())
+        if (dailyBooks.get(shopId, day)?.status == "CLOSED") {
+            throw LedgerException("اليوم مغلق؛ استخدم «تعديل اليوم» أولًا")
+        }
+    }
+
+    private suspend fun touchSalesDay(shopId: Long, time: Long) {
+        val day = startOfDay(time, ZoneId.systemDefault())
+        val current = dailyBooks.get(shopId, day)
+        if (current == null) dailyBooks.upsert(DailyBookEntity(shopId = shopId, dayStart = day))
+        else dailyBooks.upsert(current.copy(updatedAt = System.currentTimeMillis()))
+    }
+
+    private fun startOfDay(time: Long, zone: ZoneId): Long =
+        Instant.ofEpochMilli(time).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
+
+    private fun endOfDay(time: Long, zone: ZoneId = ZoneId.systemDefault()): Long =
+        Instant.ofEpochMilli(time).atZone(zone).toLocalDate().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
 
     data class CsvCommit(val created: Int, val skipped: Int)
 

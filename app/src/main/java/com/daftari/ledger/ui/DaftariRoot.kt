@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
@@ -146,7 +147,7 @@ fun DaftariRoot(
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (tab <= REPORTS_TAB) {
+            if (tab <= REPORTS_TAB && tab != SALES_TAB) {
                 FloatingActionButton(
                     onClick = { addType = DocType.SALE },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -165,6 +166,7 @@ fun DaftariRoot(
                     stringResource(R.string.nav_dashboard) to Icons.Default.Home,
                     stringResource(R.string.nav_accounts) to Icons.Default.People,
                     stringResource(R.string.nav_documents) to Icons.Default.ReceiptLong,
+                    stringResource(R.string.nav_sales) to Icons.Default.PointOfSale,
                     stringResource(R.string.nav_reports) to Icons.Default.Assessment,
                     stringResource(R.string.nav_more) to Icons.Default.MoreHoriz
                 )
@@ -186,6 +188,7 @@ fun DaftariRoot(
                         stringResource(R.string.nav_dashboard) to Icons.Default.Home,
                         stringResource(R.string.nav_accounts) to Icons.Default.People,
                         stringResource(R.string.nav_documents) to Icons.Default.ReceiptLong,
+                        stringResource(R.string.nav_sales) to Icons.Default.PointOfSale,
                         stringResource(R.string.nav_reports) to Icons.Default.Assessment,
                         stringResource(R.string.nav_more) to Icons.Default.MoreHoriz
                     )
@@ -204,6 +207,7 @@ fun DaftariRoot(
                     0 -> DashboardScreen(state, onEvent, padding) { addType = it }
                     1 -> PartiesScreen(state, onEvent, padding)
                     2 -> DocsScreen(state, onEvent, padding)
+                    SALES_TAB -> SalesLedgerScreen(state, onEvent, padding)
                     REPORTS_TAB -> ReportsScreen(state, onEvent, padding)
                     else -> MoreScreen(state, onEvent, padding)
                 }
@@ -263,4 +267,5 @@ private fun LockDialog(state: UiState, onEvent: (UiEvent) -> Unit, activity: Fra
     )
 }
 
-private const val REPORTS_TAB = 3
+private const val SALES_TAB = 3
+private const val REPORTS_TAB = 4

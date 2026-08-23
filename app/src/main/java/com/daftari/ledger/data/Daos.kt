@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Update
+import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
@@ -59,6 +60,44 @@ interface DocumentDao {
     fun observePeriod(shopId: Long, from: Long, to: Long): Flow<List<DocumentEntity>>
     @Query("SELECT * FROM documents WHERE shopId = :shopId AND deletedAt IS NULL AND occurredAt BETWEEN :from AND :to")
     suspend fun listPeriod(shopId: Long, from: Long, to: Long): List<DocumentEntity>
+
+    @Query("SELECT * FROM documents WHERE shopId = :shopId AND deletedAt IS NULL AND type IN ('SALE','EXPENSE') AND occurredAt BETWEEN :from AND :to ORDER BY occurredAt DESC, id DESC")
+    suspend fun listSalesBookPeriod(shopId: Long, from: Long, to: Long): List<DocumentEntity>
+
+    @Query(
+        """
+        SELECT d.* FROM documents d
+        LEFT JOIN parties p ON p.id = d.partyId
+        LEFT JOIN categories c ON c.id = d.categoryId
+        WHERE d.shopId = :shopId
+          AND d.deletedAt IS NULL
+          AND d.type IN ('SALE','EXPENSE')
+          AND d.occurredAt BETWEEN :from AND :to
+          AND (:entryType IS NULL OR d.type = :entryType)
+          AND (:paymentMethod IS NULL OR d.paymentMethod = :paymentMethod)
+          AND (:categoryId IS NULL OR d.categoryId = :categoryId)
+          AND (
+              :query = '' OR d.notes LIKE '%' || :query || '%' OR
+              d.docNumber LIKE '%' || :query || '%' OR
+              COALESCE(p.name, '') LIKE '%' || :query || '%' OR
+              COALESCE(c.name, '') LIKE '%' || :query || '%' OR
+              (:amountMinor IS NOT NULL AND d.amountMinor = :amountMinor)
+          )
+        ORDER BY d.occurredAt DESC, d.id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchSalesBook(
+        shopId: Long,
+        from: Long,
+        to: Long,
+        query: String,
+        amountMinor: Long?,
+        entryType: String?,
+        paymentMethod: String?,
+        categoryId: Long?,
+        limit: Int = 500
+    ): List<DocumentEntity>
     @Query("SELECT * FROM documents WHERE partyId = :partyId AND deletedAt IS NULL ORDER BY occurredAt DESC")
     fun observeParty(partyId: Long): Flow<List<DocumentEntity>>
     @Query("SELECT * FROM documents WHERE id = :id")
@@ -241,6 +280,18 @@ interface ClosingDao {
     fun observe(shopId: Long): Flow<List<DailyClosingEntity>>
     @Query("SELECT * FROM daily_closings WHERE shopId = :shopId AND dayStart = :day LIMIT 1")
     suspend fun byDay(shopId: Long, day: Long): DailyClosingEntity?
+}
+
+@Dao
+interface DailyBookDao {
+    @Query("SELECT * FROM daily_books WHERE shopId = :shopId AND dayStart = :dayStart LIMIT 1")
+    suspend fun get(shopId: Long, dayStart: Long): DailyBookEntity?
+
+    @Query("SELECT * FROM daily_books WHERE shopId = :shopId AND dayStart BETWEEN :from AND :to ORDER BY dayStart")
+    suspend fun listPeriod(shopId: Long, from: Long, to: Long): List<DailyBookEntity>
+
+    @Upsert
+    suspend fun upsert(book: DailyBookEntity): Long
 }
 
 

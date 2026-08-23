@@ -155,6 +155,71 @@ data class DailyClosingEntity(
     val closedAt: Long = System.currentTimeMillis()
 )
 
+/** بيانات صفحة اليوم فقط؛ المبالغ تبقى في documents ولا تُكرر هنا. */
+@Entity(
+    tableName = "daily_books",
+    indices = [Index(value = ["shopId", "dayStart"], unique = true), Index("dayStart")]
+)
+data class DailyBookEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val dayStart: Long,
+    val notes: String = "",
+    val status: String = "OPEN",
+    val closedAt: Long? = null,
+    val reopenedAt: Long? = null,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+data class PaymentTotal(
+    val method: String,
+    val amountMinor: Long,
+    val count: Int
+)
+
+data class DailyBookSummary(
+    val dayStart: Long,
+    val salesMinor: Long,
+    val outflowsMinor: Long,
+    val cashSalesMinor: Long,
+    val cashOutflowsMinor: Long,
+    val saleCount: Int,
+    val outflowCount: Int,
+    val notes: String,
+    val status: String,
+    val closedAt: Long?,
+    val payments: List<PaymentTotal>
+) {
+    val transactionCount: Int get() = saleCount + outflowCount
+    val netCashMovementMinor: Long get() = cashSalesMinor - cashOutflowsMinor
+}
+
+data class SalesBookEntryInput(
+    val type: String,
+    val amountMinor: Long,
+    val occurredAt: Long,
+    val categoryId: Long? = null,
+    val paymentMethod: String = "CASH",
+    val partyId: Long? = null,
+    val newPartyName: String? = null,
+    val notes: String = "",
+    val documentNumber: String = "",
+    val dueAt: Long? = null
+)
+
+data class SalesBookPeriodSummary(
+    val salesMinor: Long,
+    val outflowsMinor: Long,
+    val netCashMovementMinor: Long,
+    val saleCount: Int,
+    val outflowCount: Int,
+    val activeDays: Int,
+    val dailyAverageSalesMinor: Long,
+    val bestDay: DailyBookSummary?,
+    val weakestDay: DailyBookSummary?,
+    val paymentTotals: List<PaymentTotal>
+)
+
 data class PartyStatsAggregate(
     val sales: Long,
     val purchases: Long,

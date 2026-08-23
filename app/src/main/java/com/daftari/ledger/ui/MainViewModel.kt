@@ -135,6 +135,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.RestoreLatestWebDav -> restoreLatestWebDav()
             is UiEvent.CallPhone -> mutableEffects.tryEmit(UiEffect.OpenUri("tel:${Uri.encode(event.phone)}"))
             is UiEvent.OpenWhatsApp -> mutableEffects.tryEmit(UiEffect.OpenUri("https://wa.me/${event.phone.filter(Char::isDigit)}"))
+            UiEvent.LoadSalesLedger -> loadSalesLedger()
+            is UiEvent.SetSalesBookView -> setSalesBookView(event.view)
+            is UiEvent.SetSalesBookRange -> setSalesBookRange(event.range)
+            is UiEvent.SetSalesBookCustomRange -> setSalesBookCustomRange(event.from, event.to)
+            is UiEvent.SelectSalesDay -> selectSalesDay(event.dayStart)
+            UiEvent.CloseSalesDayPage -> closeSalesDayPage()
+            is UiEvent.SaveSalesEntry -> saveSalesEntry(event.draft)
+            is UiEvent.UpdateSalesEntry -> updateSalesEntry(event.id, event.draft)
+            is UiEvent.ArchiveSalesEntry -> archiveSalesEntry(event.id)
+            is UiEvent.DuplicateSalesEntry -> duplicateSalesEntry(event.id, event.occurredAt)
+            is UiEvent.SaveSalesDayNotes -> saveSalesDayNotes(event.dayStart, event.notes)
+            is UiEvent.CloseSalesBookDay -> closeSalesBookDay(event.dayStart)
+            is UiEvent.ReopenSalesBookDay -> reopenSalesBookDay(event.dayStart)
+            is UiEvent.SearchSalesBook -> searchSalesBook(event)
+            is UiEvent.ShareSalesDay -> shareSalesDay(event.dayStart, event.detailed)
+            is UiEvent.ExportSalesPeriod -> exportSalesPeriod(event.from, event.to, event.format)
             UiEvent.ConsumeMessage -> mutableState.update { it.copy(message = null) }
             UiEvent.ConsumeShareFile -> mutableState.update { it.copy(shareFile = null) }
             UiEvent.ConsumeShareText -> mutableState.update { it.copy(shareText = null) }
@@ -163,6 +179,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         refreshTotals()
         refreshInsights()
+        loadSalesLedger()
     }
 
     private fun setPeriod(period: Period) {
@@ -442,6 +459,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun refreshAll() {
         refreshTotals()
         refreshInsights()
+        loadSalesLedger()
         DaftariWidget.updateAll(getApplication())
     }
 

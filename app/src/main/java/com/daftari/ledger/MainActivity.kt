@@ -110,7 +110,7 @@ class MainActivity : FragmentActivity() {
                     s,
                     vm,
                     this@MainActivity,
-                    initialTab = if (intent.getBooleanExtra(EXTRA_OPEN_REPORTS, false)) 3 else 0,
+                    initialTab = if (intent.getBooleanExtra(EXTRA_OPEN_REPORTS, false)) 4 else 0,
                     initialQuickSale = intent.getBooleanExtra(EXTRA_QUICK_SALE, false)
                 )
             }

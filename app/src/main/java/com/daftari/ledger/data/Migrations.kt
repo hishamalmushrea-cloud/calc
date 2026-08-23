@@ -74,5 +74,29 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    /** v5 → v6: بيانات وصفية لدفتر البيع اليومي دون تكرار العمليات المالية. */
+    val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS daily_books (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    shopId INTEGER NOT NULL,
+                    dayStart INTEGER NOT NULL,
+                    notes TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    closedAt INTEGER,
+                    reopenedAt INTEGER,
+                    updatedAt INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_daily_books_shopId_dayStart ON daily_books(shopId, dayStart)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_daily_books_dayStart ON daily_books(dayStart)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6
+    )
 }

@@ -68,6 +68,7 @@ data class UiState(
     val nextDocumentNumber: Long = 1,
     val undoDocumentId: Long? = null,
     val cloudSettings: CloudBackupManager.Settings = CloudBackupManager.Settings(),
+    val salesLedger: SalesLedgerState = SalesLedgerState(),
     val restartRequested: Boolean = false
 )
 
@@ -160,6 +161,29 @@ sealed interface UiEvent {
     data object RestoreLatestWebDav : UiEvent
     data class CallPhone(val phone: String) : UiEvent
     data class OpenWhatsApp(val phone: String) : UiEvent
+
+    data object LoadSalesLedger : UiEvent
+    data class SetSalesBookView(val view: SalesBookView) : UiEvent
+    data class SetSalesBookRange(val range: SalesBookRange) : UiEvent
+    data class SetSalesBookCustomRange(val from: Long, val to: Long) : UiEvent
+    data class SelectSalesDay(val dayStart: Long) : UiEvent
+    data object CloseSalesDayPage : UiEvent
+    data class SaveSalesEntry(val draft: SalesEntryDraft) : UiEvent
+    data class UpdateSalesEntry(val id: Long, val draft: SalesEntryDraft) : UiEvent
+    data class ArchiveSalesEntry(val id: Long) : UiEvent
+    data class DuplicateSalesEntry(val id: Long, val occurredAt: Long) : UiEvent
+    data class SaveSalesDayNotes(val dayStart: Long, val notes: String) : UiEvent
+    data class CloseSalesBookDay(val dayStart: Long) : UiEvent
+    data class ReopenSalesBookDay(val dayStart: Long) : UiEvent
+    data class SearchSalesBook(
+        val query: String,
+        val entryType: String?,
+        val paymentMethod: String?,
+        val categoryId: Long?
+    ) : UiEvent
+    data class ShareSalesDay(val dayStart: Long, val detailed: Boolean) : UiEvent
+    data class ExportSalesPeriod(val from: Long, val to: Long, val format: String) : UiEvent
+
     data object ConsumeMessage : UiEvent
     data object ConsumeShareFile : UiEvent
     data object ConsumeShareText : UiEvent
