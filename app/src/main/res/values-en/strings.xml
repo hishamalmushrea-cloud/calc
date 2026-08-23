@@ -13,6 +13,9 @@
     <string name="action_execute">Import</string>
     <string name="action_preview">Preview</string>
     <string name="action_restore">Restore</string>
+    <string name="restore_confirm_title">Confirm restore</string>
+    <string name="restore_confirm_body">The selected backup will replace the app data. Daftari will create a safety copy of the current data before replacing it.</string>
+    <string name="restore_encrypted_password_hint">This backup is encrypted; enter its password in the backup password field before continuing.</string>
     <string name="action_share">Share</string>
     <string name="action_share_statement">Share statement</string>
     <string name="notifications">Alerts</string>

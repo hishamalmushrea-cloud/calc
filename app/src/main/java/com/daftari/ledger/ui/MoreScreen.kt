@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -46,6 +47,7 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
     var webDavUrl by remember(state.cloudSettings.webDavUrl) { mutableStateOf(state.cloudSettings.webDavUrl) }
     var webDavUser by remember(state.cloudSettings.webDavUser) { mutableStateOf(state.cloudSettings.webDavUser) }
     var webDavPassword by remember { mutableStateOf("") }
+    var pendingRestore by remember { mutableStateOf<java.io.File?>(null) }
     LaunchedEffect(Unit) { onEvent(UiEvent.RefreshBackups) }
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState())) {
         if (state.can(StaffPermission.MANAGE_SETTINGS)) {
@@ -234,7 +236,7 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                         backupFormat.format(Date(file.lastModified())) + if (file.name.endsWith(".enc")) " 🔒" else "",
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = { onEvent(UiEvent.RestoreBackup(file, backupPassword)) }) {
+                    TextButton(onClick = { pendingRestore = file }) {
                         Text(stringResource(R.string.action_restore))
                     }
                 }
@@ -319,6 +321,30 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 Text(stringResource(R.string.csv_row, row.line, row.name, row.amount, row.error ?: ready))
             }
         }
+        }
+
+        pendingRestore?.let { file ->
+            AlertDialog(
+                onDismissRequest = { pendingRestore = null },
+                title = { Text(stringResource(R.string.restore_confirm_title)) },
+                text = {
+                    Column {
+                        Text(stringResource(R.string.restore_confirm_body))
+                        if (file.name.endsWith(".enc")) {
+                            Text(stringResource(R.string.restore_encrypted_password_hint), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        onEvent(UiEvent.RestoreBackup(file, backupPassword))
+                        pendingRestore = null
+                    }) { Text(stringResource(R.string.action_restore)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingRestore = null }) { Text(stringResource(R.string.action_cancel)) }
+                }
+            )
         }
 
         if (state.can(StaffPermission.VIEW_AUDIT)) {

@@ -13,6 +13,9 @@
     <string name="action_execute">تنفيذ</string>
     <string name="action_preview">معاينة</string>
     <string name="action_restore">استعادة</string>
+    <string name="restore_confirm_title">تأكيد الاستعادة</string>
+    <string name="restore_confirm_body">سيتم استبدال بيانات التطبيق بالنسخة المحددة. سيُنشئ التطبيق نسخة أمان من البيانات الحالية قبل الاستبدال.</string>
+    <string name="restore_encrypted_password_hint">هذه نسخة مشفرة؛ أدخل كلمة المرور في حقل كلمة مرور النسخة الاحتياطية قبل المتابعة.</string>
     <string name="action_share">مشاركة</string>
     <string name="action_share_statement">مشاركة الكشف</string>
     <string name="notifications">تنبيهات</string>
