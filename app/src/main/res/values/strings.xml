@@ -270,4 +270,5 @@
     <string name="msg_pin_locked">تم قفل المحاولة لمدة %1$d ثانية</string>
     <string name="widget_title">دفتري اليوم</string>
     <string name="widget_description">ملخص نقد اليوم وزر بيع سريع</string>
+    <string name="quick_party_suggestions">حسابات مقترحة للوصول السريع</string>
 </resources>

@@ -86,8 +86,18 @@ internal fun DocumentSheet(
                 if (existing == null && type in PARTY_DOCUMENT_TYPES) {
                     OutlinedTextField(partyQuery, { partyQuery = it; party = null }, label = { Text(stringResource(R.string.name)) })
                     val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
-                    pool.filter { it.name.contains(partyQuery, true) }.take(5).forEach { candidate ->
-                        TextButton(onClick = { party = candidate; partyQuery = candidate.name }) { Text(candidate.name) }
+                    val suggestions = if (partyQuery.isBlank()) {
+                        pool.sortedByDescending { kotlin.math.abs(it.cachedBalanceMinor) }.take(5)
+                    } else {
+                        pool.filter { it.name.contains(partyQuery, true) || it.phone.contains(partyQuery, true) }.take(5)
+                    }
+                    if (partyQuery.isBlank() && suggestions.isNotEmpty()) {
+                        Text(stringResource(R.string.quick_party_suggestions), style = MaterialTheme.typography.labelSmall)
+                    }
+                    suggestions.forEach { candidate ->
+                        TextButton(onClick = { party = candidate; partyQuery = candidate.name }) {
+                            Text(candidate.name + candidate.phone.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty())
+                        }
                     }
                     val exact = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
                     if (partyQuery.isNotBlank() && exact == null && party == null) {
