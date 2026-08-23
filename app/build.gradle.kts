@@ -38,30 +38,6 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
-val diagnoseCompile by tasks.registering {
-    doLast {
-        val output = java.io.ByteArrayOutputStream()
-        val result = project.exec {
-            workingDir(rootProject.projectDir)
-            commandLine("./gradlew", ":app:compileDebugKotlin", "--no-daemon", "--console=plain")
-            standardOutput = output
-            errorOutput = output
-            isIgnoreExitValue = true
-        }
-        if (result.exitValue != 0) {
-            val important = output.toString().lineSequence()
-                .filter { it.startsWith("e:") || it.contains(" error:") }
-                .joinToString(" || ").takeLast(3500).ifBlank { output.toString().takeLast(3500) }
-            System.getenv("GITHUB_ENV")?.let { file(it).writeText("COMPILER DIAGNOSTIC: $important") }
-            logger.error("Captured main compilation failure; outer task will report it.")
-        }
-    }
-}
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
-    dependsOn(diagnoseCompile)
-    enabled = false
-}
-
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
