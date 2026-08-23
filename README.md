@@ -18,4 +18,4 @@
 محلات، عملاء، موردون، بيع/شراء/مصروف/إيراد/تحصيل/سداد/تحويل، لوحة، تقارير، أرشفة ناعمة، قيد مزدوج داخلي، مبالغ `Long`.
 
 ## CI
-يوجد مسار GitHub Actions (`.github/workflows/android.yml`) يعمل عند الدفع إلى `main` وطلبات الدمج: JDK 17 → اختبارات الوحدة → بناء APK → رفع الـ APK كـ artifact.
+يوجد مسار GitHub Actions (`.github/workflows/android.yml`) يعمل عند الدفع إلى `main` وطلبات الدمج أو يدويًا. وظيفته **الفحص فقط دون إنشاء APK**: يجهّز JDK 17 وAndroid SDK، ثم يترجم كود التطبيق واختبارات JVM عبر `testDebugUnitTest` ويشغّل `lintDebug`. لا يستدعي `assemble` أو `package` ولا يرفع APK كـ artifact.
