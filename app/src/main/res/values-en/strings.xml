@@ -131,6 +131,8 @@
     <string name="database_health_clear">Hide result</string>
     <string name="database_health_ok">No database issues detected.</string>
     <string name="database_health_issue_row">%1$s — count: %2$d</string>
+    <string name="party_required_for_document">Select an account or type a new name before saving.</string>
+    <string name="credit_sale_customer_required">Credit sales require a customer. Open details and select a customer or type a new customer name.</string>
     <string name="no_audit">No audit entries yet.</string>
     <string name="new_document">New transaction</string>
     <string name="edit_document">Edit transaction</string>

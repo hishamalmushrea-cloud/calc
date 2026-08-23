@@ -65,6 +65,8 @@ internal fun SalesEntryDialog(
     var showDueDate by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf(existing != null) }
     var submitted by remember { mutableStateOf(false) }
+    val creditSaleMissingCustomer = sale && payment == "CREDIT" && partyId == null && partyQuery.trim().isBlank()
+    val canSave = amount.isNotBlank() && !creditSaleMissingCustomer
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -87,7 +89,10 @@ internal fun SalesEntryDialog(
                             selected = payment == method,
                             onClick = {
                                 payment = method
-                                if (method == "CREDIT" && dueAt == null) dueAt = occurredAt + 30L * 86_400_000L
+                                if (method == "CREDIT") {
+                                    if (dueAt == null) dueAt = occurredAt + 30L * 86_400_000L
+                                    details = true
+                                }
                                 if (method != "CREDIT") dueAt = null
                             },
                             label = { Text(paymentLabel(method)) }
@@ -101,6 +106,13 @@ internal fun SalesEntryDialog(
                     label = { Text(stringResource(R.string.notes_optional)) },
                     minLines = 2
                 )
+                if (creditSaleMissingCustomer) {
+                    Text(
+                        stringResource(R.string.credit_sale_customer_required),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 TextButton(onClick = { details = !details }) {
                     Text(stringResource(if (details) R.string.fewer_details else R.string.more_details))
                 }
@@ -172,7 +184,7 @@ internal fun SalesEntryDialog(
         },
         confirmButton = {
             Button(
-                enabled = !submitted && amount.isNotBlank(),
+                enabled = !submitted && canSave,
                 onClick = {
                     submitted = true
                     onSave(

@@ -68,6 +68,12 @@ internal fun DocumentSheet(
     var showDate by remember { mutableStateOf(false) }
     var showDueDate by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    val partyPool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
+    val matchedParty = partyPool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
+    val finalPartyCandidateId = party?.id ?: matchedParty?.id
+    val hasPartyInput = finalPartyCandidateId != null || partyQuery.trim().isNotBlank()
+    val requiresParty = type == DocType.COLLECT || type == DocType.PAY || ((type == DocType.SALE || type == DocType.PURCHASE) && credit)
+    val canSave = amount.isNotBlank() && (!requiresParty || hasPartyInput)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -85,11 +91,10 @@ internal fun DocumentSheet(
                 OutlinedTextField(amount, { amount = it }, label = { Text(stringResource(R.string.amount)) })
                 if (type in PARTY_DOCUMENT_TYPES) {
                     OutlinedTextField(partyQuery, { partyQuery = it; party = null }, label = { Text(stringResource(R.string.name)) })
-                    val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
                     val suggestions = if (partyQuery.isBlank()) {
-                        pool.sortedByDescending { kotlin.math.abs(it.cachedBalanceMinor) }.take(5)
+                        partyPool.sortedByDescending { kotlin.math.abs(it.cachedBalanceMinor) }.take(5)
                     } else {
-                        pool.filter { it.name.contains(partyQuery, true) || it.phone.contains(partyQuery, true) }.take(5)
+                        partyPool.filter { it.name.contains(partyQuery, true) || it.phone.contains(partyQuery, true) }.take(5)
                     }
                     if (partyQuery.isBlank() && suggestions.isNotEmpty()) {
                         Text(stringResource(R.string.quick_party_suggestions), style = MaterialTheme.typography.labelSmall)
@@ -99,8 +104,7 @@ internal fun DocumentSheet(
                             Text(candidate.name + candidate.phone.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty())
                         }
                     }
-                    val exact = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
-                    if (partyQuery.isNotBlank() && exact == null && party == null) {
+                    if (partyQuery.isNotBlank() && matchedParty == null && party == null) {
                         Text(
                             stringResource(
                                 if (type in CUSTOMER_DOCUMENT_TYPES) R.string.new_customer_on_save
@@ -147,16 +151,21 @@ internal fun DocumentSheet(
                     label = { Text(stringResource(R.string.document_number_optional)) }
                 )
                 OutlinedTextField(notes, { notes = it }, label = { Text(stringResource(R.string.notes)) })
+                if (requiresParty && !hasPartyInput) {
+                    Text(
+                        stringResource(R.string.party_required_for_document),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 TextButton(onClick = { showDate = true }) {
                     Text(stringResource(R.string.date_value, dateFormat.format(Date(occurredAt))))
                 }
             }
         },
         confirmButton = {
-            Button(onClick = {
-                val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
-                val matched = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
-                val finalPartyId = party?.id ?: matched?.id
+            Button(enabled = canSave, onClick = {
+                val finalPartyId = finalPartyCandidateId
                 val newPartyName = if (type in PARTY_DOCUMENT_TYPES && finalPartyId == null) {
                     partyQuery.trim().takeIf(String::isNotBlank)
                 } else null

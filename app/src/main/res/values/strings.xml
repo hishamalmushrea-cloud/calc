@@ -147,6 +147,8 @@
     <string name="database_health_clear">إخفاء النتيجة</string>
     <string name="database_health_ok">لا توجد مشاكل مكتشفة في قاعدة البيانات.</string>
     <string name="database_health_issue_row">%1$s — العدد: %2$d</string>
+    <string name="party_required_for_document">اختر الحساب أو اكتب اسمًا جديدًا قبل الحفظ.</string>
+    <string name="credit_sale_customer_required">البيع الآجل يحتاج عميلًا. افتح التفاصيل واختر عميلًا أو اكتب اسم عميل جديد.</string>
     <string name="no_audit">لا سجل بعد.</string>
 
     <string name="new_document">عملية جديدة</string>
