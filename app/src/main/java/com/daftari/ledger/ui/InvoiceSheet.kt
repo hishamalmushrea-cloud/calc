@@ -26,6 +26,7 @@ import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.InventoryMath
 import com.daftari.ledger.domain.Money
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InvoiceSheet(state: UiState, onEvent: (UiEvent) -> Unit) {
     val sale = state.inventory.invoiceType == DocType.SALE
