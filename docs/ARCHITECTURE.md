@@ -13,7 +13,17 @@
 - وحدات مستقبلية: inventory, invoicing, sync, multiuser — واجهات فارغة غير معروضة كأزرار وهمية.
 
 التنقل:
-أسفل: الرئيسية | الحسابات | العمليات | التقارير | المزيد
+أسفل: الرئيسية | الحسابات | العمليات | بيع | التقارير | المزيد
 FAB: عملية سريعة.
 
-Hilt غير مستخدم في v1 لتقليل التعقيد؛ حقن يدوي عبر `AppContainer`.
+## الحقن ودورة الحياة
+
+لا يستخدم الإصدار الحالي Hilt. ينشئ `DaftariApp` قاعدة `AppDb` و`LedgerRepository`
+و`BackupManager` ويتيحها للـ `MainViewModel` (حقن يدوي بسيط وواضح). مهام التهيئة
+تعمل في `ProcessLifecycleOwner.lifecycleScope` بدل نطاق دائم غير قابل للإلغاء.
+
+## تنظيم الواجهة
+
+العقد موجود في `UiContract.kt` (`UiState` و`sealed interface UiEvent`)، بينما كل
+وجهة Compose في ملف مستقل: Dashboard وParties وDocs وReports وMore، مع ملفات
+مستقلة لنموذج العملية وتفاصيل الحساب. `DaftariRoot` مسؤول عن الهيكل والتنقل فقط.

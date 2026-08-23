@@ -1,9 +1,12 @@
 package com.daftari.ledger.data
 
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+
+const val DEFAULT_PARTY_CATEGORY = "عادي"
 
 @Entity(tableName = "shops")
 data class ShopEntity(
@@ -14,7 +17,8 @@ data class ShopEntity(
     val currencyCode: String = "SAR",
     val fractionDigits: Int = 2,
     val archived: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val nextDocumentNumber: Long = 1
 )
 
 @Entity(
@@ -30,7 +34,7 @@ data class PartyEntity(
     val phone: String = "",
     val address: String = "",
     val notes: String = "",
-    val category: String = "عادي",
+    val category: String = DEFAULT_PARTY_CATEGORY,
     val openingMinor: Long = 0,
     val cachedBalanceMinor: Long = 0,
     val deletedAt: Long? = null,
@@ -56,7 +60,11 @@ data class AccountEntity(
 @Entity(
     tableName = "documents",
     foreignKeys = [ForeignKey(entity = ShopEntity::class, parentColumns = ["id"], childColumns = ["shopId"], onDelete = ForeignKey.RESTRICT)],
-    indices = [Index("shopId"), Index("occurredAt"), Index("partyId"), Index("docNumber"), Index("type")]
+    indices = [
+        Index("shopId"), Index("occurredAt"), Index("partyId"), Index("docNumber"),
+        Index("type"), Index("dueAt"), Index("categoryId"), Index("employeeId"),
+        Index("shiftId"), Index("createdByEmployeeId")
+    ]
 )
 data class DocumentEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -67,6 +75,13 @@ data class DocumentEntity(
     val counterAccountId: Long? = null,
     val amountMinor: Long,
     val occurredAt: Long,
+    val dueAt: Long? = null,
+    val categoryId: Long? = null,
+    val employeeId: Long? = null,
+    val shiftId: Long? = null,
+    val createdByEmployeeId: Long? = null,
+    val updatedByEmployeeId: Long? = null,
+    val deletedByEmployeeId: Long? = null,
     val docNumber: String = "",
     val notes: String = "",
     val paymentMethod: String = "CASH",
@@ -93,6 +108,98 @@ data class JournalLineEntity(
     val memo: String = ""
 )
 
+@Entity(
+    tableName = "categories",
+    indices = [Index("shopId"), Index(value = ["shopId", "kind", "name"], unique = true)]
+)
+data class CategoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val kind: String,
+    val name: String,
+    val archived: Boolean = false
+)
+
+@Entity(
+    tableName = "employees",
+    indices = [Index("name"), Index("phone"), Index("status"), Index("role")]
+)
+data class EmployeeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val phone: String = "",
+    val jobTitle: String = "",
+    val role: String = "SELLER",
+    val permissions: Long = 0,
+    val baseSalaryMinor: Long = 0,
+    val commissionBasisPoints: Int = 0,
+    val monthlyTargetMinor: Long = 0,
+    val startDate: Long = System.currentTimeMillis(),
+    val notes: String = "",
+    val status: String = "ACTIVE",
+    val username: String = "",
+    val pinHash: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val inactiveAt: Long? = null
+)
+
+@Entity(
+    tableName = "employee_shops",
+    indices = [Index("shopId"), Index("employeeId")]
+)
+data class EmployeeShopEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val employeeId: Long,
+    val shopId: Long,
+    val active: Boolean = true,
+    val assignedAt: Long = System.currentTimeMillis(),
+    val endedAt: Long? = null
+)
+
+@Entity(
+    tableName = "employee_shifts",
+    indices = [Index("shopId"), Index("employeeId"), Index("status"), Index("openedAt")]
+)
+data class EmployeeShiftEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val employeeId: Long,
+    val label: String = "",
+    val openedAt: Long,
+    val closedAt: Long? = null,
+    val openingCashMinor: Long = 0,
+    val expectedCashMinor: Long = 0,
+    val actualCashMinor: Long? = null,
+    val differenceMinor: Long? = null,
+    val status: String = "OPEN",
+    val notes: String = "",
+    val openedByEmployeeId: Long? = null,
+    val closedByEmployeeId: Long? = null
+)
+
+data class EmployeePerformanceRow(
+    val employeeId: Long,
+    val employeeName: String,
+    val jobTitle: String,
+    val role: String,
+    val status: String,
+    val salesMinor: Long,
+    val transactionCount: Int,
+    val cashMinor: Long,
+    val bankMinor: Long,
+    val cardMinor: Long,
+    val walletMinor: Long,
+    val creditMinor: Long
+) {
+    val averageSaleMinor: Long get() = if (transactionCount == 0) 0 else salesMinor / transactionCount
+}
+
+data class ShiftCashSummary(
+    val cashSalesMinor: Long,
+    val cashOutflowsMinor: Long
+)
+
 @Entity(tableName = "audit_logs")
 data class AuditLogEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -100,7 +207,10 @@ data class AuditLogEntity(
     val action: String,
     val entity: String,
     val entityId: Long?,
-    val detail: String = ""
+    val detail: String = "",
+    val actorEmployeeId: Long? = null,
+    val beforeValue: String = "",
+    val afterValue: String = ""
 )
 
 @Entity(tableName = "app_settings")
@@ -114,7 +224,12 @@ data class SettingsEntity(
     val uniqueDocPerParty: Boolean = true,
     val autoBackupEnabled: Boolean = false,
     val autoBackupKeep: Int = 7,
-    val biometricUnlock: Boolean = false
+    val biometricUnlock: Boolean = false,
+    val latinDigits: Boolean = true,
+    val failedPinAttempts: Int = 0,
+    val pinLockedUntil: Long = 0,
+    val employeesEnabled: Boolean = false,
+    val currentEmployeeId: Long? = null
 )
 
 @Entity(
@@ -132,6 +247,117 @@ data class DailyClosingEntity(
     val differenceMinor: Long,
     val notes: String = "",
     val closedAt: Long = System.currentTimeMillis()
+)
+
+/** بيانات صفحة اليوم فقط؛ المبالغ تبقى في documents ولا تُكرر هنا. */
+@Entity(
+    tableName = "daily_books",
+    indices = [Index(value = ["shopId", "dayStart"], unique = true), Index("dayStart")]
+)
+data class DailyBookEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val dayStart: Long,
+    val notes: String = "",
+    val status: String = "OPEN",
+    val closedAt: Long? = null,
+    val reopenedAt: Long? = null,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+data class PaymentTotal(
+    val method: String,
+    val amountMinor: Long,
+    val count: Int
+)
+
+data class DailyBookSummary(
+    val dayStart: Long,
+    val salesMinor: Long,
+    val outflowsMinor: Long,
+    val cashSalesMinor: Long,
+    val cashOutflowsMinor: Long,
+    val saleCount: Int,
+    val outflowCount: Int,
+    val notes: String,
+    val status: String,
+    val closedAt: Long?,
+    val payments: List<PaymentTotal>
+) {
+    val transactionCount: Int get() = saleCount + outflowCount
+    val netCashMovementMinor: Long get() = cashSalesMinor - cashOutflowsMinor
+}
+
+data class SalesBookEntryInput(
+    val type: String,
+    val amountMinor: Long,
+    val occurredAt: Long,
+    val categoryId: Long? = null,
+    val paymentMethod: String = "CASH",
+    val partyId: Long? = null,
+    val employeeId: Long? = null,
+    val newPartyName: String? = null,
+    val notes: String = "",
+    val documentNumber: String = "",
+    val dueAt: Long? = null
+)
+
+data class SalesBookPeriodSummary(
+    val salesMinor: Long,
+    val outflowsMinor: Long,
+    val netCashMovementMinor: Long,
+    val saleCount: Int,
+    val outflowCount: Int,
+    val activeDays: Int,
+    val dailyAverageSalesMinor: Long,
+    val bestDay: DailyBookSummary?,
+    val weakestDay: DailyBookSummary?,
+    val paymentTotals: List<PaymentTotal>
+)
+
+data class PartyStatsAggregate(
+    val sales: Long,
+    val purchases: Long,
+    val collections: Long,
+    val payments: Long
+)
+
+/** صف واحد من استعلام الشيخوخة الموحّد؛ تُجمع الصفوف حسب الطرف في المستودع. */
+data class AgingDocumentRow(
+    @Embedded val party: PartyEntity,
+    val invoiceAmountMinor: Long?,
+    val invoiceOccurredAt: Long?
+)
+
+/** آخر حركة بيع/تحصيل محسوبة في SQL بدل استعلام مستقل لكل عميل. */
+data class PartyLastActivityRow(
+    @Embedded val party: PartyEntity,
+    val lastDate: Long?
+)
+
+data class PartyStatementRow(
+    @Embedded val document: DocumentEntity,
+    val netDebitDelta: Long
+)
+
+data class StatementLine(
+    val document: DocumentEntity,
+    val deltaMinor: Long,
+    val runningBalanceMinor: Long
+)
+
+data class CategoryTotal(
+    val categoryId: Long?,
+    val categoryName: String,
+    val totalMinor: Long
+)
+
+data class OverduePartyRow(
+    val partyId: Long,
+    val partyName: String,
+    val documentCount: Int,
+    val totalMinor: Long,
+    val oldestDueAt: Long
 )
 
 data class AgingRow(

@@ -3,6 +3,7 @@ package com.daftari.ledger.domain
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
+import java.util.Currency
 import java.util.Locale
 
 /**
@@ -24,12 +25,22 @@ data class Money(val minor: Long, val fractionDigits: Int = 2) {
     fun toBigDecimal(): BigDecimal =
         BigDecimal.valueOf(minor).movePointLeft(fractionDigits)
 
-    fun format(locale: Locale = Locale("ar")): String {
-        val nf = NumberFormat.getNumberInstance(locale)
-        nf.minimumFractionDigits = if (minor % 100 == 0L && fractionDigits == 2) 0 else fractionDigits
-        nf.maximumFractionDigits = fractionDigits
-        return nf.format(toBigDecimal())
+    fun format(
+        locale: Locale = Locale("ar"),
+        currencyCode: String? = null,
+        includeCurrency: Boolean = currencyCode != null
+    ): String {
+        val formatter = if (includeCurrency && currencyCode != null) {
+            NumberFormat.getCurrencyInstance(locale).apply {
+                runCatching { Currency.getInstance(currencyCode) }.getOrNull()?.let { currency = it }
+            }
+        } else NumberFormat.getNumberInstance(locale)
+        formatter.minimumFractionDigits = if (minor % powerOfTen(fractionDigits) == 0L) 0 else fractionDigits
+        formatter.maximumFractionDigits = fractionDigits
+        return formatter.format(toBigDecimal())
     }
+
+    private fun powerOfTen(digits: Int): Long = (1..digits).fold(1L) { value, _ -> value * 10L }
 
     companion object {
         fun fromMajor(text: String, fractionDigits: Int = 2): Money? {

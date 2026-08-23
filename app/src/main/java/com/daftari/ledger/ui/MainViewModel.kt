@@ -1,11 +1,13 @@
 package com.daftari.ledger.ui
 
 import android.app.Application
+import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.daftari.ledger.DaftariApp
-import com.daftari.ledger.data.AuditLogEntity
-import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.R
+import com.daftari.ledger.data.AccountCodes
 import com.daftari.ledger.data.LedgerException
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.PartyEntity
@@ -13,448 +15,592 @@ import com.daftari.ledger.data.ShopEntity
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.PartyKind
+import com.daftari.ledger.domain.StaffPermission
+import com.daftari.ledger.widget.DaftariWidget
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
-
-enum class Period { TODAY, YESTERDAY, WEEK, MONTH, YEAR, CUSTOM }
-
-data class UiState(
-    val shops: List<ShopEntity> = emptyList(),
-    val shop: ShopEntity? = null,
-    val customers: List<PartyEntity> = emptyList(),
-    val suppliers: List<PartyEntity> = emptyList(),
-    val docs: List<DocumentEntity> = emptyList(),
-    val totals: LedgerRepository.PeriodTotals = LedgerRepository.PeriodTotals(0, 0, 0, 0, 0, 0, 0, 0),
-    val owedToYou: Long = 0,
-    val youOwe: Long = 0,
-    val period: Period = Period.TODAY,
-    val message: String? = null,
-    val loading: Boolean = true,
-    val locked: Boolean = false,
-    val hasPin: Boolean = false,
-    val biometric: Boolean = false,
-    val autoBackup: Boolean = false,
-    val aging: List<com.daftari.ledger.data.AgingRow> = emptyList(),
-    val csvPreview: List<com.daftari.ledger.data.CsvPreviewRow> = emptyList(),
-    val shareFile: java.io.File? = null,
-    val prevTotals: LedgerRepository.PeriodTotals = LedgerRepository.PeriodTotals(0, 0, 0, 0, 0, 0, 0, 0),
-    val selectedParty: PartyEntity? = null,
-    val partyStats: PartyStats? = null,
-    val audit: List<AuditLogEntity> = emptyList(),
-    val backups: List<java.io.File> = emptyList(),
-    val shareText: String? = null,
-    val agingAlert: Int = 0,
-    val late: List<LedgerRepository.LateRow> = emptyList()
-)
-
-data class PartyStats(
-    val sales: Long = 0,
-    val purchases: Long = 0,
-    val collections: Long = 0,
-    val payments: Long = 0,
-    val docs: List<DocumentEntity> = emptyList()
-) {
-    val collectionRate: Int
-        get() = if (sales == 0L) 0 else ((collections * 100) / sales).toInt().coerceIn(0, 100)
-}
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
-    private val repo = (app as DaftariApp).repo
-    private val _s = MutableStateFlow(UiState())
-    val state: StateFlow<UiState> = _s
+    internal val repo = (app as DaftariApp).repo
+    internal val staff = (app as DaftariApp).staff
+    internal val services = MainUiServices(app, repo)
+    internal val mutableState = MutableStateFlow(
+        UiState(
+            cloudSettings = (app as DaftariApp).cloudBackup.settings(),
+            googleBackup = GoogleBackupUiState(
+                settings = (app as DaftariApp).googleBackup.preferences.load(),
+                hasLocalData = (app as DaftariApp).googleBackup.hasLocalData()
+            )
+        )
+    )
+    val state: StateFlow<UiState> = mutableState.asStateFlow()
+    internal val mutableEffects = MutableSharedFlow<UiEffect>(extraBufferCapacity = 4)
+    val effects: SharedFlow<UiEffect> = mutableEffects.asSharedFlow()
+
+    private val totalsMutex = Mutex()
+    private var shopBindJob: Job? = null
 
     init {
         viewModelScope.launch {
             repo.ensureSettings()
-            repo.shops.observeActive().collectLatest { shops ->
-                var shop = _s.value.shop
-                if (shop == null || shops.none { it.id == shop?.id }) shop = shops.firstOrNull()
-                if (shops.isEmpty()) {
-                    val id = repo.createShop("المحل الرئيسي")
-                    shop = repo.shops.get(id)
+            repo.settings.get()?.let { settings ->
+                val currentEmployee = staff.currentEmployee()
+                mutableState.update {
+                    it.copy(
+                        hasPin = settings.pinHash != null,
+                        locked = settings.pinHash != null,
+                        biometric = settings.biometricUnlock,
+                        autoBackup = settings.autoBackupEnabled,
+                        hideBalances = settings.hideBalances,
+                        latinDigits = settings.latinDigits,
+                        pinLockedUntil = settings.pinLockedUntil,
+                        employees = it.employees.copy(
+                            enabled = settings.employeesEnabled,
+                            currentEmployee = currentEmployee
+                        )
+                    )
                 }
-                _s.value = _s.value.copy(shops = shops.ifEmpty { listOfNotNull(shop) }, shop = shop, loading = false)
-                shop?.let { bindShop(it.id) }
+            }
+            repo.shops.observeActive().collectLatest { shops ->
+                var selected = mutableState.value.shop
+                if (selected == null || shops.none { it.id == selected?.id }) selected = shops.firstOrNull()
+                if (shops.isEmpty()) {
+                    val id = repo.createShop(getApplication<Application>().getString(R.string.default_shop_name))
+                    selected = repo.shops.get(id)
+                }
+                mutableState.update {
+                    it.copy(shops = shops.ifEmpty { listOfNotNull(selected) }, shop = selected, loading = false)
+                }
+                selected?.let { bindShop(it.id) }
             }
         }
         viewModelScope.launch {
-            repo.audit.observe().collectLatest { rows ->
-                _s.value = _s.value.copy(audit = rows)
+            repo.audit.observe().collectLatest { rows -> mutableState.update { it.copy(audit = rows) } }
+        }
+        // تتغير أعمار الديون بمرور الوقت حتى من دون عملية جديدة.
+        viewModelScope.launch {
+            while (isActive) {
+                delay(AGING_REFRESH_INTERVAL_MS)
+                refreshInsights()
             }
         }
     }
 
-    private fun range(p: Period): Pair<Long, Long> {
-        val cal = Calendar.getInstance()
-        fun startDay(c: Calendar) = c.apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        val now = System.currentTimeMillis()
-        return when (p) {
-            Period.TODAY -> startDay(cal) to now
-            Period.YESTERDAY -> {
-                cal.add(Calendar.DAY_OF_YEAR, -1)
-                val s = startDay(cal)
-                cal.add(Calendar.DAY_OF_YEAR, 1)
-                s to startDay(cal) - 1
-            }
-            Period.WEEK -> {
-                cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
-                startDay(cal) to now
-            }
-            Period.MONTH -> {
-                cal.set(Calendar.DAY_OF_MONTH, 1)
-                startDay(cal) to now
-            }
-            Period.YEAR -> {
-                cal.set(Calendar.DAY_OF_YEAR, 1)
-                startDay(cal) to now
-            }
-            Period.CUSTOM -> startDay(Calendar.getInstance()) to now
+    fun onEvent(event: UiEvent) {
+        when (event) {
+            is UiEvent.SetPeriod -> setPeriod(event.period)
+            is UiEvent.SetCustomRange -> setCustomRange(event.from, event.to)
+            is UiEvent.SelectShop -> selectShop(event.shop)
+            is UiEvent.AddShop -> addShop(event.name)
+            is UiEvent.AddParty -> addParty(event)
+            is UiEvent.UpdateParty -> updateParty(event)
+            is UiEvent.AddDocument -> addDocument(event.draft)
+            is UiEvent.UpdateDocument -> updateDocument(event)
+            is UiEvent.DeleteDocument -> deleteDocument(event.id)
+            UiEvent.UndoDeleteDocument -> undoDeleteDocument()
+            is UiEvent.ShareReceipt -> shareReceipt(event.document)
+            is UiEvent.Unlock -> unlock(event.pin)
+            UiEvent.BiometricUnlocked -> mutableState.update { it.copy(locked = false) }
+            is UiEvent.SavePin -> savePin(event.pin)
+            UiEvent.ClearPin -> clearPin()
+            is UiEvent.ToggleBackup -> toggleBackup(event.enabled)
+            is UiEvent.ToggleBiometric -> toggleBiometric(event.enabled)
+            is UiEvent.TogglePrivacy -> togglePrivacy(event.enabled)
+            is UiEvent.ToggleLatinDigits -> toggleLatinDigits(event.enabled)
+            is UiEvent.UpdateCurrency -> updateCurrency(event.currencyCode)
+            is UiEvent.AddCategory -> addCategory(event.kind, event.name)
+            is UiEvent.CloseDay -> closeDay(event.actual, event.notes)
+            is UiEvent.CloseParty -> closeParty(event.id)
+            UiEvent.LoadInsights -> refreshInsights()
+            is UiEvent.PreviewCsv -> mutableState.update { it.copy(csvPreview = repo.parseCsv(event.text)) }
+            UiEvent.CommitCsv -> commitCsv()
+            UiEvent.ExportPdf -> createFile(R.string.msg_pdf_ready, R.string.msg_pdf_failed) { services.exportPdf(state.value) }
+            UiEvent.ExportExcel -> createFile(R.string.msg_excel_ready, R.string.msg_excel_failed) { services.exportExcel(state.value) }
+            UiEvent.BackupNow -> backupNow()
+            UiEvent.RefreshBackups -> mutableState.update { it.copy(backups = services.listBackups()) }
+            is UiEvent.RestoreBackup -> restoreBackup(event.file, event.password)
+            is UiEvent.BackupEncrypted -> backupEncrypted(event.password)
+            is UiEvent.OpenParty -> openParty(event.party)
+            UiEvent.ClosePartyDialog -> mutableState.update { it.copy(selectedParty = null, partyStats = null) }
+            is UiEvent.ShareStatement -> shareStatement(event.party)
+            UiEvent.ExportCsv -> exportCsv()
+            UiEvent.RunDatabaseHealthCheck -> runDatabaseHealthCheck()
+            UiEvent.ClearDatabaseHealthCheck -> mutableState.update { it.copy(healthIssues = emptyList(), healthCheckedAt = 0) }
+            UiEvent.ChooseCloudFolder -> mutableEffects.tryEmit(UiEffect.PickCloudFolder)
+            is UiEvent.CloudFolderSelected -> saveCloudFolder(event.uri)
+            UiEvent.ClearCloudFolder -> clearCloudFolder()
+            is UiEvent.SaveWebDav -> saveWebDav(event.url, event.user, event.password)
+            UiEvent.ClearWebDav -> clearWebDav()
+            UiEvent.CloudBackupNow -> cloudBackupNow()
+            UiEvent.ChooseCloudRestoreFile -> mutableEffects.tryEmit(UiEffect.PickBackupFile)
+            is UiEvent.RestoreCloudFile -> restoreCloudFile(event.uri)
+            UiEvent.RestoreLatestWebDav -> restoreLatestWebDav()
+            UiEvent.OpenGoogleBackup -> openGoogleBackup()
+            UiEvent.CloseGoogleBackup -> closeGoogleBackup()
+            UiEvent.LinkGoogleBackup -> linkGoogleBackup()
+            UiEvent.UnlinkGoogleBackup -> unlinkGoogleBackup()
+            UiEvent.RefreshGoogleBackups -> requestGoogleAuthorization("LIST")
+            UiEvent.GoogleBackupNow -> requestGoogleAuthorization("BACKUP")
+            is UiEvent.SetGoogleBackupAutomatic -> setGoogleBackupAutomatic(event.enabled)
+            is UiEvent.SetGoogleBackupWifiOnly -> setGoogleBackupWifiOnly(event.enabled)
+            is UiEvent.PrepareGoogleRestore -> prepareGoogleRestore(event.backup)
+            UiEvent.ConfirmGoogleRestore -> confirmGoogleRestore()
+            is UiEvent.PrepareGoogleBackupDelete -> prepareGoogleBackupDelete(event.backup)
+            UiEvent.ConfirmGoogleBackupDelete -> confirmGoogleBackupDelete()
+            is UiEvent.GoogleBackupAuthorized -> handleGoogleBackupAuthorized(event)
+            is UiEvent.GoogleBackupAuthorizationFailed -> googleBackupAuthorizationFailed(event.message)
+            is UiEvent.CallPhone -> mutableEffects.tryEmit(UiEffect.OpenUri("tel:${Uri.encode(event.phone)}"))
+            is UiEvent.OpenWhatsApp -> mutableEffects.tryEmit(UiEffect.OpenUri("https://wa.me/${event.phone.filter(Char::isDigit)}"))
+            UiEvent.LoadSalesLedger -> loadSalesLedger()
+            is UiEvent.SetSalesBookView -> setSalesBookView(event.view)
+            is UiEvent.SetSalesBookRange -> setSalesBookRange(event.range)
+            is UiEvent.SetSalesBookCustomRange -> setSalesBookCustomRange(event.from, event.to)
+            is UiEvent.SelectSalesDay -> selectSalesDay(event.dayStart)
+            UiEvent.CloseSalesDayPage -> closeSalesDayPage()
+            is UiEvent.SaveSalesEntry -> saveSalesEntry(event.draft)
+            is UiEvent.UpdateSalesEntry -> updateSalesEntry(event.id, event.draft)
+            is UiEvent.ArchiveSalesEntry -> archiveSalesEntry(event.id)
+            is UiEvent.DuplicateSalesEntry -> duplicateSalesEntry(event.id, event.occurredAt)
+            is UiEvent.SaveSalesDayNotes -> saveSalesDayNotes(event.dayStart, event.notes)
+            is UiEvent.CloseSalesBookDay -> closeSalesBookDay(event.dayStart, event.notes)
+            is UiEvent.ReopenSalesBookDay -> reopenSalesBookDay(event.dayStart)
+            is UiEvent.SearchSalesBook -> searchSalesBook(event)
+            is UiEvent.ShareSalesDay -> shareSalesDay(event.dayStart, event.detailed)
+            is UiEvent.ExportSalesPeriod -> exportSalesPeriod(event.from, event.to, event.format)
+            UiEvent.OpenEmployees -> openEmployees()
+            UiEvent.CloseEmployees -> closeEmployees()
+            is UiEvent.SetEmployeesEnabled -> setEmployeesEnabled(event.enabled)
+            is UiEvent.AddEmployee -> addEmployee(event.draft)
+            is UiEvent.UpdateEmployee -> updateEmployee(event.id, event.draft)
+            is UiEvent.ChangeEmployeeStatus -> changeEmployeeStatus(event.id, event.status)
+            is UiEvent.SelectEmployee -> selectEmployee(event.id)
+            is UiEvent.SelectEmployeePeriod -> selectEmployeePeriod(event.id, event.from, event.to)
+            UiEvent.CloseEmployeeDetail -> closeEmployeeDetail()
+            is UiEvent.SetEmployeeRange -> setEmployeeRange(event.range)
+            is UiEvent.LoginEmployee -> loginEmployee(event.id, event.pin)
+            is UiEvent.SwitchToOwner -> switchToOwner(event.pin)
+            is UiEvent.SetEmployeeSwitcher -> setEmployeeSwitcher(event.open)
+            is UiEvent.AssignEmployeeShop -> assignEmployeeShop(event.employeeId, event.shopId, event.active)
+            is UiEvent.OpenEmployeeShift -> openEmployeeShift(event.employeeId, event.label, event.openingCash)
+            is UiEvent.CloseEmployeeShift -> closeEmployeeShift(event.shiftId, event.actualCash, event.notes)
+            UiEvent.ConsumeMessage -> mutableState.update { it.copy(message = null) }
+            UiEvent.ConsumeShareFile -> mutableState.update { it.copy(shareFile = null) }
+            UiEvent.ConsumeShareText -> mutableState.update { it.copy(shareText = null) }
+            UiEvent.ConsumeRestart -> mutableState.update { it.copy(restartRequested = false) }
         }
-    }
-
-    private fun previousRange(p: Period): Pair<Long, Long> {
-        val (a, b) = range(p)
-        val len = (b - a).coerceAtLeast(1L)
-        return (a - len) to (a - 1)
     }
 
     private fun bindShop(id: Long) {
-        viewModelScope.launch {
-            repo.observeCustomers(id).collectLatest { c ->
-                _s.value = _s.value.copy(customers = c)
+        shopBindJob?.cancel()
+        shopBindJob = viewModelScope.launch {
+            launch {
+                repo.observeCustomers(id).collectLatest { customers ->
+                    mutableState.update { it.copy(customers = customers) }
+                }
+            }
+            launch {
+                repo.observeSuppliers(id).collectLatest { suppliers ->
+                    mutableState.update { it.copy(suppliers = suppliers) }
+                }
+            }
+            launch {
+                repo.observeCategories(id).collectLatest { categories ->
+                    mutableState.update { it.copy(categories = categories) }
+                }
+            }
+            launch {
+                staff.observeForShop(id).collectLatest { employees ->
+                    mutableState.update { it.copy(employees = it.employees.copy(employees = employees)) }
+                }
             }
         }
+        loadEmployeeReport()
+        refreshTotals()
+        refreshInsights()
+        loadSalesLedger()
+    }
+
+    private fun setPeriod(period: Period) {
+        mutableState.update { it.copy(period = period) }
+        refreshTotals()
+    }
+
+    private fun setCustomRange(from: Long, to: Long) {
+        val (start, end) = if (from <= to) from to to else to to from
+        mutableState.update { it.copy(period = Period.CUSTOM, customFrom = start, customTo = end) }
+        refreshTotals()
+    }
+
+    private fun selectShop(shop: ShopEntity) {
+        mutableState.update { it.copy(shop = shop) }
+        bindShop(shop.id)
+    }
+
+    private fun refreshTotals() {
+        val shop = state.value.shop ?: return
+        val period = state.value.period
         viewModelScope.launch {
-            repo.observeSuppliers(id).collectLatest { s ->
-                _s.value = _s.value.copy(suppliers = s)
+            totalsMutex.withLock {
+                val currentRange = PeriodRanges.current(period, state.value.customFrom, state.value.customTo)
+                val (from, to) = currentRange
+                val (previousFrom, previousTo) = PeriodRanges.previous(currentRange)
+                val totals = repo.totals(shop.id, from, to)
+                val docs = repo.documents.listPeriod(shop.id, from, to)
+                val previous = repo.totals(shop.id, previousFrom, previousTo)
+                val uncategorized = getApplication<Application>().getString(R.string.uncategorized)
+                val categoryTotals = repo.totalsByCategory(shop.id, DocType.EXPENSE, from, to, uncategorized) +
+                    repo.totalsByCategory(shop.id, DocType.INCOME, from, to, uncategorized)
+                mutableState.update {
+                    it.copy(
+                        totals = totals,
+                        prevTotals = previous,
+                        docs = docs.sortedByDescending { document -> document.occurredAt },
+                        owedToYou = repo.youAreOwed(shop.id),
+                        customerAdvances = repo.customerAdvances(shop.id),
+                        youOwe = repo.youOwe(shop.id),
+                        supplierCredits = repo.supplierCredits(shop.id),
+                        nextDocumentNumber = repo.shops.get(shop.id)?.nextDocumentNumber ?: it.nextDocumentNumber,
+                        categoryTotals = categoryTotals
+                    )
+                }
             }
         }
-        refreshTotals()
-        loadLate()
     }
 
-    fun setPeriod(p: Period) {
-        _s.value = _s.value.copy(period = p)
-        refreshTotals()
-    }
-
-    fun selectShop(s: ShopEntity) {
-        _s.value = _s.value.copy(shop = s)
-        bindShop(s.id)
-    }
-
-    fun refreshTotals() {
-        val shop = _s.value.shop ?: return
+    private fun refreshInsights() {
+        val shop = state.value.shop ?: return
         viewModelScope.launch {
-            val (a, b) = range(_s.value.period)
-            val t = repo.totals(shop.id, a, b)
-            val docs = repo.documents.listPeriod(shop.id, a, b)
-            val (pa, pb) = previousRange(_s.value.period)
-            val pt = repo.totals(shop.id, pa, pb)
-            val agingRows = repo.aging(shop.id, "CUSTOMER")
-            _s.value = _s.value.copy(
-                totals = t,
-                prevTotals = pt,
-                docs = docs.sortedByDescending { it.occurredAt },
-                owedToYou = repo.youAreOwed(shop.id),
-                youOwe = repo.youOwe(shop.id),
-                agingAlert = agingRows.count { it.b61 > 0 || it.b90 > 0 }
+            val aging = repo.aging(shop.id, PartyKind.CUSTOMER.name)
+            val late = repo.lateCustomers(shop.id)
+            mutableState.update {
+                it.copy(
+                    aging = aging,
+                    late = late,
+                    agingAlert = aging.count { row -> row.b61 > 0 || row.b90 > 0 }
+                )
+            }
+        }
+    }
+
+    private fun addShop(name: String) = viewModelScope.launch { repo.createShop(name) }
+
+    private fun addParty(event: UiEvent.AddParty) = viewModelScope.launch {
+        val shop = state.value.shop ?: return@launch
+        try {
+            repo.addParty(
+                shop.id,
+                event.kind,
+                event.name,
+                event.phone,
+                Money.fromMajor(event.openingMajor, shop.fractionDigits)?.minor ?: 0L,
+                category = event.category,
+                creditLimitMinor = Money.fromMajor(event.limitMajor, shop.fractionDigits)?.minor ?: 0L
             )
+            refreshAll()
+        } catch (error: LedgerException) {
+            dynamicError(error)
         }
     }
 
-    fun addShop(name: String) = viewModelScope.launch {
-        repo.createShop(name)
-    }
-
-    fun addParty(
-        kind: PartyKind, name: String, phone: String, openingMajor: String,
-        category: String, limitMajor: String
-    ) = viewModelScope.launch {
-        val shop = _s.value.shop ?: return@launch
-        val open = Money.fromMajor(openingMajor)?.minor ?: 0L
-        val limit = Money.fromMajor(limitMajor)?.minor ?: 0L
+    private fun updateParty(event: UiEvent.UpdateParty) = viewModelScope.launch {
         try {
-            repo.addParty(shop.id, kind, name, phone, open, category = category, creditLimitMinor = limit)
-            refreshTotals()
-        } catch (e: LedgerException) {
-            _s.value = _s.value.copy(message = e.message)
+            val party = repo.parties.get(event.id) ?: throw LedgerException("الحساب غير موجود")
+            val shop = repo.shops.get(party.shopId) ?: state.value.shop
+            repo.updatePartyExtra(event.id, event.category, Money.fromMajor(event.limitMajor, shop?.fractionDigits ?: 2)?.minor ?: 0L)
+            val updated = repo.parties.get(event.id)
+            mutableState.update {
+                it.copy(selectedParty = updated ?: it.selectedParty, message = text(R.string.msg_updated))
+            }
+        } catch (error: LedgerException) {
+            dynamicError(error)
         }
     }
 
-    fun updatePartyExtra(id: Long, category: String, limitMajor: String) = viewModelScope.launch {
-        val limit = Money.fromMajor(limitMajor)?.minor ?: 0L
+    private fun addDocument(draft: DocumentDraft) = viewModelScope.launch {
+        val shop = state.value.shop ?: return@launch
+        val money = Money.fromMajor(draft.amount, shop.fractionDigits) ?: return@launch message(R.string.msg_invalid_amount)
         try {
-            repo.updatePartyExtra(id, category, limit)
-            val updated = repo.parties.get(id)
-            _s.value = _s.value.copy(selectedParty = updated ?: _s.value.selectedParty, message = "تم التحديث")
-        } catch (e: LedgerException) {
-            _s.value = _s.value.copy(message = e.message)
-        }
-    }
-
-    fun addDoc(
-        type: DocType, amount: String, partyId: Long?, credit: Boolean,
-        notes: String, docNumber: String, cashCode: String = "1000",
-        newPartyName: String? = null, occurredAt: Long = System.currentTimeMillis()
-    ) = viewModelScope.launch {
-        val shop = _s.value.shop ?: return@launch
-        val m = Money.fromMajor(amount) ?: run {
-            _s.value = _s.value.copy(message = "أدخل مبلغًا صحيحًا"); return@launch
-        }
-        try {
-            var pid = partyId
-            if (pid == null && !newPartyName.isNullOrBlank()) {
-                val kind = if (type == DocType.SALE || type == DocType.COLLECT) PartyKind.CUSTOMER else PartyKind.SUPPLIER
-                pid = repo.addParty(shop.id, kind, newPartyName.trim())
+            val actorId = currentActorId()
+            if (actorId != null) {
+                staff.requirePermission(
+                    actorId,
+                    when (draft.type) {
+                        DocType.SALE -> StaffPermission.RECORD_SALE
+                        DocType.EXPENSE -> StaffPermission.RECORD_OUTFLOW
+                        else -> StaffPermission.VIEW_ACCOUNTS
+                    }
+                )
+            }
+            var partyId = draft.partyId
+            if (partyId == null && !draft.newPartyName.isNullOrBlank()) {
+                val kind = if (draft.type in listOf(DocType.SALE, DocType.COLLECT)) PartyKind.CUSTOMER else PartyKind.SUPPLIER
+                partyId = repo.addParty(shop.id, kind, draft.newPartyName.trim())
             }
             repo.postDocument(
                 shopId = shop.id,
-                type = type,
-                amountMinor = m.minor,
-                occurredAt = occurredAt,
-                partyId = pid,
-                cashCode = cashCode,
-                docNumber = docNumber,
-                notes = notes,
-                paymentMethod = if (credit) "CREDIT" else "CASH",
-                transferToCode = if (type == DocType.TRANSFER) "1010" else null
+                type = draft.type,
+                amountMinor = money.minor,
+                occurredAt = draft.occurredAt,
+                partyId = partyId,
+                cashCode = AccountCodes.CASH,
+                docNumber = draft.documentNumber,
+                notes = draft.notes,
+                paymentMethod = if (draft.credit) "CREDIT" else "CASH",
+                transferToCode = if (draft.type == DocType.TRANSFER) AccountCodes.BANK else null,
+                dueAt = draft.dueAt,
+                categoryId = draft.categoryId,
+                employeeId = actorId.takeIf { draft.type == DocType.SALE },
+                actorEmployeeId = actorId
             )
-            refreshTotals()
-            _s.value = _s.value.copy(message = "تم الحفظ")
-        } catch (e: LedgerException) {
-            _s.value = _s.value.copy(message = e.message)
+            refreshAll()
+            message(R.string.msg_saved)
+        } catch (error: LedgerException) {
+            dynamicError(error)
         }
     }
 
-    fun updateDoc(
-        id: Long, amount: String, notes: String, docNumber: String,
-        credit: Boolean, occurredAt: Long
-    ) = viewModelScope.launch {
-        val m = Money.fromMajor(amount) ?: run {
-            _s.value = _s.value.copy(message = "أدخل مبلغًا صحيحًا"); return@launch
-        }
+    private fun updateDocument(event: UiEvent.UpdateDocument) = viewModelScope.launch {
         try {
-            repo.updateDocument(id, m.minor, occurredAt, notes, docNumber, if (credit) "CREDIT" else "CASH")
-            refreshTotals()
-            _s.value = _s.value.copy(message = "تم التعديل")
-        } catch (e: LedgerException) {
-            _s.value = _s.value.copy(message = e.message)
+            val actorId = currentActorId()
+            val existing = repo.documents.get(event.id) ?: throw LedgerException("العملية غير موجودة")
+            val shop = repo.shops.get(existing.shopId) ?: state.value.shop
+            val money = Money.fromMajor(event.amount, shop?.fractionDigits ?: 2) ?: return@launch message(R.string.msg_invalid_amount)
+            if (actorId != null) {
+                val permission = if (existing.type == DocType.SALE.name || existing.type == DocType.EXPENSE.name) {
+                    if (existing.employeeId == actorId) StaffPermission.EDIT_OWN_SALE else StaffPermission.EDIT_ANY_SALE
+                } else StaffPermission.VIEW_ACCOUNTS
+                staff.requirePermission(actorId, permission)
+            }
+            var partyId = event.partyId
+            if (partyId == null && !event.newPartyName.isNullOrBlank()) {
+                val kind = if (existing.type in listOf(DocType.SALE.name, DocType.COLLECT.name)) PartyKind.CUSTOMER else PartyKind.SUPPLIER
+                partyId = repo.addParty(existing.shopId, kind, event.newPartyName.trim())
+            }
+            repo.updateDocument(
+                event.id,
+                money.minor,
+                event.occurredAt,
+                event.notes,
+                event.documentNumber,
+                if (event.credit) "CREDIT" else "CASH",
+                event.dueAt,
+                event.categoryId,
+                actorEmployeeId = actorId,
+                partyId = partyId,
+                replaceParty = existing.type in listOf(DocType.SALE.name, DocType.COLLECT.name, DocType.PURCHASE.name, DocType.PAY.name)
+            )
+            refreshAll()
+            message(R.string.msg_edited)
+        } catch (error: LedgerException) {
+            dynamicError(error)
         }
     }
 
-    fun deleteDoc(id: Long) = viewModelScope.launch {
-        repo.softDeleteDocument(id)
-        refreshTotals()
-        _s.value = _s.value.copy(message = "تم الأرشفة. يمكن مراجعة السجل.")
-    }
-
-    fun consumeMessage() { _s.value = _s.value.copy(message = null) }
-    fun consumeShare() { _s.value = _s.value.copy(shareFile = null) }
-
-    suspend fun searchParties(q: String) = _s.value.shop?.let { repo.parties.search(it.id, q) }.orEmpty()
-
-    fun unlock(pin: String) = viewModelScope.launch {
-        if (repo.pinOk(pin)) _s.value = _s.value.copy(locked = false, message = "تم الفتح")
-        else _s.value = _s.value.copy(message = "رمز غير صحيح")
-    }
-
-    fun unlockOk() { _s.value = _s.value.copy(locked = false) }
-
-    fun savePin(pin: String) = viewModelScope.launch {
-        if (pin.length < 4) { _s.value = _s.value.copy(message = "أربعة أرقام على الأقل"); return@launch }
-        repo.setPin(pin)
-        _s.value = _s.value.copy(hasPin = true, message = "تم حفظ رمز القفل")
-    }
-
-    fun clearPin() = viewModelScope.launch {
-        repo.setPin(null)
-        _s.value = _s.value.copy(hasPin = false, locked = false, message = "أُلغي القفل")
-    }
-
-    fun toggleBackup(on: Boolean) = viewModelScope.launch {
-        repo.setAutoBackup(on)
-        _s.value = _s.value.copy(autoBackup = on)
-        com.daftari.ledger.backup.AutoBackupWorker.schedule(getApplication(), on)
-    }
-
-    fun toggleBio(on: Boolean) = viewModelScope.launch {
-        repo.setBiometric(on)
-        _s.value = _s.value.copy(biometric = on)
-    }
-
-    fun closeDay(actual: String, notes: String) = viewModelScope.launch {
-        val shop = _s.value.shop ?: return@launch
-        val m = Money.fromMajor(actual) ?: run { _s.value = _s.value.copy(message = "أدخل النقد الفعلي"); return@launch }
+    private fun deleteDocument(id: Long) = viewModelScope.launch {
         try {
-            repo.closeDay(shop.id, m.minor, notes)
-            _s.value = _s.value.copy(message = "تم إغلاق اليوم")
-        } catch (e: LedgerException) { _s.value = _s.value.copy(message = e.message) }
+            val actorId = currentActorId()
+            val existing = repo.documents.get(id) ?: throw LedgerException("العملية غير موجودة")
+            if (actorId != null) {
+                val permission = if (existing.type == DocType.SALE.name || existing.type == DocType.EXPENSE.name) {
+                    if (existing.employeeId == actorId) StaffPermission.DELETE_OWN_SALE else StaffPermission.DELETE_ANY_SALE
+                } else StaffPermission.VIEW_ACCOUNTS
+                staff.requirePermission(actorId, permission)
+            }
+            repo.softDeleteDocument(id, actorEmployeeId = actorId)
+            refreshAll()
+            mutableState.update { it.copy(message = text(R.string.msg_archived), undoDocumentId = id) }
+        } catch (error: LedgerException) {
+            dynamicError(error)
+        }
     }
 
-    fun closeParty(id: Long) = viewModelScope.launch {
+    private fun undoDeleteDocument() = viewModelScope.launch {
+        val id = state.value.undoDocumentId ?: return@launch
+        try {
+            val actorId = currentActorId()
+            val existing = repo.documents.get(id) ?: throw LedgerException("العملية غير موجودة")
+            if (actorId != null) {
+                val permission = if (existing.type == DocType.SALE.name || existing.type == DocType.EXPENSE.name) {
+                    if (existing.employeeId == actorId) StaffPermission.DELETE_OWN_SALE else StaffPermission.DELETE_ANY_SALE
+                } else StaffPermission.VIEW_ACCOUNTS
+                staff.requirePermission(actorId, permission)
+            }
+            repo.restoreDocument(id, actorEmployeeId = actorId)
+            refreshAll()
+            mutableState.update { it.copy(message = text(R.string.msg_archive_undone), undoDocumentId = null) }
+        } catch (error: LedgerException) {
+            dynamicError(error)
+        }
+    }
+
+    private fun shareReceipt(document: com.daftari.ledger.data.DocumentEntity) {
+        val party = document.partyId?.let { id -> (state.value.customers + state.value.suppliers).firstOrNull { it.id == id } }
+        createFile(R.string.msg_receipt_ready, R.string.msg_receipt_failed) {
+            services.receipt(document, party, state.value.shop, state.value)
+        }
+    }
+
+    private fun closeDay(actual: String, notes: String) = viewModelScope.launch {
+        val shop = state.value.shop ?: return@launch
+        val money = Money.fromMajor(actual, shop.fractionDigits) ?: return@launch message(R.string.msg_enter_actual_cash)
+        try {
+            currentActorId()?.let { staff.requirePermission(it, StaffPermission.MANAGE_SHIFTS) }
+            repo.closeDay(shop.id, money.minor, notes, currentActorId())
+            message(R.string.msg_day_closed)
+        } catch (error: LedgerException) {
+            dynamicError(error)
+        }
+    }
+
+    private fun closeParty(id: Long) = viewModelScope.launch {
         try {
             repo.closePartyAccount(id)
-            refreshTotals()
-            _s.value = _s.value.copy(message = "أُغلق الحساب مع الاحتفاظ بالسجل", selectedParty = null, partyStats = null)
-        } catch (e: LedgerException) { _s.value = _s.value.copy(message = e.message) }
-    }
-
-    fun loadAging() = viewModelScope.launch {
-        val shop = _s.value.shop ?: return@launch
-        _s.value = _s.value.copy(aging = repo.aging(shop.id, "CUSTOMER"))
-    }
-
-    fun loadLate() = viewModelScope.launch {
-        val shop = _s.value.shop ?: return@launch
-        _s.value = _s.value.copy(late = repo.lateCustomers(shop.id))
-    }
-
-    fun previewCsv(text: String) {
-        _s.value = _s.value.copy(csvPreview = repo.parseCsv(text))
-    }
-
-    fun commitCsv() = viewModelScope.launch {
-        val shop = _s.value.shop ?: return@launch
-        val rows = _s.value.csvPreview
-        try {
-            val r = repo.importCsv(shop.id, rows)
-            refreshTotals()
-            _s.value = _s.value.copy(csvPreview = emptyList(), message = "استيراد ${r.created} صف، تخطي ${r.skipped}")
-        } catch (e: Exception) {
-            _s.value = _s.value.copy(message = "فشل الاستيراد ولم يُحفظ جزئيًا إن أمكن")
-        }
-    }
-
-    fun exportPdf() {
-        val ctx = getApplication<Application>()
-        val f = com.daftari.ledger.export.PdfReports.writePeriodReport(ctx, _s.value)
-        _s.value = _s.value.copy(shareFile = f, message = "تم إنشاء PDF")
-    }
-
-    fun exportExcel() {
-        val ctx = getApplication<Application>()
-        try {
-            val f = com.daftari.ledger.export.ExcelReports.writePeriodExcel(ctx, _s.value)
-            _s.value = _s.value.copy(shareFile = f, message = "تم إنشاء Excel")
-        } catch (e: Exception) {
-            _s.value = _s.value.copy(message = "فشل إنشاء Excel: ${e.message}")
-        }
-    }
-
-    fun backupNow() = viewModelScope.launch {
-        val app = getApplication() as DaftariApp
-        val f = app.backup.exportJson()
-        _s.value = _s.value.copy(shareFile = f, backups = app.backup.listBackups(), message = "نسخة احتياطية جاهزة")
-    }
-
-    fun refreshBackups() {
-        val app = getApplication() as DaftariApp
-        _s.value = _s.value.copy(backups = app.backup.listBackups())
-    }
-
-    fun restoreBackup(f: java.io.File, password: String? = null) = viewModelScope.launch {
-        try {
-            val app = getApplication() as DaftariApp
-            if (f.name.endsWith(".enc")) app.backup.restoreEncrypted(f, password.orEmpty())
-            else app.backup.restoreFrom(f)
-            _s.value = _s.value.copy(message = "تمت الاستعادة. أغلق التطبيق وافتحه من جديد.")
-        } catch (e: Exception) {
-            _s.value = _s.value.copy(message = "فشل الاستعادة: ${e.message}")
-        }
-    }
-
-    fun backupEncrypted(password: String) = viewModelScope.launch {
-        if (password.isBlank()) {
-            _s.value = _s.value.copy(message = "أدخل كلمة مرور للنسخة المشفرة"); return@launch
-        }
-        try {
-            val app = getApplication() as DaftariApp
-            val f = app.backup.exportEncrypted(password)
-            _s.value = _s.value.copy(shareFile = f, backups = app.backup.listBackups(), message = "نسخة مشفرة جاهزة")
-        } catch (e: Exception) {
-            _s.value = _s.value.copy(message = "فشل إنشاء النسخة: ${e.message}")
-        }
-    }
-
-    fun openParty(p: PartyEntity) {
-        _s.value = _s.value.copy(selectedParty = p, partyStats = null)
-        loadPartyStats(p)
-    }
-
-    fun closePartyDialog() {
-        _s.value = _s.value.copy(selectedParty = null, partyStats = null)
-    }
-
-    private fun loadPartyStats(p: PartyEntity) {
-        viewModelScope.launch {
-            val docs = repo.documents.listParty(p.id)
-            fun sum(t: DocType) = docs.filter { it.type == t.name }.sumOf { it.amountMinor }
-            val st = PartyStats(
-                sales = sum(DocType.SALE),
-                purchases = sum(DocType.PURCHASE),
-                collections = sum(DocType.COLLECT),
-                payments = sum(DocType.PAY),
-                docs = docs.sortedByDescending { it.occurredAt }
-            )
-            _s.value = _s.value.copy(partyStats = st)
-        }
-    }
-
-    fun shareStatement(p: PartyEntity) = viewModelScope.launch {
-        val docs = repo.documents.listParty(p.id)
-        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val sb = StringBuilder()
-        sb.append("كشف حساب — ${p.name}\n")
-        sb.append("الرصيد: ${Money(p.cachedBalanceMinor).format()}\n\n")
-        sb.append("التاريخ | النوع | المبلغ\n")
-        docs.sortedByDescending { it.occurredAt }.take(50).forEach { d ->
-            sb.append("${fmt.format(Date(d.occurredAt))} | ${docTypeArabic(d.type)} | ${Money(d.amountMinor).format()}\n")
-        }
-        _s.value = _s.value.copy(shareText = sb.toString())
-    }
-
-    fun consumeShareText() { _s.value = _s.value.copy(shareText = null) }
-
-    fun exportCsv() = viewModelScope.launch {
-        val shop = _s.value.shop ?: return@launch
-        try {
-            val docs = repo.documents.listPeriod(shop.id, 0L, Long.MAX_VALUE)
-            val byId = repo.parties.listAll(shop.id).associateBy { it.id }
-            val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-            val sb = StringBuilder("name,kind,amount,type,date,notes\n")
-            docs.sortedByDescending { it.occurredAt }.forEach { d ->
-                val p = d.partyId?.let { byId[it] }
-                sb.append(
-                    listOf(
-                        p?.name ?: "", p?.kind ?: "", Money(d.amountMinor).toBigDecimal().toPlainString(),
-                        d.type, fmt.format(Date(d.occurredAt)), d.notes
-                    ).joinToString(",") { csvCell(it) }
-                ).append("\n")
+            refreshAll()
+            mutableState.update {
+                it.copy(
+                    message = text(R.string.msg_account_closed),
+                    selectedParty = null,
+                    partyStats = null
+                )
             }
-            val f = java.io.File(getApplication<Application>().cacheDir, "daftari-export.csv")
-            f.writeText(sb.toString())
-            _s.value = _s.value.copy(shareFile = f, message = "تم تصدير CSV كامل")
-        } catch (e: Exception) {
-            _s.value = _s.value.copy(message = "فشل التصدير: ${e.message}")
+        } catch (error: LedgerException) {
+            dynamicError(error)
         }
     }
 
-    private fun csvCell(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
-
-    private fun docTypeArabic(t: String) = when (t) {
-        "SALE" -> "بيع"; "PURCHASE" -> "شراء"; "EXPENSE" -> "مصروف"; "INCOME" -> "إيراد"
-        "COLLECT" -> "تحصيل"; "PAY" -> "سداد"; "TRANSFER" -> "تحويل"; "OPENING" -> "افتتاحي"
-        else -> t
+    private fun commitCsv() = viewModelScope.launch {
+        val shop = state.value.shop ?: return@launch
+        try {
+            val result = repo.importCsv(shop.id, state.value.csvPreview)
+            refreshAll()
+            mutableState.update {
+                it.copy(
+                    csvPreview = emptyList(),
+                    message = text(R.string.msg_import_result, result.created, result.skipped)
+                )
+            }
+        } catch (_: Exception) {
+            message(R.string.msg_import_failed)
+        }
     }
 
-    val repoPublic get() = repo
+    private fun backupNow() = viewModelScope.launch {
+        val file = services.backupDatabase()
+        mutableState.update {
+            it.copy(shareFile = file, backups = services.listBackups(), message = text(R.string.msg_backup_ready))
+        }
+    }
+
+    private fun restoreBackup(file: File, password: String?) = viewModelScope.launch {
+        try {
+            services.restore(file, password)
+            mutableState.update {
+                it.copy(restartRequested = true, message = text(R.string.msg_restore_restarting))
+            }
+        } catch (error: Exception) {
+            message(R.string.msg_restore_failed, error.message.orEmpty())
+        }
+    }
+
+    private fun backupEncrypted(password: String) = viewModelScope.launch {
+        if (password.isBlank()) return@launch message(R.string.msg_enter_backup_password)
+        try {
+            val file = services.backupEncrypted(password)
+            mutableState.update {
+                it.copy(shareFile = file, backups = services.listBackups(), message = text(R.string.msg_encrypted_backup_ready))
+            }
+        } catch (error: Exception) {
+            message(R.string.msg_backup_failed, error.message.orEmpty())
+        }
+    }
+
+    private fun openParty(party: PartyEntity) {
+        mutableState.update { it.copy(selectedParty = party, partyStats = null) }
+        viewModelScope.launch {
+            val (totals, recent) = repo.partyStats(party.id)
+            val statement = repo.statement(party)
+            mutableState.update {
+                it.copy(
+                    partyStats = PartyStats(
+                        totals.sales,
+                        totals.purchases,
+                        totals.collections,
+                        totals.payments,
+                        recent,
+                        statement
+                    )
+                )
+            }
+        }
+    }
+
+    private fun shareStatement(party: PartyEntity) = viewModelScope.launch {
+        mutableState.update { it.copy(shareText = services.statement(party, state.value)) }
+    }
+
+    private fun exportCsv() {
+        val shop = state.value.shop ?: return
+        createFile(R.string.msg_csv_exported, R.string.msg_export_failed) { services.exportCsv(shop.id) }
+    }
+
+    private fun runDatabaseHealthCheck() = viewModelScope.launch {
+        try {
+            val report = withContext(Dispatchers.IO) { repo.healthCheck() }
+            mutableState.update {
+                it.copy(
+                    healthIssues = report.issues,
+                    healthCheckedAt = System.currentTimeMillis(),
+                    message = if (report.ok) text(R.string.msg_database_health_ok) else text(R.string.msg_database_health_issues, report.issues.size)
+                )
+            }
+        } catch (error: Exception) {
+            message(R.string.msg_database_health_failed, error.message.orEmpty())
+        }
+    }
+
+    private fun createFile(@StringRes success: Int, @StringRes failure: Int, block: suspend () -> File) =
+        viewModelScope.launch {
+            try {
+                val file = block()
+                mutableState.update { it.copy(shareFile = file, message = text(success)) }
+            } catch (error: Exception) {
+                message(failure, error.message.orEmpty())
+            }
+        }
+
+    private fun refreshAll() {
+        refreshTotals()
+        refreshInsights()
+        loadSalesLedger()
+        DaftariWidget.updateAll(getApplication())
+    }
+
+    internal fun dynamicError(error: Exception) {
+        mutableState.update { it.copy(message = UiText.Dynamic(error.message.orEmpty())) }
+    }
+
+    internal fun message(@StringRes id: Int, vararg args: Any) {
+        mutableState.update { it.copy(message = text(id, *args)) }
+    }
+
+    internal fun text(@StringRes id: Int, vararg args: Any): UiText = UiText.Resource(id, args.toList())
+
+    private companion object {
+        const val AGING_REFRESH_INTERVAL_MS = 60L * 60L * 1000L
+    }
 }

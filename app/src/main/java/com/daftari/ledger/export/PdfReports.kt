@@ -8,9 +8,18 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
 import android.text.TextPaint
+import android.util.LayoutDirection
+import com.daftari.ledger.R
+import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.PartyEntity
+import com.daftari.ledger.data.ShopEntity
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.ui.UiState
+import com.daftari.ledger.ui.displayMoney
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * تصدير PDF مع دعم RTL وتشكيل العربية عبر StaticLayout
@@ -24,22 +33,55 @@ object PdfReports {
     fun writePeriodReport(ctx: Context, s: UiState): File {
         val t = s.totals
         val lines = listOf(
-            "دفتري — تقرير مالي",
+            ctx.getString(R.string.report_financial_title),
             s.shop?.name.orEmpty(),
-            "مبيعات: ${Money(t.sales).format()}",
-            "مشتريات: ${Money(t.purchases).format()}",
-            "مصروفات: ${Money(t.expenses).format()}",
-            "تحصيل: ${Money(t.collections).format()}",
-            "سداد: ${Money(t.payments).format()}",
-            "صافي نقدي: ${Money(t.cashNet).format()}",
-            "ربح تقديري: ${Money(t.estimatedProfit).format()}",
-            "لك: ${Money(s.owedToYou).format()}  عليك: ${Money(s.youOwe).format()}"
+            ctx.getString(R.string.sales_value, s.displayMoney(t.sales, Locale.getDefault())),
+            ctx.getString(R.string.purchases_value, s.displayMoney(t.purchases, Locale.getDefault())),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.expenses), s.displayMoney(t.expenses, Locale.getDefault())),
+            ctx.getString(R.string.collections_value, s.displayMoney(t.collections, Locale.getDefault())),
+            ctx.getString(R.string.payments_value, s.displayMoney(t.payments, Locale.getDefault())),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.cash_net), s.displayMoney(t.cashNet, Locale.getDefault())),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.estimated_profit), s.displayMoney(t.estimatedProfit, Locale.getDefault())),
+            ctx.getString(R.string.report_receivables_payables, s.displayMoney(s.owedToYou, Locale.getDefault()), s.displayMoney(s.youOwe, Locale.getDefault()))
         )
         return writeLines(ctx, "daftari-report.pdf", lines)
     }
 
     fun writeStatement(ctx: Context, title: String, lines: List<String>): File =
         writeLines(ctx, "daftari-statement.pdf", listOf(title) + lines)
+
+    fun writeDocumentReceipt(
+        ctx: Context,
+        document: DocumentEntity,
+        party: PartyEntity?,
+        shop: ShopEntity?,
+        state: UiState
+    ): File {
+        val format = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val type = ctx.getString(documentTypeString(document.type))
+        val lines = listOf(
+            ctx.getString(R.string.receipt_title, type),
+            shop?.name.orEmpty(),
+            ctx.getString(R.string.receipt_number, document.docNumber.ifBlank { "—" }),
+            ctx.getString(R.string.date_value, format.format(Date(document.occurredAt))),
+            ctx.getString(R.string.receipt_party, party?.name ?: "—"),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.amount), state.displayMoney(document.amountMinor, Locale.getDefault())),
+            ctx.getString(R.string.notes) + ": " + document.notes
+        )
+        return writeLines(ctx, "daftari-receipt-${document.id}.pdf", lines)
+    }
+
+    private fun documentTypeString(type: String): Int = when (type) {
+        "SALE" -> R.string.doc_type_sale
+        "PURCHASE" -> R.string.doc_type_purchase
+        "EXPENSE" -> R.string.doc_type_expense
+        "INCOME" -> R.string.doc_type_income
+        "COLLECT" -> R.string.doc_type_collect
+        "PAY" -> R.string.doc_type_pay
+        "TRANSFER" -> R.string.doc_type_transfer
+        "OPENING" -> R.string.doc_type_opening
+        else -> R.string.doc_type_unknown
+    }
 
     private fun writeLines(ctx: Context, name: String, lines: List<String>): File {
         val doc = PdfDocument()
@@ -50,6 +92,11 @@ object PdfReports {
             isAntiAlias = true; textSize = 13f; color = Color.BLACK
         }
         val width = (PAGE_W - MARGIN * 2).toInt()
+        val textDirection = if (ctx.resources.configuration.layoutDirection == LayoutDirection.RTL) {
+            TextDirectionHeuristics.RTL
+        } else {
+            TextDirectionHeuristics.LTR
+        }
         var page = doc.startPage(PdfDocument.PageInfo.Builder(PAGE_W, PAGE_H, 1).create())
         var canvas: Canvas = page.canvas
         var y = MARGIN
@@ -58,7 +105,7 @@ object PdfReports {
             val paint = if (i == 0) titlePaint else bodyPaint
             val layout = StaticLayout.Builder.obtain(line, 0, line.length, paint, width)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                .setTextDirection(TextDirectionHeuristics.RTL)
+                .setTextDirection(textDirection)
                 .setLineSpacing(4f, 1f)
                 .setIncludePad(false)
                 .build()

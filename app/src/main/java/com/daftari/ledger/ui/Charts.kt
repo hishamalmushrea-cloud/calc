@@ -14,9 +14,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.daftari.ledger.R
 import com.daftari.ledger.domain.Money
 
 @Composable
@@ -27,7 +29,7 @@ fun SmoothLineChart(
 ) {
     if (data.isEmpty()) {
         Box(modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-            Text("لا توجد بيانات", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.chart_no_data), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -106,7 +108,7 @@ fun DoughnutChart(
 
     if (validData.isEmpty()) {
         Box(modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-            Text("لا توجد حركات", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.chart_no_activity), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -129,8 +131,8 @@ fun DoughnutChart(
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("الإجمالي", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(Money(total).format(), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(stringResource(R.string.chart_total), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(displayMoney(total), fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
         
@@ -150,7 +152,7 @@ fun DoughnutChart(
                     Text(pair.first, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     val percent = ((pair.second.toDouble() / total) * 100).toInt()
                     Text("$percent%", modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(Money(pair.second).format(), fontWeight = FontWeight.Bold)
+                    Text(displayMoney(pair.second), fontWeight = FontWeight.Bold)
                 }
             }
         }

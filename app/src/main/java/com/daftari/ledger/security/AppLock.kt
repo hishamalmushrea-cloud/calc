@@ -1,6 +1,7 @@
 package com.daftari.ledger.security
 
 import android.content.Context
+import com.daftari.ledger.R
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -22,8 +23,8 @@ object AppLock {
         })
         prompt.authenticate(
             BiometricPrompt.PromptInfo.Builder()
-                .setTitle("فتح دفتري")
-                .setNegativeButtonText("إلغاء")
+                .setTitle(activity.getString(R.string.biometric_prompt_title))
+                .setNegativeButtonText(activity.getString(R.string.action_cancel))
                 .build()
         )
     }
