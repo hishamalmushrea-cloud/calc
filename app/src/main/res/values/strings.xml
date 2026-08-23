@@ -526,4 +526,36 @@
     <string name="msg_google_backup_failed">تعذر إكمال النسخ أو الاستعادة: %1$s</string>
     <string name="backup_failure_channel">تنبيهات النسخ الاحتياطي</string>
     <string name="backup_failure_notification">فشل النسخ الاحتياطي عدة مرات. افتح دفتري لإعادة المحاولة أو ربط الحساب.</string>
+
+    <string name="section_inventory">المخزون والفواتير</string>
+    <string name="inventory_title">المخزون والفواتير</string>
+    <string name="inventory_hint">أضف أصنافك ثم أصدر فاتورة بيع أو شراء. المبلغ يُرحَّل كعملية عادية دون تكرار القيود.</string>
+    <string name="open_inventory">فتح المخزون والفواتير</string>
+    <string name="add_item">إضافة صنف</string>
+    <string name="edit_item">تعديل الصنف</string>
+    <string name="no_items">لا أصناف بعد. أضف أول صنف لتبدأ الفواتير.</string>
+    <string name="item_name">اسم الصنف</string>
+    <string name="item_sku_optional">رمز/باركود (اختياري)</string>
+    <string name="item_sku_value">الرمز: %1$s</string>
+    <string name="item_unit">الوحدة</string>
+    <string name="item_sell_price">سعر البيع</string>
+    <string name="item_cost_price">سعر التكلفة (اختياري)</string>
+    <string name="item_qty">الكمية</string>
+    <string name="item_reorder_qty">حد إعادة الطلب</string>
+    <string name="item_track_stock">تتبع الكمية</string>
+    <string name="item_price_value">السعر: %1$s</string>
+    <string name="item_qty_value">المتوفر: %1$s %2$s</string>
+    <string name="item_service">خدمة — بدون كمية</string>
+    <string name="low_stock_alert">تنبيه مخزون منخفض: %1$d أصناف</string>
+    <string name="new_sale_invoice">فاتورة بيع</string>
+    <string name="new_purchase_invoice">فاتورة شراء</string>
+    <string name="invoice_hint">اختر الأصناف والكميات. الإجمالي يصبح عملية بيع أو شراء في الدفتر.</string>
+    <string name="add_invoice_line">إضافة بند</string>
+    <string name="add_line">أضف البند</string>
+    <string name="invoice_total">الإجمالي: %1$s</string>
+    <string name="save_invoice">حفظ الفاتورة</string>
+    <string name="msg_item_saved">تم حفظ الصنف</string>
+    <string name="msg_item_archived">تمت أرشفة الصنف</string>
+    <string name="msg_invoice_saved">تم حفظ الفاتورة وتحديث المخزون</string>
+    <string name="msg_invalid_qty">أدخل كمية أكبر من صفر</string>
 </resources>

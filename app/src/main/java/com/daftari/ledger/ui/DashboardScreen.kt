@@ -121,6 +121,13 @@ internal fun DashboardScreen(
         Text(stringResource(R.string.dashboard_balances_hint), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
         ComparisonCard(state.totals.sales, state.prevTotals.sales)
+        if (state.inventory.lowStockCount > 0) {
+            Text(
+                stringResource(R.string.low_stock_alert, state.inventory.lowStockCount),
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold
+            )
+        }
         if (state.agingAlert > 0) {
             Text(
                 pluralStringResource(R.plurals.aging_alert, state.agingAlert, state.agingAlert),

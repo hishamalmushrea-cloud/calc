@@ -228,6 +228,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     mutableState.update { it.copy(employees = it.employees.copy(employees = employees)) }
                 }
             }
+            launch {
+                repo.observeItems(id).collectLatest { items ->
+                    mutableState.update {
+                        it.copy(
+                            inventory = it.inventory.copy(
+                                items = items,
+                                lowStockCount = items.count { item -> item.trackStock && item.qtyMilli <= item.reorderQtyMilli }
+                            )
+                        )
+                    }
+                }
+            }
         }
         loadEmployeeReport()
         refreshTotals()

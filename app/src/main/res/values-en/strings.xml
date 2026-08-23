@@ -334,4 +334,36 @@
     <string name="msg_google_backup_failed">Backup or restore could not be completed: %1$s</string>
     <string name="backup_failure_channel">Backup alerts</string>
     <string name="backup_failure_notification">Backup failed several times. Open Daftari to retry or reconnect the account.</string>
+
+    <string name="section_inventory">Inventory and invoices</string>
+    <string name="inventory_title">Inventory and invoices</string>
+    <string name="inventory_hint">Add items, then issue a sale or purchase invoice. The total posts as a normal ledger transaction.</string>
+    <string name="open_inventory">Open inventory and invoices</string>
+    <string name="add_item">Add item</string>
+    <string name="edit_item">Edit item</string>
+    <string name="no_items">No items yet. Add the first item to start invoicing.</string>
+    <string name="item_name">Item name</string>
+    <string name="item_sku_optional">SKU/barcode (optional)</string>
+    <string name="item_sku_value">SKU: %1$s</string>
+    <string name="item_unit">Unit</string>
+    <string name="item_sell_price">Selling price</string>
+    <string name="item_cost_price">Cost price (optional)</string>
+    <string name="item_qty">Quantity</string>
+    <string name="item_reorder_qty">Reorder level</string>
+    <string name="item_track_stock">Track quantity</string>
+    <string name="item_price_value">Price: %1$s</string>
+    <string name="item_qty_value">On hand: %1$s %2$s</string>
+    <string name="item_service">Service — no quantity</string>
+    <string name="low_stock_alert">Low stock alert: %1$d items</string>
+    <string name="new_sale_invoice">Sale invoice</string>
+    <string name="new_purchase_invoice">Purchase invoice</string>
+    <string name="invoice_hint">Pick items and quantities. The total is posted as a sale or purchase.</string>
+    <string name="add_invoice_line">Add line</string>
+    <string name="add_line">Add line</string>
+    <string name="invoice_total">Total: %1$s</string>
+    <string name="save_invoice">Save invoice</string>
+    <string name="msg_item_saved">Item saved</string>
+    <string name="msg_item_archived">Item archived</string>
+    <string name="msg_invoice_saved">Invoice saved and stock updated</string>
+    <string name="msg_invalid_qty">Enter a quantity greater than zero</string>
 </resources>

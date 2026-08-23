@@ -146,6 +146,8 @@ class LedgerRepository(private val db: AppDb) {
     val audit = db.audit()
     val settings = db.settings()
     val dailyBooks = db.dailyBooks()
+    val items = db.items()
+    val documentLines = db.documentLines()
 
     suspend fun ensureSettings() {
         if (settings.get() == null) settings.insert(SettingsEntity())
@@ -442,6 +444,7 @@ class LedgerRepository(private val db: AppDb) {
                 if (d.type == DocType.SALE.name || d.type == DocType.EXPENSE.name) {
                     ensureSalesDayOpen(d.shopId, d.occurredAt)
                 }
+                applyStockForDocument(d.id, d.type, reverse = true)
                 documents.update(
                     d.copy(
                         deletedAt = System.currentTimeMillis(),
@@ -464,6 +467,7 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun restoreDocument(id: Long, actorEmployeeId: Long? = null) = db.withTransaction {
         val document = documents.get(id) ?: return@withTransaction
         if (document.deletedAt != null) {
+            applyStockForDocument(document.id, document.type, reverse = false)
             documents.update(
                 document.copy(
                     deletedAt = null,
@@ -1018,5 +1022,141 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun updatePinProtection(failedAttempts: Int, lockedUntil: Long) {
         val st = settings.get() ?: return
         settings.update(st.copy(failedPinAttempts = failedAttempts, pinLockedUntil = lockedUntil))
+    }
+
+    fun observeItems(shopId: Long): Flow<List<ItemEntity>> = items.observe(shopId)
+
+    suspend fun upsertItem(
+        shopId: Long,
+        id: Long?,
+        name: String,
+        sku: String,
+        unit: String,
+        sellPriceMinor: Long,
+        costPriceMinor: Long,
+        qtyMilli: Long,
+        reorderQtyMilli: Long,
+        trackStock: Boolean
+    ): Long = db.withTransaction {
+        if (name.isBlank()) throw LedgerException("أدخل اسم الصنف")
+        if (sellPriceMinor < 0 || costPriceMinor < 0) throw LedgerException("سعر الصنف غير صالح")
+        val normalizedSku = sku.trim()
+        if (normalizedSku.isNotBlank() && items.countSku(shopId, normalizedSku, id ?: -1) > 0) {
+            throw LedgerException("رمز الصنف مستخدم مسبقًا")
+        }
+        val now = System.currentTimeMillis()
+        if (id == null) {
+            val newId = items.insert(
+                ItemEntity(
+                    shopId = shopId,
+                    name = name.trim(),
+                    sku = normalizedSku,
+                    unit = unit.trim().ifBlank { "قطعة" },
+                    sellPriceMinor = sellPriceMinor,
+                    costPriceMinor = costPriceMinor,
+                    qtyMilli = qtyMilli,
+                    reorderQtyMilli = reorderQtyMilli.coerceAtLeast(0),
+                    trackStock = trackStock,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+            audit.insert(AuditLogEntity(action = "CREATE", entity = "item", entityId = newId, detail = name.trim()))
+            newId
+        } else {
+            val current = items.get(id) ?: throw LedgerException("الصنف غير موجود")
+            items.update(
+                current.copy(
+                    name = name.trim(),
+                    sku = normalizedSku,
+                    unit = unit.trim().ifBlank { current.unit },
+                    sellPriceMinor = sellPriceMinor,
+                    costPriceMinor = costPriceMinor,
+                    qtyMilli = qtyMilli,
+                    reorderQtyMilli = reorderQtyMilli.coerceAtLeast(0),
+                    trackStock = trackStock,
+                    updatedAt = now
+                )
+            )
+            audit.insert(AuditLogEntity(action = "UPDATE", entity = "item", entityId = id, detail = name.trim()))
+            id
+        }
+    }
+
+    suspend fun archiveItem(id: Long) {
+        val item = items.get(id) ?: return
+        items.update(item.copy(archived = true, updatedAt = System.currentTimeMillis()))
+        audit.insert(AuditLogEntity(action = "ARCHIVE", entity = "item", entityId = id, detail = item.name))
+    }
+
+    suspend fun postInvoice(
+        shopId: Long,
+        type: DocType,
+        lines: List<InvoiceLineInput>,
+        occurredAt: Long,
+        partyId: Long? = null,
+        paymentMethod: String = "CASH",
+        notes: String = "",
+        documentNumber: String = "",
+        dueAt: Long? = null,
+        actorEmployeeId: Long? = null
+    ): Long = db.withTransaction {
+        if (type != DocType.SALE && type != DocType.PURCHASE) throw LedgerException("الفاتورة للبيع أو الشراء فقط")
+        val prepared = prepareInvoiceLines(shopId, lines)
+        val amount = prepared.sumOf { it.lineTotalMinor }
+        val docId = postDocument(
+            shopId = shopId,
+            type = type,
+            amountMinor = amount,
+            occurredAt = occurredAt,
+            partyId = partyId,
+            docNumber = documentNumber,
+            notes = notes,
+            paymentMethod = paymentMethod,
+            dueAt = dueAt,
+            employeeId = actorEmployeeId.takeIf { type == DocType.SALE },
+            actorEmployeeId = actorEmployeeId
+        )
+        attachInvoiceLines(docId, type.name, prepared)
+        docId
+    }
+
+    private suspend fun prepareInvoiceLines(shopId: Long, lines: List<InvoiceLineInput>): List<DocumentLineEntity> {
+        if (lines.isEmpty()) throw LedgerException("أضف صنفًا واحدًا على الأقل")
+        return lines.map { line ->
+            val item = items.get(line.itemId) ?: throw LedgerException("الصنف غير موجود")
+            if (item.shopId != shopId || item.archived) throw LedgerException("الصنف غير متاح في هذا المحل")
+            val total = runCatching { com.daftari.ledger.domain.InventoryMath.lineTotal(line.qtyMilli, line.unitPriceMinor) }
+                .getOrElse { throw LedgerException(it.message ?: "كمية أو سعر غير صالح") }
+            DocumentLineEntity(
+                documentId = 0,
+                itemId = item.id,
+                itemName = item.name,
+                qtyMilli = line.qtyMilli,
+                unitPriceMinor = line.unitPriceMinor,
+                lineTotalMinor = total,
+                trackStock = item.trackStock
+            )
+        }
+    }
+
+    private suspend fun attachInvoiceLines(documentId: Long, type: String, lines: List<DocumentLineEntity>) {
+        documentLines.insertAll(lines.map { it.copy(documentId = documentId) })
+        applyStockDeltas(type, lines, reverse = false)
+    }
+
+    private suspend fun applyStockForDocument(documentId: Long, type: String, reverse: Boolean) {
+        val lines = documentLines.forDocument(documentId)
+        if (lines.isNotEmpty()) applyStockDeltas(type, lines, reverse)
+    }
+
+    private suspend fun applyStockDeltas(type: String, lines: List<DocumentLineEntity>, reverse: Boolean) {
+        lines.forEach { line ->
+            val delta = com.daftari.ledger.domain.InventoryMath.stockDelta(type, line.qtyMilli, line.trackStock)
+            if (delta == 0L) return@forEach
+            val item = items.get(line.itemId) ?: return@forEach
+            val change = if (reverse) -delta else delta
+            items.update(item.copy(qtyMilli = item.qtyMilli + change, updatedAt = System.currentTimeMillis()))
+        }
     }
 }

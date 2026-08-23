@@ -85,6 +85,18 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
             }
         }
 
+        if (state.can(StaffPermission.VIEW_ACCOUNTS) || state.can(StaffPermission.RECORD_SALE)) {
+            Section(stringResource(R.string.section_inventory), initiallyExpanded = true) {
+                Text(stringResource(R.string.inventory_hint), style = MaterialTheme.typography.bodySmall)
+                if (state.inventory.lowStockCount > 0) {
+                    Text(stringResource(R.string.low_stock_alert, state.inventory.lowStockCount), color = MaterialTheme.colorScheme.error)
+                }
+                Button(onClick = { onEvent(UiEvent.OpenInventory) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.open_inventory))
+                }
+            }
+        }
+
         Section(stringResource(R.string.section_employees), initiallyExpanded = state.employees.enabled) {
             if (state.can(StaffPermission.MANAGE_EMPLOYEES)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
