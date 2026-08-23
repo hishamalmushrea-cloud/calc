@@ -53,7 +53,7 @@ val diagnoseCompile by tasks.registering {
                 .filter { it.startsWith("e:") || it.contains(" error:") }
                 .joinToString(" || ").takeLast(3500).ifBlank { output.toString().takeLast(3500) }
             System.getenv("GITHUB_ENV")?.let { file(it).writeText("COMPILER DIAGNOSTIC: $important") }
-            throw GradleException("main compilation failed")
+            logger.error("Captured main compilation failure; outer task will report it.")
         }
     }
 }
