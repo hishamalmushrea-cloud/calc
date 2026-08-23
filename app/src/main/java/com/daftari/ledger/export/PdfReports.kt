@@ -15,6 +15,7 @@ import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.data.ShopEntity
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.ui.UiState
+import com.daftari.ledger.ui.displayMoney
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -34,14 +35,14 @@ object PdfReports {
         val lines = listOf(
             ctx.getString(R.string.report_financial_title),
             s.shop?.name.orEmpty(),
-            ctx.getString(R.string.sales_value, Money(t.sales).format()),
-            ctx.getString(R.string.purchases_value, Money(t.purchases).format()),
-            ctx.getString(R.string.report_line, ctx.getString(R.string.expenses), Money(t.expenses).format()),
-            ctx.getString(R.string.collections_value, Money(t.collections).format()),
-            ctx.getString(R.string.payments_value, Money(t.payments).format()),
-            ctx.getString(R.string.report_line, ctx.getString(R.string.cash_net), Money(t.cashNet).format()),
-            ctx.getString(R.string.report_line, ctx.getString(R.string.estimated_profit), Money(t.estimatedProfit).format()),
-            ctx.getString(R.string.report_receivables_payables, Money(s.owedToYou).format(), Money(s.youOwe).format())
+            ctx.getString(R.string.sales_value, s.displayMoney(t.sales, Locale.getDefault())),
+            ctx.getString(R.string.purchases_value, s.displayMoney(t.purchases, Locale.getDefault())),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.expenses), s.displayMoney(t.expenses, Locale.getDefault())),
+            ctx.getString(R.string.collections_value, s.displayMoney(t.collections, Locale.getDefault())),
+            ctx.getString(R.string.payments_value, s.displayMoney(t.payments, Locale.getDefault())),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.cash_net), s.displayMoney(t.cashNet, Locale.getDefault())),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.estimated_profit), s.displayMoney(t.estimatedProfit, Locale.getDefault())),
+            ctx.getString(R.string.report_receivables_payables, s.displayMoney(s.owedToYou, Locale.getDefault()), s.displayMoney(s.youOwe, Locale.getDefault()))
         )
         return writeLines(ctx, "daftari-report.pdf", lines)
     }
@@ -53,7 +54,8 @@ object PdfReports {
         ctx: Context,
         document: DocumentEntity,
         party: PartyEntity?,
-        shop: ShopEntity?
+        shop: ShopEntity?,
+        state: UiState
     ): File {
         val format = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         val type = ctx.getString(documentTypeString(document.type))
@@ -63,7 +65,7 @@ object PdfReports {
             ctx.getString(R.string.receipt_number, document.docNumber.ifBlank { "—" }),
             ctx.getString(R.string.date_value, format.format(Date(document.occurredAt))),
             ctx.getString(R.string.receipt_party, party?.name ?: "—"),
-            ctx.getString(R.string.report_line, ctx.getString(R.string.amount), Money(document.amountMinor).format()),
+            ctx.getString(R.string.report_line, ctx.getString(R.string.amount), state.displayMoney(document.amountMinor, Locale.getDefault())),
             ctx.getString(R.string.notes) + ": " + document.notes
         )
         return writeLines(ctx, "daftari-receipt-${document.id}.pdf", lines)

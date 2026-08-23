@@ -6,6 +6,8 @@ import androidx.compose.ui.res.stringResource
 import com.daftari.ledger.backup.CloudBackupManager
 import com.daftari.ledger.data.AgingRow
 import com.daftari.ledger.data.AuditLogEntity
+import com.daftari.ledger.data.CategoryEntity
+import com.daftari.ledger.data.CategoryTotal
 import com.daftari.ledger.data.CsvPreviewRow
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.LedgerRepository
@@ -47,6 +49,11 @@ data class UiState(
     val hasPin: Boolean = false,
     val biometric: Boolean = false,
     val autoBackup: Boolean = false,
+    val hideBalances: Boolean = false,
+    val latinDigits: Boolean = true,
+    val pinLockedUntil: Long = 0,
+    val categories: List<CategoryEntity> = emptyList(),
+    val categoryTotals: List<CategoryTotal> = emptyList(),
     val aging: List<AgingRow> = emptyList(),
     val csvPreview: List<CsvPreviewRow> = emptyList(),
     val shareFile: File? = null,
@@ -85,7 +92,8 @@ data class DocumentDraft(
     val documentNumber: String,
     val newPartyName: String? = null,
     val occurredAt: Long = System.currentTimeMillis(),
-    val dueAt: Long? = null
+    val dueAt: Long? = null,
+    val categoryId: Long? = null
 )
 
 sealed interface UiEvent {
@@ -110,7 +118,8 @@ sealed interface UiEvent {
         val documentNumber: String,
         val credit: Boolean,
         val occurredAt: Long,
-        val dueAt: Long?
+        val dueAt: Long?,
+        val categoryId: Long?
     ) : UiEvent
     data class DeleteDocument(val id: Long) : UiEvent
     data object UndoDeleteDocument : UiEvent
@@ -121,6 +130,10 @@ sealed interface UiEvent {
     data object ClearPin : UiEvent
     data class ToggleBackup(val enabled: Boolean) : UiEvent
     data class ToggleBiometric(val enabled: Boolean) : UiEvent
+    data class TogglePrivacy(val enabled: Boolean) : UiEvent
+    data class ToggleLatinDigits(val enabled: Boolean) : UiEvent
+    data class UpdateCurrency(val currencyCode: String) : UiEvent
+    data class AddCategory(val kind: String, val name: String) : UiEvent
     data class CloseDay(val actual: String, val notes: String) : UiEvent
     data class CloseParty(val id: Long) : UiEvent
     data object LoadInsights : UiEvent

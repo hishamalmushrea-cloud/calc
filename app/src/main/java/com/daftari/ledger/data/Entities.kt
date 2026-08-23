@@ -60,7 +60,7 @@ data class AccountEntity(
 @Entity(
     tableName = "documents",
     foreignKeys = [ForeignKey(entity = ShopEntity::class, parentColumns = ["id"], childColumns = ["shopId"], onDelete = ForeignKey.RESTRICT)],
-    indices = [Index("shopId"), Index("occurredAt"), Index("partyId"), Index("docNumber"), Index("type"), Index("dueAt")]
+    indices = [Index("shopId"), Index("occurredAt"), Index("partyId"), Index("docNumber"), Index("type"), Index("dueAt"), Index("categoryId")]
 )
 data class DocumentEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -72,6 +72,7 @@ data class DocumentEntity(
     val amountMinor: Long,
     val occurredAt: Long,
     val dueAt: Long? = null,
+    val categoryId: Long? = null,
     val docNumber: String = "",
     val notes: String = "",
     val paymentMethod: String = "CASH",
@@ -98,6 +99,18 @@ data class JournalLineEntity(
     val memo: String = ""
 )
 
+@Entity(
+    tableName = "categories",
+    indices = [Index("shopId"), Index(value = ["shopId", "kind", "name"], unique = true)]
+)
+data class CategoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val kind: String,
+    val name: String,
+    val archived: Boolean = false
+)
+
 @Entity(tableName = "audit_logs")
 data class AuditLogEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -119,7 +132,10 @@ data class SettingsEntity(
     val uniqueDocPerParty: Boolean = true,
     val autoBackupEnabled: Boolean = false,
     val autoBackupKeep: Int = 7,
-    val biometricUnlock: Boolean = false
+    val biometricUnlock: Boolean = false,
+    val latinDigits: Boolean = true,
+    val failedPinAttempts: Int = 0,
+    val pinLockedUntil: Long = 0
 )
 
 @Entity(
@@ -168,6 +184,12 @@ data class StatementLine(
     val document: DocumentEntity,
     val deltaMinor: Long,
     val runningBalanceMinor: Long
+)
+
+data class CategoryTotal(
+    val categoryId: Long?,
+    val categoryName: String,
+    val totalMinor: Long
 )
 
 data class OverduePartyRow(

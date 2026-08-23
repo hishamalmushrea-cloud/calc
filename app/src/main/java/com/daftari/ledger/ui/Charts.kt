@@ -132,7 +132,7 @@ fun DoughnutChart(
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(R.string.chart_total), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(Money(total).format(), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(displayMoney(total), fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
         
@@ -152,7 +152,7 @@ fun DoughnutChart(
                     Text(pair.first, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     val percent = ((pair.second.toDouble() / total) * 100).toInt()
                     Text("$percent%", modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(Money(pair.second).format(), fontWeight = FontWeight.Bold)
+                    Text(displayMoney(pair.second), fontWeight = FontWeight.Bold)
                 }
             }
         }

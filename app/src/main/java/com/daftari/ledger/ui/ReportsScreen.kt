@@ -58,6 +58,14 @@ internal fun ReportsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
         if (state.aging.isEmpty()) Text(stringResource(R.string.no_due_debts), style = MaterialTheme.typography.bodySmall)
         state.aging.forEach { AgingCard(it) }
         Spacer(Modifier.padding(4.dp))
+        Text(stringResource(R.string.category_report), fontWeight = FontWeight.Bold)
+        if (state.categoryTotals.isEmpty()) {
+            Text(stringResource(R.string.no_category_data), style = MaterialTheme.typography.bodySmall)
+        }
+        state.categoryTotals.forEach { total ->
+            Metric(total.categoryName, total.totalMinor, false)
+        }
+        Spacer(Modifier.padding(4.dp))
         Text(stringResource(R.string.late_customers), fontWeight = FontWeight.Bold)
         if (state.late.isEmpty()) Text(stringResource(R.string.no_late_customers), style = MaterialTheme.typography.bodySmall)
         state.late.forEachIndexed { index, row -> LateCard(row, index, lateFormat) }

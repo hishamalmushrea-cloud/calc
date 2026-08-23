@@ -28,7 +28,7 @@ class AppDbMigrationTest {
     }
 
     @Test
-    fun migrate1To4PreservesPartiesAndBuildsFtsIndex() {
+    fun migrate1To5PreservesPartiesAndBuildsFtsIndex() {
         helper.createDatabase(TEST_DB, 1).apply {
             execSQL("INSERT INTO shops (id,name,phone,address,currencyCode,fractionDigits,archived,createdAt) VALUES (1,'متجر','','','SAR',2,0,1)")
             execSQL(
@@ -41,7 +41,7 @@ class AppDbMigrationTest {
             close()
         }
 
-        helper.runMigrationsAndValidate(TEST_DB, 4, true, *Migrations.ALL).apply {
+        helper.runMigrationsAndValidate(TEST_DB, 5, true, *Migrations.ALL).apply {
             query("SELECT creditLimitMinor FROM parties WHERE id = 7").use { cursor ->
                 cursor.moveToFirst()
                 assertEquals(0L, cursor.getLong(0))

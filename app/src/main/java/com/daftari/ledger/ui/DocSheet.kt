@@ -32,7 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun DocumentSheet(
     state: UiState,
@@ -56,6 +56,7 @@ internal fun DocumentSheet(
     var dueAt by remember {
         mutableStateOf(existing?.dueAt ?: (occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS).takeIf { credit })
     }
+    var categoryId by remember { mutableStateOf(existing?.categoryId) }
     var party by remember {
         mutableStateOf(
             initialParty ?: existing?.partyId?.let { id ->
@@ -116,6 +117,19 @@ internal fun DocumentSheet(
                         }
                     }
                 }
+                if (type == DocType.EXPENSE || type == DocType.INCOME) {
+                    Text(stringResource(R.string.category), style = MaterialTheme.typography.labelMedium)
+                    val kind = if (type == DocType.EXPENSE) "EXPENSE" else "INCOME"
+                    FlowRow {
+                        state.categories.filter { it.kind == kind }.forEach { category ->
+                            FilterChip(
+                                selected = categoryId == category.id,
+                                onClick = { categoryId = if (categoryId == category.id) null else category.id },
+                                label = { Text(category.name) }
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     documentNumber,
                     { documentNumber = it },
@@ -144,7 +158,8 @@ internal fun DocumentSheet(
                                 documentNumber = documentNumber,
                                 newPartyName = if (finalPartyId == null) partyQuery.trim().takeIf(String::isNotBlank) else null,
                                 occurredAt = occurredAt,
-                                dueAt = dueAt
+                                dueAt = dueAt,
+                                categoryId = categoryId
                             )
                         )
                     )
@@ -157,7 +172,8 @@ internal fun DocumentSheet(
                             documentNumber,
                             credit,
                             occurredAt,
-                            dueAt
+                            dueAt,
+                            categoryId
                         )
                     )
                 }

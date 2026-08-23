@@ -46,7 +46,7 @@ internal fun PartyDetail(
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.balance), style = MaterialTheme.typography.labelMedium)
                 Text(
-                    Money(party.cachedBalanceMinor).format(),
+                    displayMoney(party.cachedBalanceMinor),
                     fontWeight = FontWeight.Bold,
                     fontSize = 26.sp,
                     color = partyBalanceColor(party)
@@ -56,7 +56,7 @@ internal fun PartyDetail(
                 }
                 if (party.creditLimitMinor > 0) {
                     Text(
-                        stringResource(R.string.credit_limit_value, Money(party.creditLimitMinor).format()),
+                        stringResource(R.string.credit_limit_value, displayMoney(party.creditLimitMinor)),
                         style = MaterialTheme.typography.bodySmall
                     )
                     if (party.kind == PartyKind.CUSTOMER.name && party.cachedBalanceMinor >= party.creditLimitMinor) {
@@ -79,12 +79,12 @@ internal fun PartyDetail(
                     Text(stringResource(R.string.loading))
                 } else {
                     Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.sales_value, Money(stats.sales).format()))
-                    Text(stringResource(R.string.collections_value, Money(stats.collections).format()))
+                    Text(stringResource(R.string.sales_value, displayMoney(stats.sales)))
+                    Text(stringResource(R.string.collections_value, displayMoney(stats.collections)))
                     Text(stringResource(R.string.collection_rate, stats.collectionRate))
                     if (party.kind == PartyKind.SUPPLIER.name) {
-                        Text(stringResource(R.string.purchases_value, Money(stats.purchases).format()))
-                        Text(stringResource(R.string.payments_value, Money(stats.payments).format()))
+                        Text(stringResource(R.string.purchases_value, displayMoney(stats.purchases)))
+                        Text(stringResource(R.string.payments_value, displayMoney(stats.payments)))
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.recent_operations), fontWeight = FontWeight.Bold)
@@ -94,8 +94,8 @@ internal fun PartyDetail(
                             stringResource(
                                 R.string.statement_line_running,
                                 documentTypeLabel(line.document.type),
-                                Money(line.document.amountMinor).format(),
-                                Money(line.runningBalanceMinor).format()
+                                displayMoney(line.document.amountMinor),
+                                displayMoney(line.runningBalanceMinor)
                             )
                         )
                     }

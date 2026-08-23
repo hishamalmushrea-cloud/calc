@@ -49,7 +49,7 @@ internal fun HeroMetric(title: String, minor: Long, positive: Boolean, subtitle:
             Spacer(Modifier.size(6.dp))
             AnimatedCounter(
                 targetValue = minor,
-                format = { Money(it).format() },
+                format = { displayMoney(it) },
                 style = MaterialTheme.typography.displaySmall.copy(
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
@@ -71,7 +71,7 @@ internal fun SplitMetric(title: String, minor: Long, positive: Boolean, modifier
             Spacer(Modifier.size(4.dp))
             AnimatedCounter(
                 targetValue = minor,
-                format = { Money(it).format() },
+                format = { displayMoney(it) },
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
             )
         }
@@ -87,7 +87,7 @@ internal fun Metric(title: String, minor: Long, positive: Boolean) {
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Text(Money(minor).format(), fontWeight = FontWeight.Bold, color = color)
+            Text(displayMoney(minor), fontWeight = FontWeight.Bold, color = color)
         }
     }
 }
@@ -101,11 +101,11 @@ internal fun ComparisonCard(current: Long, previous: Long) {
         Column(Modifier.padding(12.dp)) {
             Text(stringResource(R.string.sales_comparison), style = MaterialTheme.typography.labelMedium)
             Text(
-                stringResource(R.string.current_previous_values, Money(current).format(), Money(previous).format()),
+                stringResource(R.string.current_previous_values, displayMoney(current), displayMoney(previous)),
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "$sign${Money(difference).format()}${percent?.let { " ($sign$it%)" }.orEmpty()}",
+                "$sign${displayMoney(difference)}${percent?.let { " ($sign$it%)" }.orEmpty()}",
                 color = if (difference >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
         }
@@ -137,7 +137,7 @@ private fun AgeCell(label: String, minor: Long, warn: Boolean = false) {
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall)
-        Text(Money(minor).format(), fontWeight = FontWeight.Bold, color = color, fontSize = 13.sp)
+        Text(displayMoney(minor), fontWeight = FontWeight.Bold, color = color, fontSize = 13.sp)
     }
 }
 
@@ -154,7 +154,7 @@ internal fun LateCard(row: LedgerRepository.LateRow, index: Int, format: SimpleD
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(Money(row.balanceMinor).format(), fontWeight = FontWeight.Bold)
+                Text(displayMoney(row.balanceMinor), fontWeight = FontWeight.Bold)
                 Text(
                     pluralStringResource(R.plurals.late_days, row.daysLate, row.daysLate),
                     color = color,

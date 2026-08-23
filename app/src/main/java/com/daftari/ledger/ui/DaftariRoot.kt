@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +31,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -38,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -47,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -63,7 +70,8 @@ fun DaftariRoot(
     state: UiState,
     viewModel: MainViewModel,
     activity: FragmentActivity? = null,
-    initialTab: Int = 0
+    initialTab: Int = 0,
+    initialQuickSale: Boolean = false
 ) {
     var tab by remember { mutableIntStateOf(initialTab) }
     var addType by remember { mutableStateOf<DocType?>(null) }
@@ -73,7 +81,18 @@ fun DaftariRoot(
     val message = state.message?.asString()
     val undoLabel = stringResource(R.string.action_undo)
     val onEvent = viewModel::onEvent
+    val useNavigationRail = LocalConfiguration.current.screenWidthDp >= 600
+    LaunchedEffect(initialQuickSale) {
+        if (initialQuickSale) addType = DocType.SALE
+    }
+    val moneySettings = MoneyDisplaySettings(
+        currencyCode = state.shop?.currencyCode ?: "SAR",
+        fractionDigits = state.shop?.fractionDigits ?: 2,
+        latinDigits = state.latinDigits,
+        hideBalances = state.hideBalances
+    )
 
+    CompositionLocalProvider(LocalMoneyDisplay provides moneySettings) {
     LaunchedEffect(message) {
         message?.let {
             val result = snackbar.showSnackbar(
@@ -142,7 +161,7 @@ fun DaftariRoot(
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            if (!useNavigationRail) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 val items = listOf(
                     stringResource(R.string.nav_dashboard) to Icons.Default.Home,
                     stringResource(R.string.nav_accounts) to Icons.Default.People,
@@ -161,12 +180,35 @@ fun DaftariRoot(
             }
         }
     ) { padding ->
-        when (tab) {
-            0 -> DashboardScreen(state, onEvent, padding) { addType = it }
-            1 -> PartiesScreen(state, onEvent, padding)
-            2 -> DocsScreen(state, onEvent, padding)
-            REPORTS_TAB -> ReportsScreen(state, onEvent, padding)
-            else -> MoreScreen(state, onEvent, padding)
+        Row(Modifier.fillMaxSize()) {
+            if (useNavigationRail) {
+                NavigationRail(Modifier.padding(top = padding.calculateTopPadding())) {
+                    val railItems = listOf(
+                        stringResource(R.string.nav_dashboard) to Icons.Default.Home,
+                        stringResource(R.string.nav_accounts) to Icons.Default.People,
+                        stringResource(R.string.nav_documents) to Icons.Default.ReceiptLong,
+                        stringResource(R.string.nav_reports) to Icons.Default.Assessment,
+                        stringResource(R.string.nav_more) to Icons.Default.MoreHoriz
+                    )
+                    railItems.forEachIndexed { index, (label, icon) ->
+                        NavigationRailItem(
+                            selected = tab == index,
+                            onClick = { tab = index },
+                            icon = { Icon(icon, contentDescription = null) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+            }
+            Box(Modifier.weight(1f)) {
+                when (tab) {
+                    0 -> DashboardScreen(state, onEvent, padding) { addType = it }
+                    1 -> PartiesScreen(state, onEvent, padding)
+                    2 -> DocsScreen(state, onEvent, padding)
+                    REPORTS_TAB -> ReportsScreen(state, onEvent, padding)
+                    else -> MoreScreen(state, onEvent, padding)
+                }
+            }
         }
     }
 
@@ -192,6 +234,7 @@ fun DaftariRoot(
         }
     }
     if (state.locked) LockDialog(state, onEvent, activity)
+    }
 }
 
 @Composable

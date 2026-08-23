@@ -4,6 +4,7 @@ import android.content.Context
 import com.daftari.ledger.R
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.ui.UiState
+import com.daftari.ledger.ui.displayMoney
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -29,14 +30,14 @@ object ExcelReports {
 
         val summaryRows = mutableListOf<List<String>>()
         summaryRows += listOf(ctx.getString(R.string.report_item), ctx.getString(R.string.report_value))
-        summaryRows += listOf(ctx.getString(R.string.sales), Money(s.totals.sales).format())
-        summaryRows += listOf(ctx.getString(R.string.purchases), Money(s.totals.purchases).format())
-        summaryRows += listOf(ctx.getString(R.string.expenses), Money(s.totals.expenses).format())
-        summaryRows += listOf(ctx.getString(R.string.other_income), Money(s.totals.income).format())
-        summaryRows += listOf(ctx.getString(R.string.collections), Money(s.totals.collections).format())
-        summaryRows += listOf(ctx.getString(R.string.payments), Money(s.totals.payments).format())
-        summaryRows += listOf(ctx.getString(R.string.cash_net), Money(s.totals.cashNet).format())
-        summaryRows += listOf(ctx.getString(R.string.estimated_profit), Money(s.totals.estimatedProfit).format())
+        summaryRows += listOf(ctx.getString(R.string.sales), s.displayMoney(s.totals.sales, Locale.getDefault()))
+        summaryRows += listOf(ctx.getString(R.string.purchases), s.displayMoney(s.totals.purchases, Locale.getDefault()))
+        summaryRows += listOf(ctx.getString(R.string.expenses), s.displayMoney(s.totals.expenses, Locale.getDefault()))
+        summaryRows += listOf(ctx.getString(R.string.other_income), s.displayMoney(s.totals.income, Locale.getDefault()))
+        summaryRows += listOf(ctx.getString(R.string.collections), s.displayMoney(s.totals.collections, Locale.getDefault()))
+        summaryRows += listOf(ctx.getString(R.string.payments), s.displayMoney(s.totals.payments, Locale.getDefault()))
+        summaryRows += listOf(ctx.getString(R.string.cash_net), s.displayMoney(s.totals.cashNet, Locale.getDefault()))
+        summaryRows += listOf(ctx.getString(R.string.estimated_profit), s.displayMoney(s.totals.estimatedProfit, Locale.getDefault()))
 
         val docsRows = mutableListOf<List<String>>()
         docsRows += listOf(
@@ -48,7 +49,7 @@ object ExcelReports {
             docsRows += listOf(
                 fmt.format(Date(document.occurredAt)),
                 ctx.getString(documentTypeString(document.type)),
-                Money(document.amountMinor).format(),
+                s.displayMoney(document.amountMinor, Locale.getDefault()),
                 party?.name.orEmpty(),
                 document.notes,
                 document.docNumber
@@ -65,7 +66,7 @@ object ExcelReports {
                 party.name,
                 ctx.getString(if (party.kind == "CUSTOMER") R.string.customer else R.string.supplier),
                 party.category,
-                Money(party.cachedBalanceMinor).format(),
+                s.displayMoney(party.cachedBalanceMinor, Locale.getDefault()),
                 party.phone
             )
         }

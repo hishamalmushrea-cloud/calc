@@ -16,6 +16,7 @@ import com.daftari.ledger.data.ShopEntity
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.PartyKind
+import com.daftari.ledger.widget.DaftariWidget
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,7 +36,9 @@ import kotlinx.coroutines.sync.withLock
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as DaftariApp).repo
     private val services = MainUiServices(app, repo)
-    private val mutableState = MutableStateFlow(UiState(cloudSettings = app.cloudBackup.settings()))
+    private val mutableState = MutableStateFlow(
+        UiState(cloudSettings = (app as DaftariApp).cloudBackup.settings())
+    )
     val state: StateFlow<UiState> = mutableState.asStateFlow()
     private val mutableEffects = MutableSharedFlow<UiEffect>(extraBufferCapacity = 4)
     val effects: SharedFlow<UiEffect> = mutableEffects.asSharedFlow()
@@ -52,7 +55,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         hasPin = settings.pinHash != null,
                         locked = settings.pinHash != null,
                         biometric = settings.biometricUnlock,
-                        autoBackup = settings.autoBackupEnabled
+                        autoBackup = settings.autoBackupEnabled,
+                        hideBalances = settings.hideBalances,
+                        latinDigits = settings.latinDigits,
+                        pinLockedUntil = settings.pinLockedUntil
                     )
                 }
             }
@@ -100,6 +106,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.ClearPin -> clearPin()
             is UiEvent.ToggleBackup -> toggleBackup(event.enabled)
             is UiEvent.ToggleBiometric -> toggleBiometric(event.enabled)
+            is UiEvent.TogglePrivacy -> togglePrivacy(event.enabled)
+            is UiEvent.ToggleLatinDigits -> toggleLatinDigits(event.enabled)
+            is UiEvent.UpdateCurrency -> updateCurrency(event.currencyCode)
+            is UiEvent.AddCategory -> addCategory(event.kind, event.name)
             is UiEvent.CloseDay -> closeDay(event.actual, event.notes)
             is UiEvent.CloseParty -> closeParty(event.id)
             UiEvent.LoadInsights -> refreshInsights()
@@ -146,6 +156,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     mutableState.update { it.copy(suppliers = suppliers) }
                 }
             }
+            launch {
+                repo.observeCategories(id).collectLatest { categories ->
+                    mutableState.update { it.copy(categories = categories) }
+                }
+            }
         }
         refreshTotals()
         refreshInsights()
@@ -178,6 +193,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val totals = repo.totals(shop.id, from, to)
                 val docs = repo.documents.listPeriod(shop.id, from, to)
                 val previous = repo.totals(shop.id, previousFrom, previousTo)
+                val uncategorized = getApplication<Application>().getString(R.string.uncategorized)
+                val categoryTotals = repo.totalsByCategory(shop.id, DocType.EXPENSE, from, to, uncategorized) +
+                    repo.totalsByCategory(shop.id, DocType.INCOME, from, to, uncategorized)
                 mutableState.update {
                     it.copy(
                         totals = totals,
@@ -185,7 +203,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         docs = docs.sortedByDescending { document -> document.occurredAt },
                         owedToYou = repo.youAreOwed(shop.id),
                         youOwe = repo.youOwe(shop.id),
-                        nextDocumentNumber = repo.shops.get(shop.id)?.nextDocumentNumber ?: it.nextDocumentNumber
+                        nextDocumentNumber = repo.shops.get(shop.id)?.nextDocumentNumber ?: it.nextDocumentNumber,
+                        categoryTotals = categoryTotals
                     )
                 }
             }
@@ -259,7 +278,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 notes = draft.notes,
                 paymentMethod = if (draft.credit) "CREDIT" else "CASH",
                 transferToCode = if (draft.type == DocType.TRANSFER) AccountCodes.BANK else null,
-                dueAt = draft.dueAt
+                dueAt = draft.dueAt,
+                categoryId = draft.categoryId
             )
             refreshAll()
             message(R.string.msg_saved)
@@ -278,7 +298,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 event.notes,
                 event.documentNumber,
                 if (event.credit) "CREDIT" else "CASH",
-                event.dueAt
+                event.dueAt,
+                event.categoryId
             )
             refreshAll()
             message(R.string.msg_edited)
@@ -303,25 +324,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun shareReceipt(document: com.daftari.ledger.data.DocumentEntity) {
         val party = document.partyId?.let { id -> (state.value.customers + state.value.suppliers).firstOrNull { it.id == id } }
         createFile(R.string.msg_receipt_ready, R.string.msg_receipt_failed) {
-            services.receipt(document, party, state.value.shop)
+            services.receipt(document, party, state.value.shop, state.value)
         }
     }
 
     private fun unlock(pin: String) = viewModelScope.launch {
+        val now = System.currentTimeMillis()
+        val settings = repo.settings.get()
+        val lockedUntil = settings?.pinLockedUntil ?: 0L
+        if (lockedUntil > now) {
+            message(R.string.msg_pin_locked, ((lockedUntil - now + 999) / 1000).toInt())
+            return@launch
+        }
         if (repo.pinOk(pin)) {
-            mutableState.update { it.copy(locked = false, message = text(R.string.msg_unlocked)) }
-        } else message(R.string.msg_wrong_pin)
+            repo.updatePinProtection(0, 0)
+            mutableState.update { it.copy(locked = false, pinLockedUntil = 0, message = text(R.string.msg_unlocked)) }
+        } else {
+            val attempts = (settings?.failedPinAttempts ?: 0) + 1
+            if (attempts >= MAX_PIN_ATTEMPTS) {
+                val until = now + PIN_LOCK_MILLIS
+                repo.updatePinProtection(0, until)
+                mutableState.update { it.copy(pinLockedUntil = until, message = text(R.string.msg_pin_locked, 30)) }
+            } else {
+                repo.updatePinProtection(attempts, 0)
+                message(R.string.msg_wrong_pin_attempts, MAX_PIN_ATTEMPTS - attempts)
+            }
+        }
     }
 
     private fun savePin(pin: String) = viewModelScope.launch {
         if (pin.length < 4) return@launch message(R.string.msg_pin_too_short)
         repo.setPin(pin)
-        mutableState.update { it.copy(hasPin = true, message = text(R.string.msg_pin_saved)) }
+        repo.updatePinProtection(0, 0)
+        mutableState.update { it.copy(hasPin = true, pinLockedUntil = 0, message = text(R.string.msg_pin_saved)) }
     }
 
     private fun clearPin() = viewModelScope.launch {
         repo.setPin(null)
-        mutableState.update { it.copy(hasPin = false, locked = false, message = text(R.string.msg_pin_removed)) }
+        repo.updatePinProtection(0, 0)
+        mutableState.update { it.copy(hasPin = false, locked = false, pinLockedUntil = 0, message = text(R.string.msg_pin_removed)) }
     }
 
     private fun toggleBackup(enabled: Boolean) = viewModelScope.launch {
@@ -333,6 +374,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun toggleBiometric(enabled: Boolean) = viewModelScope.launch {
         repo.setBiometric(enabled)
         mutableState.update { it.copy(biometric = enabled) }
+    }
+
+    private fun togglePrivacy(enabled: Boolean) = viewModelScope.launch {
+        repo.setPrivacyMode(enabled)
+        mutableState.update { it.copy(hideBalances = enabled) }
+    }
+
+    private fun toggleLatinDigits(enabled: Boolean) = viewModelScope.launch {
+        repo.setLatinDigits(enabled)
+        mutableState.update { it.copy(latinDigits = enabled) }
+    }
+
+    private fun updateCurrency(code: String) = viewModelScope.launch {
+        val shop = state.value.shop ?: return@launch
+        try {
+            repo.updateShopCurrency(shop.id, code)
+            val updated = repo.shops.get(shop.id)
+            mutableState.update { it.copy(shop = updated ?: shop, message = text(R.string.msg_currency_saved)) }
+        } catch (error: LedgerException) {
+            dynamicError(error)
+        }
+    }
+
+    private fun addCategory(kind: String, name: String) = viewModelScope.launch {
+        val shop = state.value.shop ?: return@launch
+        try {
+            repo.addCategory(shop.id, kind, name)
+            message(R.string.msg_category_added)
+        } catch (error: Exception) {
+            dynamicError(error)
+        }
     }
 
     private fun closeDay(actual: String, notes: String) = viewModelScope.launch {
@@ -429,7 +501,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun shareStatement(party: PartyEntity) = viewModelScope.launch {
-        mutableState.update { it.copy(shareText = services.statement(party)) }
+        mutableState.update { it.copy(shareText = services.statement(party, state.value)) }
     }
 
     private fun exportCsv() {
@@ -507,6 +579,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun refreshAll() {
         refreshTotals()
         refreshInsights()
+        DaftariWidget.updateAll(getApplication())
     }
 
     private fun dynamicError(error: Exception) {
@@ -521,5 +594,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val AGING_REFRESH_INTERVAL_MS = 60L * 60L * 1000L
+        const val MAX_PIN_ATTEMPTS = 5
+        const val PIN_LOCK_MILLIS = 30_000L
     }
 }

@@ -159,7 +159,7 @@ private fun PartyCard(
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(Money(party.cachedBalanceMinor).format(), fontWeight = FontWeight.Bold, color = balanceColor, fontSize = 16.sp)
+                Text(displayMoney(party.cachedBalanceMinor), fontWeight = FontWeight.Bold, color = balanceColor, fontSize = 16.sp)
                 Text(
                     stringResource(if (party.kind == PartyKind.CUSTOMER.name) R.string.party_you_are_owed else R.string.party_you_owe),
                     style = MaterialTheme.typography.labelSmall,

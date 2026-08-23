@@ -253,4 +253,21 @@
     <string name="msg_cloud_backup_ready">اكتمل النسخ السحابي</string>
     <string name="msg_cloud_not_configured">تم إنشاء نسخة محلية؛ لم تُضبط وجهة سحابية</string>
     <string name="msg_cloud_backup_failed">فشل النسخ السحابي: %1$s</string>
+
+    <string name="currency_code">رمز العملة (مثل SAR أو YER)</string>
+    <string name="save_currency">حفظ العملة</string>
+    <string name="privacy_mode">إخفاء الأرصدة</string>
+    <string name="latin_digits">استخدام الأرقام اللاتينية 123</string>
+    <string name="section_categories">تصنيفات المصروفات والإيرادات</string>
+    <string name="category_name">اسم التصنيف</string>
+    <string name="add_category">إضافة تصنيف</string>
+    <string name="uncategorized">دون تصنيف</string>
+    <string name="category_report">التقرير حسب التصنيف</string>
+    <string name="no_category_data">لا توجد بيانات مصنفة في هذه الفترة.</string>
+    <string name="msg_currency_saved">تم حفظ عملة المحل</string>
+    <string name="msg_category_added">تمت إضافة التصنيف</string>
+    <string name="msg_wrong_pin_attempts">رمز غير صحيح. متبقٍ %1$d محاولات</string>
+    <string name="msg_pin_locked">تم قفل المحاولة لمدة %1$d ثانية</string>
+    <string name="widget_title">دفتري اليوم</string>
+    <string name="widget_description">ملخص نقد اليوم وزر بيع سريع</string>
 </resources>

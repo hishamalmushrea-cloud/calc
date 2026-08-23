@@ -132,7 +132,7 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                                 if (document.notes.isNotBlank()) Text(document.notes, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(Money(document.amountMinor).format(), fontWeight = FontWeight.Bold, color = color)
+                                Text(displayMoney(document.amountMinor), fontWeight = FontWeight.Bold, color = color)
                                 Row {
                                     TextButton(
                                         onClick = { onEvent(UiEvent.ShareReceipt(document)) },

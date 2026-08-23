@@ -127,6 +127,7 @@ class LedgerRepository(private val db: AppDb) {
     val accounts = db.accounts()
     val documents = db.documents()
     val journal = db.journal()
+    val categories = db.categories()
     val audit = db.audit()
     val settings = db.settings()
 
@@ -264,7 +265,8 @@ class LedgerRepository(private val db: AppDb) {
         notes: String = "",
         paymentMethod: String = "CASH",
         transferToCode: String? = null,
-        dueAt: Long? = null
+        dueAt: Long? = null,
+        categoryId: Long? = null
     ): Long = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val st = settings.get()
@@ -291,6 +293,7 @@ class LedgerRepository(private val db: AppDb) {
                 amountMinor = amountMinor,
                 occurredAt = occurredAt,
                 dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
+                categoryId = categoryId.takeIf { type == DocType.EXPENSE || type == DocType.INCOME },
                 docNumber = finalDocumentNumber,
                 notes = notes,
                 paymentMethod = paymentMethod
@@ -310,7 +313,7 @@ class LedgerRepository(private val db: AppDb) {
 
     suspend fun updateDocument(
         id: Long, amountMinor: Long, occurredAt: Long, notes: String,
-        docNumber: String, paymentMethod: String, dueAt: Long? = null
+        docNumber: String, paymentMethod: String, dueAt: Long? = null, categoryId: Long? = null
     ) = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val d = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
@@ -330,6 +333,7 @@ class LedgerRepository(private val db: AppDb) {
                 amountMinor = amountMinor,
                 occurredAt = occurredAt,
                 dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
+                categoryId = categoryId.takeIf { type == DocType.EXPENSE || type == DocType.INCOME },
                 notes = notes,
                 docNumber = docNumber,
                 paymentMethod = paymentMethod,
@@ -404,6 +408,28 @@ class LedgerRepository(private val db: AppDb) {
 
     fun observeCustomers(shopId: Long): Flow<List<PartyEntity>> = parties.observe(shopId, "CUSTOMER")
     fun observeSuppliers(shopId: Long): Flow<List<PartyEntity>> = parties.observe(shopId, "SUPPLIER")
+    fun observeCategories(shopId: Long): Flow<List<CategoryEntity>> = categories.observe(shopId)
+
+    suspend fun addCategory(shopId: Long, kind: String, name: String): Long {
+        if (name.isBlank()) throw LedgerException("أدخل اسم التصنيف")
+        return categories.insert(CategoryEntity(shopId = shopId, kind = kind, name = name.trim()))
+    }
+
+    suspend fun totalsByCategory(
+        shopId: Long,
+        type: DocType,
+        from: Long,
+        to: Long,
+        uncategorized: String
+    ): List<CategoryTotal> = documents.totalsByCategory(shopId, type.name, from, to, uncategorized)
+
+    suspend fun updateShopCurrency(shopId: Long, currencyCode: String) {
+        val shop = shops.get(shopId) ?: throw LedgerException("المحل غير موجود")
+        val normalized = currencyCode.trim().uppercase()
+        runCatching { java.util.Currency.getInstance(normalized) }
+            .getOrElse { throw LedgerException("رمز العملة غير صالح") }
+        shops.update(shop.copy(currencyCode = normalized))
+    }
 
     /** بحث بادئة FTS4؛ لا يستخدم LIKE الذي يبدأ بعلامة % ولا يفقد الفهرس. */
     suspend fun searchParties(shopId: Long, input: String): List<PartyEntity> {
@@ -578,5 +604,20 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun setBiometric(on: Boolean) {
         val st = settings.get() ?: return
         settings.update(st.copy(biometricUnlock = on))
+    }
+
+    suspend fun setPrivacyMode(hidden: Boolean) {
+        val st = settings.get() ?: return
+        settings.update(st.copy(hideBalances = hidden))
+    }
+
+    suspend fun setLatinDigits(enabled: Boolean) {
+        val st = settings.get() ?: return
+        settings.update(st.copy(latinDigits = enabled))
+    }
+
+    suspend fun updatePinProtection(failedAttempts: Int, lockedUntil: Long) {
+        val st = settings.get() ?: return
+        settings.update(st.copy(failedPinAttempts = failedAttempts, pinLockedUntil = lockedUntil))
     }
 }

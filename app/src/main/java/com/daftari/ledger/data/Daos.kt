@@ -164,6 +164,29 @@ interface DocumentDao {
         """
     )
     suspend fun overdueParties(now: Long): List<OverduePartyRow>
+
+    @Query(
+        """
+        SELECT d.categoryId AS categoryId,
+               COALESCE(c.name, :uncategorized) AS categoryName,
+               COALESCE(SUM(d.amountMinor), 0) AS totalMinor
+        FROM documents d
+        LEFT JOIN categories c ON c.id = d.categoryId
+        WHERE d.shopId = :shopId
+          AND d.deletedAt IS NULL
+          AND d.type = :type
+          AND d.occurredAt BETWEEN :from AND :to
+        GROUP BY d.categoryId, c.name
+        ORDER BY totalMinor DESC
+        """
+    )
+    suspend fun totalsByCategory(
+        shopId: Long,
+        type: String,
+        from: Long,
+        to: Long,
+        uncategorized: String
+    ): List<CategoryTotal>
 }
 
 @Dao
@@ -184,6 +207,16 @@ interface JournalDao {
         ORDER BY id
     """)
     suspend fun ledger(shopId: Long, accountId: Long): List<JournalLineEntity>
+}
+
+@Dao
+interface CategoryDao {
+    @Query("SELECT * FROM categories WHERE shopId = :shopId AND archived = 0 ORDER BY kind, name")
+    fun observe(shopId: Long): Flow<List<CategoryEntity>>
+    @Query("SELECT * FROM categories WHERE shopId = :shopId AND archived = 0 ORDER BY kind, name")
+    suspend fun list(shopId: Long): List<CategoryEntity>
+    @Insert suspend fun insert(category: CategoryEntity): Long
+    @Update suspend fun update(category: CategoryEntity)
 }
 
 @Dao

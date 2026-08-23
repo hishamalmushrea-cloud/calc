@@ -9,10 +9,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         ShopEntity::class, PartyEntity::class, AccountEntity::class,
-        DocumentEntity::class, JournalLineEntity::class, AuditLogEntity::class,
-        SettingsEntity::class, DailyClosingEntity::class
+        DocumentEntity::class, JournalLineEntity::class, CategoryEntity::class,
+        AuditLogEntity::class, SettingsEntity::class, DailyClosingEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDb : RoomDatabase() {
@@ -21,6 +21,7 @@ abstract class AppDb : RoomDatabase() {
     abstract fun accounts(): AccountDao
     abstract fun documents(): DocumentDao
     abstract fun journal(): JournalDao
+    abstract fun categories(): CategoryDao
     abstract fun audit(): AuditDao
     abstract fun settings(): SettingsDao
     abstract fun closings(): ClosingDao

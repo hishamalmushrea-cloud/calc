@@ -50,5 +50,29 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    /** v4 → v5: تصنيفات الدخل/المصروف وإعدادات الخصوصية وحماية PIN. */
+    val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    shopId INTEGER NOT NULL,
+                    kind TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    archived INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_categories_shopId ON categories(shopId)")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_categories_shopId_kind_name ON categories(shopId, kind, name)")
+            db.execSQL("ALTER TABLE documents ADD COLUMN categoryId INTEGER")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_categoryId ON documents(categoryId)")
+            db.execSQL("ALTER TABLE app_settings ADD COLUMN latinDigits INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE app_settings ADD COLUMN failedPinAttempts INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE app_settings ADD COLUMN pinLockedUntil INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }

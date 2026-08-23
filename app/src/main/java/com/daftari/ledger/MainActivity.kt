@@ -106,7 +106,8 @@ class MainActivity : FragmentActivity() {
                     s,
                     vm,
                     this@MainActivity,
-                    initialTab = if (intent.getBooleanExtra(EXTRA_OPEN_REPORTS, false)) 3 else 0
+                    initialTab = if (intent.getBooleanExtra(EXTRA_OPEN_REPORTS, false)) 3 else 0,
+                    initialQuickSale = intent.getBooleanExtra(EXTRA_QUICK_SALE, false)
                 )
             }
         }
@@ -130,5 +131,6 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         const val EXTRA_OPEN_REPORTS = "open_reports"
+        const val EXTRA_QUICK_SALE = "quick_sale"
     }
 }

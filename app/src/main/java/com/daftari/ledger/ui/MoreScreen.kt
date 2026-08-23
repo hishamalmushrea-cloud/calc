@@ -34,6 +34,9 @@ import java.util.Locale
 @Composable
 internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: PaddingValues) {
     var shopName by remember { mutableStateOf("") }
+    var currencyCode by remember(state.shop?.currencyCode) { mutableStateOf(state.shop?.currencyCode.orEmpty()) }
+    var categoryName by remember { mutableStateOf("") }
+    var categoryKind by remember { mutableStateOf("EXPENSE") }
     var pin by remember { mutableStateOf("") }
     var cash by remember { mutableStateOf("") }
     var closeNotes by remember { mutableStateOf("") }
@@ -57,10 +60,19 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                     shopName = ""
                 }
             }) { Text(stringResource(R.string.create_shop)) }
+            OutlinedTextField(
+                currencyCode,
+                { currencyCode = it.uppercase().take(3) },
+                label = { Text(stringResource(R.string.currency_code)) },
+                singleLine = true
+            )
+            Button(onClick = { onEvent(UiEvent.UpdateCurrency(currencyCode)) }) {
+                Text(stringResource(R.string.save_currency))
+            }
         }
 
         Section(stringResource(R.string.section_day_close)) {
-            Text(stringResource(R.string.expected_cash, Money(state.totals.cashNet).format()))
+            Text(stringResource(R.string.expected_cash, displayMoney(state.totals.cashNet)))
             OutlinedTextField(cash, { cash = it }, label = { Text(stringResource(R.string.actual_cash)) })
             OutlinedTextField(closeNotes, { closeNotes = it }, label = { Text(stringResource(R.string.notes)) })
             Button(onClick = { onEvent(UiEvent.CloseDay(cash, closeNotes)) }) {
@@ -83,6 +95,37 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 Text(stringResource(R.string.biometric_on_open), modifier = Modifier.weight(1f))
                 Switch(state.biometric, { onEvent(UiEvent.ToggleBiometric(it)) })
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.privacy_mode), modifier = Modifier.weight(1f))
+                Switch(state.hideBalances, { onEvent(UiEvent.TogglePrivacy(it)) })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.latin_digits), modifier = Modifier.weight(1f))
+                Switch(state.latinDigits, { onEvent(UiEvent.ToggleLatinDigits(it)) })
+            }
+        }
+
+        Section(stringResource(R.string.section_categories)) {
+            Row {
+                TextButton(onClick = { categoryKind = "EXPENSE" }) {
+                    Text((if (categoryKind == "EXPENSE") "✓ " else "") + stringResource(R.string.expenses))
+                }
+                TextButton(onClick = { categoryKind = "INCOME" }) {
+                    Text((if (categoryKind == "INCOME") "✓ " else "") + stringResource(R.string.other_income))
+                }
+            }
+            OutlinedTextField(
+                categoryName,
+                { categoryName = it },
+                label = { Text(stringResource(R.string.category_name)) }
+            )
+            Button(onClick = {
+                if (categoryName.isNotBlank()) {
+                    onEvent(UiEvent.AddCategory(categoryKind, categoryName))
+                    categoryName = ""
+                }
+            }) { Text(stringResource(R.string.add_category)) }
+            state.categories.forEach { category -> Text("• ${category.name}") }
         }
 
         Section(stringResource(R.string.section_backup)) {

@@ -41,29 +41,29 @@ internal class MainUiServices(
         else daftariApp.backup.restoreFrom(file)
     }
 
-    suspend fun statement(party: PartyEntity): String {
+    suspend fun statement(party: PartyEntity, state: UiState): String {
         val lines = repo.statement(party)
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         return buildString {
             append(app.getString(R.string.statement_title, party.name)).append('\n')
-            append(app.getString(R.string.statement_balance, Money(party.cachedBalanceMinor).format())).append("\n\n")
+            append(app.getString(R.string.statement_balance, state.displayMoney(party.cachedBalanceMinor, Locale.getDefault()))).append("\n\n")
             append(app.getString(R.string.statement_columns_running)).append('\n')
             lines.takeLast(50).asReversed().forEach { line ->
                 append(dateFormat.format(Date(line.document.occurredAt)))
                     .append(" | ")
                     .append(app.getString(documentTypeString(line.document.type)))
                     .append(" | ")
-                    .append(Money(line.document.amountMinor).format())
+                    .append(state.displayMoney(line.document.amountMinor, Locale.getDefault()))
                     .append(" | ")
-                    .append(Money(line.runningBalanceMinor).format())
+                    .append(state.displayMoney(line.runningBalanceMinor, Locale.getDefault()))
                     .append('\n')
             }
         }
     }
 
-    suspend fun receipt(document: DocumentEntity, party: PartyEntity?, shop: ShopEntity?): File =
+    suspend fun receipt(document: DocumentEntity, party: PartyEntity?, shop: ShopEntity?, state: UiState): File =
         withContext(Dispatchers.IO) {
-            PdfReports.writeDocumentReceipt(app, document, party, shop)
+            PdfReports.writeDocumentReceipt(app, document, party, shop, state)
         }
 
     suspend fun exportCsv(shopId: Long): File = withContext(Dispatchers.IO) {
