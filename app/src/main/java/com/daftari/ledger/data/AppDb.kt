@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DailyBookEntity::class, EmployeeEntity::class, EmployeeShopEntity::class,
         EmployeeShiftEntity::class
     ],
-    version = 7,
+    version = AppDb.VERSION,
     exportSchema = true
 )
 abstract class AppDb : RoomDatabase() {
@@ -33,6 +33,7 @@ abstract class AppDb : RoomDatabase() {
     abstract fun employeeShifts(): EmployeeShiftDao
 
     companion object {
+        const val VERSION = 7
         @Volatile private var I: AppDb? = null
 
         fun get(ctx: Context): AppDb = I ?: synchronized(this) {

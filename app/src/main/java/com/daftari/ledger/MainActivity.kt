@@ -8,8 +8,23 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.credentials.ClearCredentialStateRequest
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import android.accounts.Account
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.auth.api.identity.RevokeAccessRequest
+import com.google.android.gms.common.api.Scope
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.daftari.ledger.backup.GOOGLE_DRIVE_APPDATA_SCOPE
+import com.daftari.ledger.backup.GOOGLE_EMAIL_SCOPE
+import com.daftari.ledger.backup.GOOGLE_OPENID_SCOPE
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,6 +40,14 @@ import kotlinx.coroutines.flow.collect
 
 class MainActivity : FragmentActivity() {
     private val vm: MainViewModel by viewModels()
+    private var pendingGoogleAction: String = ""
+    private var pendingGoogleEmail: String = ""
+    private var pendingGoogleSubject: String = ""
+    private val googleAuthorization = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        runCatching { Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(result.data) }
+            .onSuccess { authorization -> completeGoogleAuthorization(authorization.accessToken) }
+            .onFailure { vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(it.message.orEmpty())) }
+    }
     private val cloudFolderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
             try {
@@ -62,6 +85,9 @@ class MainActivity : FragmentActivity() {
                             UiEffect.PickBackupFile -> backupFilePicker.launch(
                                 arrayOf("application/vnd.sqlite3", "application/octet-stream", "*/*")
                             )
+                            is UiEffect.LinkGoogleBackup -> linkGoogleAccount(effect.action)
+                            is UiEffect.AuthorizeGoogleBackup -> authorizeGoogleDrive(effect.action)
+                            UiEffect.UnlinkGoogleBackup -> unlinkGoogleAccount()
                             is UiEffect.OpenUri -> runCatching {
                                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(effect.uri)))
                             }
@@ -115,6 +141,87 @@ class MainActivity : FragmentActivity() {
                 )
             }
         }
+    }
+
+    private suspend fun linkGoogleAccount(action: String) {
+        val clientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+        if (clientId.isBlank()) {
+            vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(getString(R.string.google_backup_not_configured)))
+            return
+        }
+        runCatching {
+            val option = GetGoogleIdOption.Builder()
+                .setServerClientId(clientId)
+                .setFilterByAuthorizedAccounts(false)
+                .setAutoSelectEnabled(false)
+                .build()
+            val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+            val credential = CredentialManager.create(this).getCredential(this, request).credential
+            check(credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL)
+            GoogleIdTokenCredential.createFrom(credential.data)
+        }.onSuccess { google ->
+            pendingGoogleEmail = google.id
+            pendingGoogleSubject = google.idToken.split('.').getOrNull(1)?.let(::decodeGoogleSubject).orEmpty()
+            pendingGoogleAction = action
+            startGoogleAuthorization()
+        }.onFailure {
+            vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(it.message ?: getString(R.string.google_sign_in_failed)))
+        }
+    }
+
+    private fun decodeGoogleSubject(encodedPayload: String): String = runCatching {
+        val json = String(android.util.Base64.decode(encodedPayload, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING))
+        com.google.gson.JsonParser.parseString(json).asJsonObject.get("sub")?.asString.orEmpty()
+    }.getOrDefault("")
+
+    private fun authorizeGoogleDrive(action: String) {
+        pendingGoogleAction = action
+        pendingGoogleEmail = ""
+        pendingGoogleSubject = ""
+        startGoogleAuthorization()
+    }
+
+    private fun startGoogleAuthorization() {
+        val request = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(GOOGLE_DRIVE_APPDATA_SCOPE), Scope(GOOGLE_OPENID_SCOPE), Scope(GOOGLE_EMAIL_SCOPE)))
+            .build()
+        Identity.getAuthorizationClient(this).authorize(request)
+            .addOnSuccessListener { result ->
+                if (result.hasResolution()) {
+                    val intent = result.pendingIntent?.intentSender
+                    if (intent != null) googleAuthorization.launch(IntentSenderRequest.Builder(intent).build())
+                    else vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(getString(R.string.google_authorization_failed)))
+                } else completeGoogleAuthorization(result.accessToken)
+            }
+            .addOnFailureListener { vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(it.message.orEmpty())) }
+    }
+
+    private fun completeGoogleAuthorization(token: String?) {
+        if (token.isNullOrBlank()) {
+            vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(getString(R.string.google_authorization_failed)))
+            return
+        }
+        vm.onEvent(
+            UiEvent.GoogleBackupAuthorized(
+                pendingGoogleEmail, pendingGoogleSubject, token,
+                pendingGoogleAction.ifBlank { "LIST" }
+            )
+        )
+        pendingGoogleAction = ""
+        pendingGoogleEmail = ""
+        pendingGoogleSubject = ""
+    }
+
+    private suspend fun unlinkGoogleAccount() {
+        val email = vm.state.value.googleBackup.settings.accountEmail
+        if (email.isNotBlank()) {
+            val request = RevokeAccessRequest.builder()
+                .setAccount(Account(email, "com.google"))
+                .setScopes(listOf(Scope(GOOGLE_DRIVE_APPDATA_SCOPE), Scope(GOOGLE_OPENID_SCOPE), Scope(GOOGLE_EMAIL_SCOPE)))
+                .build()
+            Identity.getAuthorizationClient(this).revokeAccess(request)
+        }
+        runCatching { CredentialManager.create(this).clearCredentialState(ClearCredentialStateRequest()) }
     }
 
     /**

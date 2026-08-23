@@ -161,6 +161,21 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
             state.categories.forEach { category -> Text("• ${category.name}") }
         }
 
+        Section(stringResource(R.string.section_google_backup), initiallyExpanded = true) {
+            val google = state.googleBackup.settings
+            if (google.linked) {
+                Text(stringResource(R.string.google_account_value, google.accountEmail))
+                if (google.lastSuccessAt > 0) {
+                    Text(stringResource(R.string.last_backup_value, SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(google.lastSuccessAt))))
+                }
+            } else {
+                Text(stringResource(R.string.google_backup_link_hint), style = MaterialTheme.typography.bodySmall)
+            }
+            Button(onClick = { onEvent(UiEvent.OpenGoogleBackup) }) {
+                Text(stringResource(if (google.linked) R.string.manage_google_backup else R.string.restore_my_data))
+            }
+        }
+
         Section(stringResource(R.string.section_backup)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.daily_auto_backup), modifier = Modifier.weight(1f))

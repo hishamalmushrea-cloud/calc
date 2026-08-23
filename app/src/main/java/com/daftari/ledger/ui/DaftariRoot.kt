@@ -209,7 +209,9 @@ fun DaftariRoot(
                 }
             }
             Box(Modifier.weight(1f)) {
-                if (state.employees.screenOpen && (
+                if (state.googleBackup.screenOpen) {
+                    GoogleBackupScreen(state, onEvent, padding)
+                } else if (state.employees.screenOpen && (
                         state.can(StaffPermission.MANAGE_EMPLOYEES) || state.can(StaffPermission.VIEW_REPORTS) ||
                             state.employees.selectedEmployee?.id == state.employees.currentEmployee?.id
                     )

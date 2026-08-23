@@ -38,7 +38,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val staff = (app as DaftariApp).staff
     internal val services = MainUiServices(app, repo)
     internal val mutableState = MutableStateFlow(
-        UiState(cloudSettings = (app as DaftariApp).cloudBackup.settings())
+        UiState(
+            cloudSettings = (app as DaftariApp).cloudBackup.settings(),
+            googleBackup = GoogleBackupUiState(
+                settings = (app as DaftariApp).googleBackup.preferences.load(),
+                hasLocalData = (app as DaftariApp).googleBackup.hasLocalData()
+            )
+        )
     )
     val state: StateFlow<UiState> = mutableState.asStateFlow()
     internal val mutableEffects = MutableSharedFlow<UiEffect>(extraBufferCapacity = 4)
@@ -140,6 +146,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.ChooseCloudRestoreFile -> mutableEffects.tryEmit(UiEffect.PickBackupFile)
             is UiEvent.RestoreCloudFile -> restoreCloudFile(event.uri)
             UiEvent.RestoreLatestWebDav -> restoreLatestWebDav()
+            UiEvent.OpenGoogleBackup -> openGoogleBackup()
+            UiEvent.CloseGoogleBackup -> closeGoogleBackup()
+            UiEvent.LinkGoogleBackup -> linkGoogleBackup()
+            UiEvent.UnlinkGoogleBackup -> unlinkGoogleBackup()
+            UiEvent.RefreshGoogleBackups -> requestGoogleAuthorization("LIST")
+            UiEvent.GoogleBackupNow -> requestGoogleAuthorization("BACKUP")
+            is UiEvent.SetGoogleBackupAutomatic -> setGoogleBackupAutomatic(event.enabled)
+            is UiEvent.SetGoogleBackupWifiOnly -> setGoogleBackupWifiOnly(event.enabled)
+            is UiEvent.PrepareGoogleRestore -> prepareGoogleRestore(event.backup)
+            UiEvent.ConfirmGoogleRestore -> confirmGoogleRestore()
+            is UiEvent.PrepareGoogleBackupDelete -> prepareGoogleBackupDelete(event.backup)
+            UiEvent.ConfirmGoogleBackupDelete -> confirmGoogleBackupDelete()
+            is UiEvent.GoogleBackupAuthorized -> handleGoogleBackupAuthorized(event)
+            is UiEvent.GoogleBackupAuthorizationFailed -> googleBackupAuthorizationFailed(event.message)
             is UiEvent.CallPhone -> mutableEffects.tryEmit(UiEffect.OpenUri("tel:${Uri.encode(event.phone)}"))
             is UiEvent.OpenWhatsApp -> mutableEffects.tryEmit(UiEffect.OpenUri("https://wa.me/${event.phone.filter(Char::isDigit)}"))
             UiEvent.LoadSalesLedger -> loadSalesLedger()

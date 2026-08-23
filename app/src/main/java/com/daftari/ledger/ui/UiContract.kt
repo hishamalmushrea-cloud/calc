@@ -70,6 +70,7 @@ data class UiState(
     val cloudSettings: CloudBackupManager.Settings = CloudBackupManager.Settings(),
     val salesLedger: SalesLedgerState = SalesLedgerState(),
     val employees: EmployeeUiState = EmployeeUiState(),
+    val googleBackup: GoogleBackupUiState = GoogleBackupUiState(),
     val restartRequested: Boolean = false
 )
 
@@ -160,6 +161,25 @@ sealed interface UiEvent {
     data object ChooseCloudRestoreFile : UiEvent
     data class RestoreCloudFile(val uri: String) : UiEvent
     data object RestoreLatestWebDav : UiEvent
+    data object OpenGoogleBackup : UiEvent
+    data object CloseGoogleBackup : UiEvent
+    data object LinkGoogleBackup : UiEvent
+    data object UnlinkGoogleBackup : UiEvent
+    data object RefreshGoogleBackups : UiEvent
+    data object GoogleBackupNow : UiEvent
+    data class SetGoogleBackupAutomatic(val enabled: Boolean) : UiEvent
+    data class SetGoogleBackupWifiOnly(val enabled: Boolean) : UiEvent
+    data class PrepareGoogleRestore(val backup: com.daftari.ledger.backup.RemoteBackup?) : UiEvent
+    data object ConfirmGoogleRestore : UiEvent
+    data class PrepareGoogleBackupDelete(val backup: com.daftari.ledger.backup.RemoteBackup?) : UiEvent
+    data object ConfirmGoogleBackupDelete : UiEvent
+    data class GoogleBackupAuthorized(
+        val accountEmail: String,
+        val accountSubject: String,
+        val accessToken: String,
+        val action: String
+    ) : UiEvent
+    data class GoogleBackupAuthorizationFailed(val message: String) : UiEvent
     data class CallPhone(val phone: String) : UiEvent
     data class OpenWhatsApp(val phone: String) : UiEvent
 
@@ -211,6 +231,9 @@ sealed interface UiEvent {
 sealed interface UiEffect {
     data object PickCloudFolder : UiEffect
     data object PickBackupFile : UiEffect
+    data class LinkGoogleBackup(val action: String = "LINK") : UiEffect
+    data class AuthorizeGoogleBackup(val action: String) : UiEffect
+    data object UnlinkGoogleBackup : UiEffect
     data class OpenUri(val uri: String) : UiEffect
 }
 
