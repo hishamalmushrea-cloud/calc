@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.daftari.ledger.R
 import com.daftari.ledger.domain.Money
+import com.daftari.ledger.domain.StaffPermission
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,6 +48,7 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
     var webDavPassword by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { onEvent(UiEvent.RefreshBackups) }
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState())) {
+        if (state.can(StaffPermission.MANAGE_SETTINGS)) {
         Section(stringResource(R.string.section_shops), initiallyExpanded = true) {
             state.shops.forEach { shop ->
                 TextButton(onClick = { onEvent(UiEvent.SelectShop(shop)) }) {
@@ -70,7 +72,36 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 Text(stringResource(R.string.save_currency))
             }
         }
+        }
 
+        Section(stringResource(R.string.section_employees), initiallyExpanded = state.employees.enabled) {
+            if (state.can(StaffPermission.MANAGE_EMPLOYEES)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.enable_employee_system), modifier = Modifier.weight(1f))
+                    Switch(state.employees.enabled, { onEvent(UiEvent.SetEmployeesEnabled(it)) })
+                }
+            }
+            if (state.employees.enabled) {
+                Text(
+                    stringResource(
+                        R.string.current_user_value,
+                        state.employees.currentEmployee?.name ?: stringResource(R.string.owner_mode)
+                    )
+                )
+                Button(onClick = { onEvent(UiEvent.SetEmployeeSwitcher(true)) }) {
+                    Text(stringResource(R.string.switch_employee))
+                }
+                if (state.can(StaffPermission.MANAGE_EMPLOYEES) || state.can(StaffPermission.VIEW_REPORTS)) {
+                    Button(onClick = { onEvent(UiEvent.OpenEmployees) }) {
+                        Text(stringResource(R.string.manage_employees))
+                    }
+                }
+            } else {
+                Text(stringResource(R.string.employee_system_optional_hint), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        if (state.can(StaffPermission.MANAGE_SHIFTS)) {
         Section(stringResource(R.string.section_day_close)) {
             Text(stringResource(R.string.expected_cash, displayMoney(state.totals.cashNet)))
             OutlinedTextField(cash, { cash = it }, label = { Text(stringResource(R.string.actual_cash)) })
@@ -79,7 +110,9 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 Text(stringResource(R.string.section_day_close))
             }
         }
+        }
 
+        if (state.can(StaffPermission.MANAGE_SETTINGS)) {
         Section(stringResource(R.string.section_security)) {
             OutlinedTextField(
                 pin,
@@ -221,6 +254,9 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
             }
         }
 
+        }
+
+        if (state.can(StaffPermission.VIEW_ACCOUNTS)) {
         Section(stringResource(R.string.section_csv_import)) {
             Text(stringResource(R.string.csv_format_hint), style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(csv, { csv = it }, label = { Text(stringResource(R.string.paste_csv)) }, minLines = 4)
@@ -235,7 +271,9 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 Text(stringResource(R.string.csv_row, row.line, row.name, row.amount, row.error ?: ready))
             }
         }
+        }
 
+        if (state.can(StaffPermission.VIEW_AUDIT)) {
         Section(stringResource(R.string.section_audit)) {
             if (state.audit.isEmpty()) Text(stringResource(R.string.no_audit), style = MaterialTheme.typography.bodySmall)
             val auditFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
@@ -245,6 +283,7 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+        }
         }
     }
 }

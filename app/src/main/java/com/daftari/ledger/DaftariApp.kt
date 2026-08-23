@@ -8,6 +8,7 @@ import com.daftari.ledger.backup.BackupManager
 import com.daftari.ledger.backup.CloudBackupManager
 import com.daftari.ledger.data.AppDb
 import com.daftari.ledger.data.LedgerRepository
+import com.daftari.ledger.data.StaffRepository
 import com.daftari.ledger.reminder.DueReminderWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,11 +20,14 @@ class DaftariApp : Application() {
         private set
     lateinit var cloudBackup: CloudBackupManager
         private set
+    lateinit var staff: StaffRepository
+        private set
 
     override fun onCreate() {
         super.onCreate()
         val db = AppDb.get(this)
         repo = LedgerRepository(db)
+        staff = StaffRepository(db)
         backup = BackupManager(this, db)
         cloudBackup = CloudBackupManager(this, backup)
         DueReminderWorker.schedule(this)

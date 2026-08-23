@@ -96,7 +96,68 @@ object Migrations {
         }
     }
 
+    /** v6 → v7: الموظفون والصلاحيات وإسناد العمليات والورديات والتدقيق. */
+    val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS employees (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL, phone TEXT NOT NULL, jobTitle TEXT NOT NULL,
+                    role TEXT NOT NULL, permissions INTEGER NOT NULL,
+                    baseSalaryMinor INTEGER NOT NULL, commissionBasisPoints INTEGER NOT NULL,
+                    monthlyTargetMinor INTEGER NOT NULL, startDate INTEGER NOT NULL,
+                    notes TEXT NOT NULL, status TEXT NOT NULL, username TEXT NOT NULL,
+                    pinHash TEXT, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL,
+                    inactiveAt INTEGER
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employees_name ON employees(name)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employees_phone ON employees(phone)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employees_status ON employees(status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employees_role ON employees(role)")
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS employee_shops (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    employeeId INTEGER NOT NULL, shopId INTEGER NOT NULL,
+                    active INTEGER NOT NULL, assignedAt INTEGER NOT NULL, endedAt INTEGER
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employee_shops_shopId ON employee_shops(shopId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employee_shops_employeeId ON employee_shops(employeeId)")
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS employee_shifts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    shopId INTEGER NOT NULL, employeeId INTEGER NOT NULL, label TEXT NOT NULL,
+                    openedAt INTEGER NOT NULL, closedAt INTEGER,
+                    openingCashMinor INTEGER NOT NULL, expectedCashMinor INTEGER NOT NULL,
+                    actualCashMinor INTEGER, differenceMinor INTEGER, status TEXT NOT NULL,
+                    notes TEXT NOT NULL, openedByEmployeeId INTEGER, closedByEmployeeId INTEGER
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employee_shifts_shopId ON employee_shifts(shopId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employee_shifts_employeeId ON employee_shifts(employeeId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employee_shifts_status ON employee_shifts(status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_employee_shifts_openedAt ON employee_shifts(openedAt)")
+
+            listOf("employeeId", "shiftId", "createdByEmployeeId", "updatedByEmployeeId", "deletedByEmployeeId").forEach {
+                db.execSQL("ALTER TABLE documents ADD COLUMN $it INTEGER")
+            }
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_employeeId ON documents(employeeId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_shiftId ON documents(shiftId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_createdByEmployeeId ON documents(createdByEmployeeId)")
+
+            db.execSQL("ALTER TABLE audit_logs ADD COLUMN actorEmployeeId INTEGER")
+            db.execSQL("ALTER TABLE audit_logs ADD COLUMN beforeValue TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE audit_logs ADD COLUMN afterValue TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE app_settings ADD COLUMN employeesEnabled INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE app_settings ADD COLUMN currentEmployeeId INTEGER")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
-        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+        MIGRATION_6_7
     )
 }

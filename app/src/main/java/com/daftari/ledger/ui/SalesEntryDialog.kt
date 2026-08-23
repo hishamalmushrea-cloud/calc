@@ -32,6 +32,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import com.daftari.ledger.R
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.domain.Money
+import com.daftari.ledger.domain.StaffPermission
 import java.util.Calendar
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -51,6 +52,9 @@ internal fun SalesEntryDialog(
     var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }
     var documentNumber by remember { mutableStateOf(existing?.docNumber ?: state.nextDocumentNumber.toString()) }
     var partyId by remember { mutableStateOf(existing?.partyId) }
+    var employeeId by remember {
+        mutableStateOf(existing?.employeeId ?: state.employees.currentEmployee?.id)
+    }
     var partyQuery by remember {
         mutableStateOf(existing?.partyId?.let { id -> state.customers.firstOrNull { it.id == id }?.name }.orEmpty())
     }
@@ -101,6 +105,27 @@ internal fun SalesEntryDialog(
                     Text(stringResource(if (details) R.string.fewer_details else R.string.more_details))
                 }
                 if (details) {
+                    if (sale && state.employees.enabled) {
+                        Text(stringResource(R.string.sold_by_employee), style = MaterialTheme.typography.labelMedium)
+                        if (state.can(StaffPermission.ASSIGN_SALESPERSON)) {
+                            FlowRow {
+                                FilterChip(
+                                    selected = employeeId == null,
+                                    onClick = { employeeId = null },
+                                    label = { Text(stringResource(R.string.owner_or_no_employee)) }
+                                )
+                                state.employees.employees.filter { it.status == "ACTIVE" }.forEach { employee ->
+                                    FilterChip(
+                                        selected = employeeId == employee.id,
+                                        onClick = { employeeId = employee.id },
+                                        label = { Text(employee.name) }
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(state.employees.currentEmployee?.name ?: stringResource(R.string.owner_or_no_employee))
+                        }
+                    }
                     val categoryKind = if (sale) "INCOME" else "EXPENSE"
                     Text(stringResource(R.string.category), style = MaterialTheme.typography.labelMedium)
                     FlowRow {
@@ -158,6 +183,7 @@ internal fun SalesEntryDialog(
                             categoryId = categoryId,
                             paymentMethod = payment,
                             partyId = partyId,
+                            employeeId = employeeId,
                             newPartyName = if (payment == "CREDIT" && partyId == null) partyQuery.trim().takeIf { it.isNotBlank() } else null,
                             notes = notes,
                             documentNumber = documentNumber,

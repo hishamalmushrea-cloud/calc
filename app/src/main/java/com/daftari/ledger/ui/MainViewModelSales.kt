@@ -6,6 +6,7 @@ import com.daftari.ledger.data.LedgerException
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.SalesBookEntryInput
 import com.daftari.ledger.domain.Money
+import com.daftari.ledger.domain.StaffPermission
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Instant
@@ -24,26 +25,33 @@ internal fun MainViewModel.loadSalesLedger() {
         salesRange(SalesBookRange.THIS_WEEK)
     } else current.visibleFrom to current.visibleTo
     viewModelScope.launch {
+        val scopedEmployeeId = state.value.employees.currentEmployee?.id
+            ?.takeUnless { state.value.can(StaffPermission.VIEW_ALL_SALES) }
         mutableState.update { it.copy(salesLedger = it.salesLedger.copy(loading = true, visibleFrom = from, visibleTo = to)) }
-        val days = repo.salesBookDays(shop.id, from, to)
-        val summary = repo.salesBookPeriodSummary(shop.id, from, to)
+        val days = repo.salesBookDays(shop.id, from, to, scopedEmployeeId)
+        val summary = repo.salesBookPeriodSummary(shop.id, from, to, scopedEmployeeId)
         val periodLength = (to - from + 1).coerceAtLeast(1)
-        val previousSummary = repo.salesBookPeriodSummary(shop.id, from - periodLength, from - 1)
+        val previousSummary = repo.salesBookPeriodSummary(shop.id, from - periodLength, from - 1, scopedEmployeeId)
         val uncategorized = getApplication<android.app.Application>().getString(R.string.uncategorized)
         val outflowCategories = repo.totalsByCategory(
             shop.id,
             com.daftari.ledger.domain.DocType.EXPENSE,
             from,
             to,
-            uncategorized
+            uncategorized,
+            scopedEmployeeId
         )
         val selected = state.value.salesLedger.selectedDayStart
-        val entries = selected?.let { repo.salesBookEntries(shop.id, it) }.orEmpty()
+        val entries = selected?.let { repo.salesBookEntries(shop.id, it, scopedEmployeeId) }.orEmpty()
+        val employeePerformance = selected?.let { day ->
+            staff.performance(shop.id, day, endOfDay(day)).filter { scopedEmployeeId == null || it.employeeId == scopedEmployeeId }
+        }.orEmpty()
         mutableState.update {
             it.copy(
                 salesLedger = it.salesLedger.copy(
                     days = days,
                     entries = entries,
+                    dayEmployeePerformance = employeePerformance,
                     periodSummary = summary,
                     previousPeriodSummary = previousSummary,
                     outflowCategories = outflowCategories,
@@ -88,22 +96,34 @@ internal fun MainViewModel.setSalesBookCustomRange(from: Long, to: Long) {
 internal fun MainViewModel.selectSalesDay(dayStart: Long) {
     val shop = state.value.shop ?: return
     viewModelScope.launch {
-        val entries = repo.salesBookEntries(shop.id, dayStart)
+        val scopedEmployeeId = state.value.employees.currentEmployee?.id
+            ?.takeUnless { state.value.can(StaffPermission.VIEW_ALL_SALES) }
+        val entries = repo.salesBookEntries(shop.id, dayStart, scopedEmployeeId)
+        val employeePerformance = staff.performance(shop.id, dayStart, endOfDay(dayStart))
+            .filter { scopedEmployeeId == null || it.employeeId == scopedEmployeeId }
         mutableState.update {
-            it.copy(salesLedger = it.salesLedger.copy(selectedDayStart = dayStart, entries = entries))
+            it.copy(
+                salesLedger = it.salesLedger.copy(
+                    selectedDayStart = dayStart,
+                    entries = entries,
+                    dayEmployeePerformance = employeePerformance
+                )
+            )
         }
     }
 }
 
 internal fun MainViewModel.closeSalesDayPage() {
-    mutableState.update { it.copy(salesLedger = it.salesLedger.copy(selectedDayStart = null, entries = emptyList())) }
+    mutableState.update {
+        it.copy(salesLedger = it.salesLedger.copy(selectedDayStart = null, entries = emptyList(), dayEmployeePerformance = emptyList()))
+    }
 }
 
 internal fun MainViewModel.saveSalesEntry(draft: SalesEntryDraft) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
     val amount = Money.fromMajor(draft.amount) ?: return@launch message(R.string.msg_invalid_amount)
     try {
-        repo.postSalesBookEntry(shop.id, draft.toInput(amount.minor))
+        repo.postSalesBookEntry(shop.id, draft.toInput(amount.minor), currentActorId())
         message(R.string.msg_sales_entry_saved)
         loadSalesLedger()
     } catch (error: LedgerException) {
@@ -114,7 +134,7 @@ internal fun MainViewModel.saveSalesEntry(draft: SalesEntryDraft) = viewModelSco
 internal fun MainViewModel.updateSalesEntry(id: Long, draft: SalesEntryDraft) = viewModelScope.launch {
     val amount = Money.fromMajor(draft.amount) ?: return@launch message(R.string.msg_invalid_amount)
     try {
-        repo.updateSalesBookEntry(id, draft.toInput(amount.minor))
+        repo.updateSalesBookEntry(id, draft.toInput(amount.minor), currentActorId())
         message(R.string.msg_edited)
         loadSalesLedger()
     } catch (error: LedgerException) {
@@ -124,7 +144,7 @@ internal fun MainViewModel.updateSalesEntry(id: Long, draft: SalesEntryDraft) = 
 
 internal fun MainViewModel.archiveSalesEntry(id: Long) = viewModelScope.launch {
     try {
-        repo.archiveSalesBookEntry(id)
+        repo.archiveSalesBookEntry(id, currentActorId())
         mutableState.update { it.copy(message = text(R.string.msg_archived), undoDocumentId = id) }
         loadSalesLedger()
     } catch (error: LedgerException) {
@@ -134,7 +154,7 @@ internal fun MainViewModel.archiveSalesEntry(id: Long) = viewModelScope.launch {
 
 internal fun MainViewModel.duplicateSalesEntry(id: Long, occurredAt: Long) = viewModelScope.launch {
     try {
-        repo.duplicateSalesBookEntry(id, occurredAt)
+        repo.duplicateSalesBookEntry(id, occurredAt, currentActorId())
         message(R.string.msg_sales_entry_duplicated)
         loadSalesLedger()
     } catch (error: LedgerException) {
@@ -145,7 +165,9 @@ internal fun MainViewModel.duplicateSalesEntry(id: Long, occurredAt: Long) = vie
 internal fun MainViewModel.saveSalesDayNotes(dayStart: Long, notes: String) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
     try {
-        repo.saveSalesDayNotes(shop.id, dayStart, notes)
+        val actorId = currentActorId()
+        actorId?.let { staff.requirePermission(it, StaffPermission.MANAGE_SHIFTS) }
+        repo.saveSalesDayNotes(shop.id, dayStart, notes, actorId)
         message(R.string.msg_day_notes_saved)
         loadSalesLedger()
     } catch (error: LedgerException) {
@@ -155,22 +177,36 @@ internal fun MainViewModel.saveSalesDayNotes(dayStart: Long, notes: String) = vi
 
 internal fun MainViewModel.closeSalesBookDay(dayStart: Long, notes: String) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
-    repo.closeSalesDay(shop.id, dayStart, notes)
-    message(R.string.msg_sales_day_closed)
-    loadSalesLedger()
+    try {
+        val actorId = currentActorId()
+        actorId?.let { staff.requirePermission(it, StaffPermission.MANAGE_SHIFTS) }
+        repo.closeSalesDay(shop.id, dayStart, notes, actorId)
+        message(R.string.msg_sales_day_closed)
+        loadSalesLedger()
+    } catch (error: LedgerException) {
+        dynamicError(error)
+    }
 }
 
 internal fun MainViewModel.reopenSalesBookDay(dayStart: Long) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
-    repo.reopenSalesDay(shop.id, dayStart)
-    message(R.string.msg_sales_day_reopened)
-    loadSalesLedger()
+    try {
+        val actorId = currentActorId()
+        actorId?.let { staff.requirePermission(it, StaffPermission.MANAGE_SHIFTS) }
+        repo.reopenSalesDay(shop.id, dayStart, actorId)
+        message(R.string.msg_sales_day_reopened)
+        loadSalesLedger()
+    } catch (error: LedgerException) {
+        dynamicError(error)
+    }
 }
 
 internal fun MainViewModel.searchSalesBook(event: UiEvent.SearchSalesBook) {
     val shop = state.value.shop ?: return
     val ledger = state.value.salesLedger
     viewModelScope.launch {
+        val scopedEmployeeId = state.value.employees.currentEmployee?.id
+            ?.takeUnless { state.value.can(StaffPermission.VIEW_ALL_SALES) }
         val entries = repo.searchSalesBook(
             shop.id,
             ledger.visibleFrom,
@@ -178,7 +214,8 @@ internal fun MainViewModel.searchSalesBook(event: UiEvent.SearchSalesBook) {
             event.query,
             event.entryType,
             event.paymentMethod,
-            event.categoryId
+            event.categoryId,
+            scopedEmployeeId
         )
         mutableState.update {
             it.copy(
@@ -197,8 +234,10 @@ internal fun MainViewModel.searchSalesBook(event: UiEvent.SearchSalesBook) {
 
 internal fun MainViewModel.shareSalesDay(dayStart: Long, detailed: Boolean) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
-    val day = repo.salesBookDays(shop.id, dayStart, endOfDay(dayStart)).first()
-    val entries = repo.salesBookEntries(shop.id, dayStart)
+    val scopedEmployeeId = state.value.employees.currentEmployee?.id
+        ?.takeUnless { state.value.can(StaffPermission.VIEW_ALL_SALES) }
+    val day = repo.salesBookDays(shop.id, dayStart, endOfDay(dayStart), scopedEmployeeId).first()
+    val entries = repo.salesBookEntries(shop.id, dayStart, scopedEmployeeId)
     val app = getApplication<android.app.Application>()
     val date = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL).format(Date(dayStart))
     val locale = Locale.getDefault()
@@ -227,8 +266,12 @@ internal fun MainViewModel.shareSalesDay(dayStart: Long, detailed: Boolean) = vi
 internal fun MainViewModel.exportSalesPeriod(from: Long, to: Long, format: String) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
     try {
+        val actorId = currentActorId()
+        actorId?.let { staff.requirePermission(it, StaffPermission.VIEW_REPORTS) }
+        val scopedEmployeeId = actorId?.takeUnless { state.value.can(StaffPermission.VIEW_ALL_SALES) }
         val docs = repo.documents.listSalesBookPeriod(shop.id, from, to)
-        val summary = repo.salesBookPeriodSummary(shop.id, from, to)
+            .filter { scopedEmployeeId == null || it.employeeId == scopedEmployeeId }
+        val summary = repo.salesBookPeriodSummary(shop.id, from, to, scopedEmployeeId)
         val totals = LedgerRepository.PeriodTotals(
             sales = summary.salesMinor,
             purchases = 0,
@@ -276,6 +319,7 @@ private fun SalesEntryDraft.toInput(amountMinor: Long) = SalesBookEntryInput(
     categoryId = categoryId,
     paymentMethod = paymentMethod,
     partyId = partyId,
+    employeeId = employeeId,
     newPartyName = newPartyName,
     notes = notes,
     documentNumber = documentNumber,

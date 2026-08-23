@@ -11,9 +11,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ShopEntity::class, PartyEntity::class, AccountEntity::class,
         DocumentEntity::class, JournalLineEntity::class, CategoryEntity::class,
         AuditLogEntity::class, SettingsEntity::class, DailyClosingEntity::class,
-        DailyBookEntity::class
+        DailyBookEntity::class, EmployeeEntity::class, EmployeeShopEntity::class,
+        EmployeeShiftEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDb : RoomDatabase() {
@@ -27,6 +28,9 @@ abstract class AppDb : RoomDatabase() {
     abstract fun settings(): SettingsDao
     abstract fun closings(): ClosingDao
     abstract fun dailyBooks(): DailyBookDao
+    abstract fun employees(): EmployeeDao
+    abstract fun employeeShops(): EmployeeShopDao
+    abstract fun employeeShifts(): EmployeeShiftDao
 
     companion object {
         @Volatile private var I: AppDb? = null

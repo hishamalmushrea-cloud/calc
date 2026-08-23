@@ -7,6 +7,7 @@ import com.daftari.ledger.domain.AgingFifo
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.PartyKind
 import com.daftari.ledger.domain.SalesBookAnalytics
+import com.daftari.ledger.domain.StaffPermission
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -126,6 +127,7 @@ object JournalLineBuilder {
 }
 
 class LedgerRepository(private val db: AppDb) {
+    private val staffAccess = StaffRepository(db)
     val shops = db.shops()
     val parties = db.parties()
     val accounts = db.accounts()
@@ -271,7 +273,10 @@ class LedgerRepository(private val db: AppDb) {
         paymentMethod: String = "CASH",
         transferToCode: String? = null,
         dueAt: Long? = null,
-        categoryId: Long? = null
+        categoryId: Long? = null,
+        employeeId: Long? = null,
+        shiftId: Long? = null,
+        actorEmployeeId: Long? = null
     ): Long = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         if (type == DocType.SALE || type == DocType.EXPENSE) ensureSalesDayOpen(shopId, occurredAt)
@@ -300,6 +305,9 @@ class LedgerRepository(private val db: AppDb) {
                 occurredAt = occurredAt,
                 dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
                 categoryId = categoryId.takeIf { type == DocType.EXPENSE || type == DocType.INCOME },
+                employeeId = employeeId,
+                shiftId = shiftId,
+                createdByEmployeeId = actorEmployeeId,
                 docNumber = finalDocumentNumber,
                 notes = notes,
                 paymentMethod = paymentMethod
@@ -313,14 +321,22 @@ class LedgerRepository(private val db: AppDb) {
         val lines = JournalLineBuilder.build(docId, type, amountMinor, partyId, credit, notes, refs)
         journal.insertAll(lines)
         partyId?.let { refreshPartyBalance(it) }
-        audit.insert(AuditLogEntity(action = "CREATE", entity = "document", entityId = docId, detail = type.name))
+        audit.insert(
+            AuditLogEntity(
+                action = "CREATE", entity = "document", entityId = docId, detail = type.name,
+                actorEmployeeId = actorEmployeeId,
+                afterValue = "amount=$amountMinor;payment=$paymentMethod;employee=$employeeId;party=$partyId"
+            )
+        )
         docId
     }
 
     suspend fun updateDocument(
         id: Long, amountMinor: Long, occurredAt: Long, notes: String,
         docNumber: String, paymentMethod: String, dueAt: Long? = null,
-        categoryId: Long? = null, cashCode: String = AccountCodes.CASH
+        categoryId: Long? = null, cashCode: String = AccountCodes.CASH,
+        actorEmployeeId: Long? = null, employeeId: Long? = null,
+        shiftId: Long? = null, replaceEmployeeAssignment: Boolean = false
     ) = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val d = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
@@ -346,6 +362,9 @@ class LedgerRepository(private val db: AppDb) {
                 dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
                 categoryId = categoryId.takeIf { type == DocType.EXPENSE || type == DocType.INCOME },
                 cashAccountId = refs.cashId,
+                updatedByEmployeeId = actorEmployeeId,
+                employeeId = if (replaceEmployeeAssignment) employeeId else (employeeId ?: d.employeeId),
+                shiftId = if (replaceEmployeeAssignment) shiftId else d.shiftId,
                 notes = notes,
                 docNumber = docNumber,
                 paymentMethod = paymentMethod,
@@ -353,11 +372,18 @@ class LedgerRepository(private val db: AppDb) {
             )
         )
         d.partyId?.let { refreshPartyBalance(it) }
-        audit.insert(AuditLogEntity(action = "UPDATE", entity = "document", entityId = id, detail = type.name))
+        audit.insert(
+            AuditLogEntity(
+                action = "UPDATE", entity = "document", entityId = id, detail = type.name,
+                actorEmployeeId = actorEmployeeId,
+                beforeValue = "amount=${d.amountMinor};payment=${d.paymentMethod};employee=${d.employeeId};notes=${d.notes}",
+                afterValue = "amount=$amountMinor;payment=$paymentMethod;employee=${if (replaceEmployeeAssignment) employeeId else (employeeId ?: d.employeeId)};notes=$notes"
+            )
+        )
         Unit
     }
 
-    suspend fun softDeleteDocument(id: Long) {
+    suspend fun softDeleteDocument(id: Long, actorEmployeeId: Long? = null) {
         db.withTransaction {
             val d = documents.get(id)
             if (d != null && d.deletedAt == null) {
@@ -367,21 +393,41 @@ class LedgerRepository(private val db: AppDb) {
                 documents.update(
                     d.copy(
                         deletedAt = System.currentTimeMillis(),
+                        deletedByEmployeeId = actorEmployeeId,
                         updatedAt = System.currentTimeMillis()
                     )
                 )
                 d.partyId?.let { refreshPartyBalance(it) }
-                audit.insert(AuditLogEntity(action = "DELETE", entity = "document", entityId = id))
+                audit.insert(
+                    AuditLogEntity(
+                        action = "DELETE", entity = "document", entityId = id,
+                        actorEmployeeId = actorEmployeeId,
+                        beforeValue = "amount=${d.amountMinor};type=${d.type};payment=${d.paymentMethod};notes=${d.notes}"
+                    )
+                )
             }
         }
     }
 
-    suspend fun restoreDocument(id: Long) = db.withTransaction {
+    suspend fun restoreDocument(id: Long, actorEmployeeId: Long? = null) = db.withTransaction {
         val document = documents.get(id) ?: return@withTransaction
         if (document.deletedAt != null) {
-            documents.update(document.copy(deletedAt = null, updatedAt = System.currentTimeMillis()))
+            documents.update(
+                document.copy(
+                    deletedAt = null,
+                    deletedByEmployeeId = null,
+                    updatedByEmployeeId = actorEmployeeId,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
             document.partyId?.let { refreshPartyBalance(it) }
-            audit.insert(AuditLogEntity(action = "RESTORE", entity = "document", entityId = id))
+            audit.insert(
+                AuditLogEntity(
+                    action = "RESTORE", entity = "document", entityId = id,
+                    actorEmployeeId = actorEmployeeId,
+                    beforeValue = "deletedAt=${document.deletedAt}", afterValue = "restored=true"
+                )
+            )
         }
     }
 
@@ -435,8 +481,9 @@ class LedgerRepository(private val db: AppDb) {
         type: DocType,
         from: Long,
         to: Long,
-        uncategorized: String
-    ): List<CategoryTotal> = documents.totalsByCategory(shopId, type.name, from, to, uncategorized)
+        uncategorized: String,
+        employeeId: Long? = null
+    ): List<CategoryTotal> = documents.totalsByCategory(shopId, type.name, from, to, uncategorized, employeeId)
 
     suspend fun updateShopCurrency(shopId: Long, currencyCode: String) {
         val shop = shops.get(shopId) ?: throw LedgerException("المحل غير موجود")
@@ -474,7 +521,7 @@ class LedgerRepository(private val db: AppDb) {
 
     val closings = db.closings()
 
-    suspend fun closeDay(shopId: Long, cashActualMinor: Long, notes: String): Long = db.withTransaction {
+    suspend fun closeDay(shopId: Long, cashActualMinor: Long, notes: String, actorEmployeeId: Long? = null): Long = db.withTransaction {
         val cal = java.util.Calendar.getInstance()
         cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
         cal.set(java.util.Calendar.MINUTE, 0)
@@ -493,7 +540,13 @@ class LedgerRepository(private val db: AppDb) {
                 differenceMinor = cashActualMinor - expected, notes = notes
             )
         )
-        audit.insert(AuditLogEntity(action = "CLOSE_DAY", entity = "closing", entityId = id))
+        audit.insert(
+            AuditLogEntity(
+                action = "CLOSE_DAY", entity = "closing", entityId = id,
+                actorEmployeeId = actorEmployeeId,
+                afterValue = "expected=$expected;actual=$cashActualMinor;difference=${cashActualMinor - expected}"
+            )
+        )
         id
     }
 
@@ -578,11 +631,13 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun overdueParties(now: Long = System.currentTimeMillis()): List<OverduePartyRow> =
         documents.overdueParties(now)
 
-    suspend fun salesBookDays(shopId: Long, from: Long, to: Long): List<DailyBookSummary> {
+    suspend fun salesBookDays(shopId: Long, from: Long, to: Long, employeeId: Long? = null): List<DailyBookSummary> {
         val zone = ZoneId.systemDefault()
         val startDate = Instant.ofEpochMilli(from).atZone(zone).toLocalDate()
         val endDate = Instant.ofEpochMilli(to).atZone(zone).toLocalDate()
-        val docsByDay = documents.listSalesBookPeriod(shopId, from, to).groupBy {
+        val docsByDay = documents.listSalesBookPeriod(shopId, from, to)
+            .filter { employeeId == null || it.employeeId == employeeId }
+            .groupBy {
             startOfDay(it.occurredAt, zone)
         }
         val books = dailyBooks.listPeriod(shopId, startOfDay(from, zone), endOfDay(to, zone))
@@ -622,11 +677,13 @@ class LedgerRepository(private val db: AppDb) {
         return result
     }
 
-    suspend fun salesBookPeriodSummary(shopId: Long, from: Long, to: Long): SalesBookPeriodSummary =
-        SalesBookAnalytics.summarize(salesBookDays(shopId, from, to))
+    suspend fun salesBookPeriodSummary(shopId: Long, from: Long, to: Long, employeeId: Long? = null): SalesBookPeriodSummary =
+        SalesBookAnalytics.summarize(salesBookDays(shopId, from, to, employeeId))
 
-    suspend fun salesBookEntries(shopId: Long, dayStart: Long): List<DocumentEntity> =
-        documents.listSalesBookPeriod(shopId, dayStart, endOfDay(dayStart)).sortedByDescending { it.occurredAt }
+    suspend fun salesBookEntries(shopId: Long, dayStart: Long, employeeId: Long? = null): List<DocumentEntity> =
+        documents.listSalesBookPeriod(shopId, dayStart, endOfDay(dayStart))
+            .filter { employeeId == null || it.employeeId == employeeId }
+            .sortedByDescending { it.occurredAt }
 
     suspend fun searchSalesBook(
         shopId: Long,
@@ -635,7 +692,8 @@ class LedgerRepository(private val db: AppDb) {
         query: String,
         entryType: String?,
         paymentMethod: String?,
-        categoryId: Long?
+        categoryId: Long?,
+        employeeId: Long? = null
     ): List<DocumentEntity> = documents.searchSalesBook(
         shopId = shopId,
         from = from,
@@ -645,12 +703,26 @@ class LedgerRepository(private val db: AppDb) {
         entryType = entryType,
         paymentMethod = paymentMethod,
         categoryId = categoryId
-    )
+    ).filter { employeeId == null || it.employeeId == employeeId }
 
-    suspend fun postSalesBookEntry(shopId: Long, input: SalesBookEntryInput): Long {
+    suspend fun postSalesBookEntry(
+        shopId: Long,
+        input: SalesBookEntryInput,
+        actorEmployeeId: Long? = null
+    ): Long {
         ensureSalesDayOpen(shopId, input.occurredAt)
         val type = runCatching { DocType.valueOf(input.type) }.getOrNull()
         if (type != DocType.SALE && type != DocType.EXPENSE) throw LedgerException("نوع إدخال الدفتر غير صالح")
+        staffAccess.requirePermission(
+            actorEmployeeId,
+            if (type == DocType.SALE) StaffPermission.RECORD_SALE else StaffPermission.RECORD_OUTFLOW
+        )
+        // الإدخال يحدد الإسناد صراحة؛ الواجهة تملؤه بالمستخدم الحالي تلقائيًا،
+        // بينما تبقى null اختيارًا مقصودًا لـ «صاحب المحل/بدون موظف».
+        val attributedEmployeeId = input.employeeId
+        if (actorEmployeeId != null && attributedEmployeeId != actorEmployeeId) {
+            staffAccess.requirePermission(actorEmployeeId, StaffPermission.ASSIGN_SALESPERSON)
+        }
         if (input.amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val method = input.paymentMethod.uppercase()
         if (type == DocType.EXPENSE && method == "CREDIT") {
@@ -663,6 +735,7 @@ class LedgerRepository(private val db: AppDb) {
             partyId = addParty(shopId, PartyKind.CUSTOMER, name)
         }
         val cashCode = if (method == "CASH") AccountCodes.CASH else AccountCodes.BANK
+        val shiftId = attributedEmployeeId?.let { staffAccess.openShiftFor(shopId, it)?.id }
         val id = postDocument(
             shopId = shopId,
             type = type,
@@ -674,20 +747,38 @@ class LedgerRepository(private val db: AppDb) {
             notes = input.notes,
             paymentMethod = method,
             dueAt = input.dueAt,
-            categoryId = input.categoryId
+            categoryId = input.categoryId,
+            employeeId = attributedEmployeeId,
+            shiftId = shiftId,
+            actorEmployeeId = actorEmployeeId
         )
         touchSalesDay(shopId, input.occurredAt)
         return id
     }
 
-    suspend fun updateSalesBookEntry(id: Long, input: SalesBookEntryInput) {
+    suspend fun updateSalesBookEntry(
+        id: Long,
+        input: SalesBookEntryInput,
+        actorEmployeeId: Long? = null
+    ) {
         val current = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
+        if (actorEmployeeId != null) {
+            staffAccess.requirePermission(
+                actorEmployeeId,
+                if (current.employeeId == actorEmployeeId) StaffPermission.EDIT_OWN_SALE else StaffPermission.EDIT_ANY_SALE
+            )
+            if (input.employeeId != current.employeeId) {
+                staffAccess.requirePermission(actorEmployeeId, StaffPermission.ASSIGN_SALESPERSON)
+            }
+        }
         ensureSalesDayOpen(current.shopId, current.occurredAt)
         ensureSalesDayOpen(current.shopId, input.occurredAt)
         val method = input.paymentMethod.uppercase()
         if (current.type == DocType.EXPENSE.name && method == "CREDIT") {
             throw LedgerException("المخرج الآجل يُسجل كشراء من شاشة العمليات")
         }
+        val assignedShiftId = if (input.employeeId == current.employeeId) current.shiftId
+        else input.employeeId?.let { staffAccess.openShiftFor(current.shopId, it)?.id }
         updateDocument(
             id = id,
             amountMinor = input.amountMinor,
@@ -697,20 +788,30 @@ class LedgerRepository(private val db: AppDb) {
             paymentMethod = method,
             dueAt = input.dueAt,
             categoryId = input.categoryId,
-            cashCode = if (method == "CASH") AccountCodes.CASH else AccountCodes.BANK
+            cashCode = if (method == "CASH") AccountCodes.CASH else AccountCodes.BANK,
+            actorEmployeeId = actorEmployeeId,
+            employeeId = input.employeeId,
+            shiftId = assignedShiftId,
+            replaceEmployeeAssignment = true
         )
         touchSalesDay(current.shopId, current.occurredAt)
         touchSalesDay(current.shopId, input.occurredAt)
     }
 
-    suspend fun archiveSalesBookEntry(id: Long) {
+    suspend fun archiveSalesBookEntry(id: Long, actorEmployeeId: Long? = null) {
         val current = documents.get(id) ?: return
+        if (actorEmployeeId != null) {
+            staffAccess.requirePermission(
+                actorEmployeeId,
+                if (current.employeeId == actorEmployeeId) StaffPermission.DELETE_OWN_SALE else StaffPermission.DELETE_ANY_SALE
+            )
+        }
         ensureSalesDayOpen(current.shopId, current.occurredAt)
-        softDeleteDocument(id)
+        softDeleteDocument(id, actorEmployeeId)
         touchSalesDay(current.shopId, current.occurredAt)
     }
 
-    suspend fun duplicateSalesBookEntry(id: Long, occurredAt: Long): Long {
+    suspend fun duplicateSalesBookEntry(id: Long, occurredAt: Long, actorEmployeeId: Long? = null): Long {
         val source = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
         return postSalesBookEntry(
             source.shopId,
@@ -721,13 +822,15 @@ class LedgerRepository(private val db: AppDb) {
                 categoryId = source.categoryId,
                 paymentMethod = source.paymentMethod,
                 partyId = source.partyId,
+                employeeId = source.employeeId,
                 notes = source.notes,
                 dueAt = source.dueAt?.let { occurredAt + (it - source.occurredAt).coerceAtLeast(0) }
-            )
+            ),
+            actorEmployeeId
         )
     }
 
-    suspend fun saveSalesDayNotes(shopId: Long, dayStart: Long, notes: String) {
+    suspend fun saveSalesDayNotes(shopId: Long, dayStart: Long, notes: String, actorEmployeeId: Long? = null) {
         val current = dailyBooks.get(shopId, dayStart)
         if (current?.status == "CLOSED") throw LedgerException("أعد فتح اليوم قبل تعديل ملاحظاته")
         dailyBooks.upsert(
@@ -736,9 +839,16 @@ class LedgerRepository(private val db: AppDb) {
                 updatedAt = System.currentTimeMillis()
             )
         )
+        audit.insert(
+            AuditLogEntity(
+                action = "UPDATE_SALES_DAY_NOTES", entity = "daily_book", entityId = current?.id,
+                detail = dayStart.toString(), actorEmployeeId = actorEmployeeId,
+                beforeValue = current?.notes.orEmpty(), afterValue = notes
+            )
+        )
     }
 
-    suspend fun closeSalesDay(shopId: Long, dayStart: Long, notes: String? = null) {
+    suspend fun closeSalesDay(shopId: Long, dayStart: Long, notes: String? = null, actorEmployeeId: Long? = null) {
         val current = dailyBooks.get(shopId, dayStart)
         val now = System.currentTimeMillis()
         dailyBooks.upsert(
@@ -749,14 +859,14 @@ class LedgerRepository(private val db: AppDb) {
                 updatedAt = now
             )
         )
-        audit.insert(AuditLogEntity(action = "CLOSE_SALES_DAY", entity = "daily_book", entityId = current?.id, detail = dayStart.toString()))
+        audit.insert(AuditLogEntity(action = "CLOSE_SALES_DAY", entity = "daily_book", entityId = current?.id, detail = dayStart.toString(), actorEmployeeId = actorEmployeeId))
     }
 
-    suspend fun reopenSalesDay(shopId: Long, dayStart: Long) {
+    suspend fun reopenSalesDay(shopId: Long, dayStart: Long, actorEmployeeId: Long? = null) {
         val current = dailyBooks.get(shopId, dayStart) ?: DailyBookEntity(shopId = shopId, dayStart = dayStart)
         val now = System.currentTimeMillis()
         dailyBooks.upsert(current.copy(status = "OPEN", reopenedAt = now, updatedAt = now))
-        audit.insert(AuditLogEntity(action = "REOPEN_SALES_DAY", entity = "daily_book", entityId = current.id.takeIf { it != 0L }, detail = dayStart.toString()))
+        audit.insert(AuditLogEntity(action = "REOPEN_SALES_DAY", entity = "daily_book", entityId = current.id.takeIf { it != 0L }, detail = dayStart.toString(), actorEmployeeId = actorEmployeeId))
     }
 
     private suspend fun ensureSalesDayOpen(shopId: Long, time: Long) {

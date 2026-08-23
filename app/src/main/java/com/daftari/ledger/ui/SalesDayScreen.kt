@@ -40,6 +40,7 @@ import com.daftari.ledger.R
 import com.daftari.ledger.data.DailyBookSummary
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.domain.Money
+import com.daftari.ledger.domain.StaffPermission
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -87,19 +88,41 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                 }
             }
         }
+        if (state.salesLedger.dayEmployeePerformance.any { it.transactionCount > 0 }) {
+            Card(Modifier.fillMaxWidth().padding(top = 7.dp)) {
+                Column(Modifier.padding(10.dp)) {
+                    Text(stringResource(R.string.employee_sales_today), fontWeight = FontWeight.Bold)
+                    state.salesLedger.dayEmployeePerformance.filter { it.transactionCount > 0 }.forEach { employee ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                onEvent(UiEvent.SelectEmployeePeriod(employee.employeeId, dayStart, endOfSalesDay(dayStart)))
+                            }.padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(employee.employeeName)
+                            Text(displayMoney(employee.salesMinor), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(7.dp))
         if (!closed) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { addType = "SALE" }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Text(stringResource(R.string.record_sale))
+                if (state.can(StaffPermission.RECORD_SALE)) {
+                    Button(onClick = { addType = "SALE" }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Text(stringResource(R.string.record_sale))
+                    }
                 }
-                Button(onClick = { addType = "EXPENSE" }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Text(stringResource(R.string.record_outflow))
+                if (state.can(StaffPermission.RECORD_OUTFLOW)) {
+                    Button(onClick = { addType = "EXPENSE" }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Text(stringResource(R.string.record_outflow))
+                    }
                 }
             }
-        } else {
+        } else if (state.can(StaffPermission.MANAGE_SHIFTS)) {
             Button(onClick = { onEvent(UiEvent.ReopenSalesBookDay(dayStart)) }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.edit_closed_day))
             }
@@ -110,14 +133,24 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                 item { Text(stringResource(R.string.no_operations_yet), modifier = Modifier.padding(20.dp)) }
             }
             items(state.salesLedger.entries, key = { it.id }) { entry ->
+                val own = state.employees.currentEmployee?.id == entry.employeeId
+                val canEdit = state.employees.currentEmployee == null || state.can(
+                    if (own) StaffPermission.EDIT_OWN_SALE else StaffPermission.EDIT_ANY_SALE
+                )
+                val canArchive = state.employees.currentEmployee == null || state.can(
+                    if (own) StaffPermission.DELETE_OWN_SALE else StaffPermission.DELETE_ANY_SALE
+                )
+                val canDuplicate = state.employees.currentEmployee == null || state.can(
+                    if (entry.type == "SALE") StaffPermission.RECORD_SALE else StaffPermission.RECORD_OUTFLOW
+                )
                 SalesBookEntryRow(
                     entry = entry,
                     state = state,
                     onEvent = onEvent,
                     readOnly = closed,
-                    onEdit = { editing = entry },
-                    onArchive = { pendingArchive = entry },
-                    onDuplicate = { pendingDuplicate = entry }
+                    onEdit = if (canEdit) ({ editing = entry }) else null,
+                    onArchive = if (canArchive) ({ pendingArchive = entry }) else null,
+                    onDuplicate = if (canDuplicate) ({ pendingDuplicate = entry }) else null
                 )
             }
         }
@@ -127,19 +160,21 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
             label = { Text(stringResource(R.string.day_notes)) },
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
-            enabled = !closed
+            enabled = !closed && state.can(StaffPermission.MANAGE_SHIFTS)
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            if (!closed) {
+            if (!closed && state.can(StaffPermission.MANAGE_SHIFTS)) {
                 TextButton(onClick = { onEvent(UiEvent.SaveSalesDayNotes(dayStart, notes)) }) {
                     Text(stringResource(R.string.save_notes))
                 }
                 TextButton(onClick = { showCloseReview = true }) { Text(stringResource(R.string.close_sales_day)) }
             }
             TextButton(onClick = { onEvent(UiEvent.ShareSalesDay(dayStart, false)) }) { Text(stringResource(R.string.action_share)) }
-            TextButton(onClick = { onEvent(UiEvent.ExportSalesPeriod(dayStart, endOfSalesDay(dayStart), "PDF")) }) { Text("PDF") }
-            TextButton(onClick = { onEvent(UiEvent.ExportSalesPeriod(dayStart, endOfSalesDay(dayStart), "EXCEL")) }) { Text("Excel") }
-            TextButton(onClick = { onEvent(UiEvent.ExportSalesPeriod(dayStart, endOfSalesDay(dayStart), "CSV")) }) { Text("CSV") }
+            if (state.can(StaffPermission.VIEW_REPORTS)) {
+                TextButton(onClick = { onEvent(UiEvent.ExportSalesPeriod(dayStart, endOfSalesDay(dayStart), "PDF")) }) { Text("PDF") }
+                TextButton(onClick = { onEvent(UiEvent.ExportSalesPeriod(dayStart, endOfSalesDay(dayStart), "EXCEL")) }) { Text("Excel") }
+                TextButton(onClick = { onEvent(UiEvent.ExportSalesPeriod(dayStart, endOfSalesDay(dayStart), "CSV")) }) { Text("CSV") }
+            }
         }
     }
 
@@ -201,6 +236,7 @@ internal fun SalesBookEntryRow(
     val sale = entry.type == "SALE"
     val category = entry.categoryId?.let { id -> state.categories.firstOrNull { it.id == id }?.name }
     val party = entry.partyId?.let { id -> (state.customers + state.suppliers).firstOrNull { it.id == id }?.name }
+    val employee = entry.employeeId?.let { id -> state.employees.employees.firstOrNull { it.id == id }?.name }
     Card(Modifier.fillMaxWidth().clickable(enabled = !readOnly && onEdit != null) { onEdit?.invoke() }) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -210,7 +246,7 @@ internal fun SalesBookEntryRow(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    listOfNotNull(paymentLabel(entry.paymentMethod), category, party).joinToString(" • "),
+                    listOfNotNull(paymentLabel(entry.paymentMethod), employee, category, party).joinToString(" • "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

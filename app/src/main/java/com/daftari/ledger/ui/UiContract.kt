@@ -69,6 +69,7 @@ data class UiState(
     val undoDocumentId: Long? = null,
     val cloudSettings: CloudBackupManager.Settings = CloudBackupManager.Settings(),
     val salesLedger: SalesLedgerState = SalesLedgerState(),
+    val employees: EmployeeUiState = EmployeeUiState(),
     val restartRequested: Boolean = false
 )
 
@@ -183,6 +184,23 @@ sealed interface UiEvent {
     ) : UiEvent
     data class ShareSalesDay(val dayStart: Long, val detailed: Boolean) : UiEvent
     data class ExportSalesPeriod(val from: Long, val to: Long, val format: String) : UiEvent
+
+    data object OpenEmployees : UiEvent
+    data object CloseEmployees : UiEvent
+    data class SetEmployeesEnabled(val enabled: Boolean) : UiEvent
+    data class AddEmployee(val draft: EmployeeDraft) : UiEvent
+    data class UpdateEmployee(val id: Long, val draft: EmployeeDraft) : UiEvent
+    data class ChangeEmployeeStatus(val id: Long, val status: String) : UiEvent
+    data class SelectEmployee(val id: Long) : UiEvent
+    data class SelectEmployeePeriod(val id: Long, val from: Long, val to: Long) : UiEvent
+    data object CloseEmployeeDetail : UiEvent
+    data class SetEmployeeRange(val range: SalesBookRange) : UiEvent
+    data class LoginEmployee(val id: Long, val pin: String) : UiEvent
+    data class SwitchToOwner(val pin: String) : UiEvent
+    data class SetEmployeeSwitcher(val open: Boolean) : UiEvent
+    data class AssignEmployeeShop(val employeeId: Long, val shopId: Long, val active: Boolean) : UiEvent
+    data class OpenEmployeeShift(val employeeId: Long, val label: String, val openingCash: String) : UiEvent
+    data class CloseEmployeeShift(val shiftId: Long, val actualCash: String, val notes: String) : UiEvent
 
     data object ConsumeMessage : UiEvent
     data object ConsumeShareFile : UiEvent

@@ -215,6 +215,7 @@ interface DocumentDao {
           AND d.deletedAt IS NULL
           AND d.type = :type
           AND d.occurredAt BETWEEN :from AND :to
+          AND (:employeeId IS NULL OR d.employeeId = :employeeId)
         GROUP BY d.categoryId, c.name
         ORDER BY totalMinor DESC
         """
@@ -224,8 +225,17 @@ interface DocumentDao {
         type: String,
         from: Long,
         to: Long,
-        uncategorized: String
+        uncategorized: String,
+        employeeId: Long? = null
     ): List<CategoryTotal>
+
+    @Query("""
+        SELECT
+          COALESCE(SUM(CASE WHEN type = 'SALE' AND paymentMethod = 'CASH' THEN amountMinor ELSE 0 END), 0) AS cashSalesMinor,
+          COALESCE(SUM(CASE WHEN type = 'EXPENSE' AND paymentMethod = 'CASH' THEN amountMinor ELSE 0 END), 0) AS cashOutflowsMinor
+        FROM documents WHERE shiftId = :shiftId AND deletedAt IS NULL
+    """)
+    suspend fun shiftCashSummary(shiftId: Long): ShiftCashSummary
 }
 
 @Dao
@@ -259,10 +269,78 @@ interface CategoryDao {
 }
 
 @Dao
+interface EmployeeDao {
+    @Query("""
+        SELECT e.* FROM employees e
+        JOIN employee_shops es ON es.employeeId = e.id
+        WHERE es.shopId = :shopId AND es.active = 1
+        ORDER BY CASE e.status WHEN 'ACTIVE' THEN 0 WHEN 'LEAVE' THEN 1 ELSE 2 END, e.name
+    """)
+    fun observeForShop(shopId: Long): Flow<List<EmployeeEntity>>
+
+    @Query("SELECT * FROM employees WHERE id = :id")
+    suspend fun get(id: Long): EmployeeEntity?
+
+    @Query("SELECT * FROM employees WHERE name LIKE '%' || :query || '%' OR phone LIKE '%' || :query || '%' OR username LIKE '%' || :query || '%' ORDER BY name LIMIT 100")
+    suspend fun search(query: String): List<EmployeeEntity>
+
+    @Query("SELECT COUNT(*) FROM employees WHERE username = :username AND username != '' AND id != :exceptId")
+    suspend fun countUsername(username: String, exceptId: Long = -1): Int
+
+    @Insert suspend fun insert(employee: EmployeeEntity): Long
+    @Update suspend fun update(employee: EmployeeEntity)
+
+    @Query("""
+        SELECT e.id AS employeeId, e.name AS employeeName, e.jobTitle, e.role, e.status,
+               COALESCE(SUM(d.amountMinor), 0) AS salesMinor,
+               COUNT(d.id) AS transactionCount,
+               COALESCE(SUM(CASE WHEN d.paymentMethod = 'CASH' THEN d.amountMinor ELSE 0 END), 0) AS cashMinor,
+               COALESCE(SUM(CASE WHEN d.paymentMethod = 'BANK' THEN d.amountMinor ELSE 0 END), 0) AS bankMinor,
+               COALESCE(SUM(CASE WHEN d.paymentMethod = 'CARD' THEN d.amountMinor ELSE 0 END), 0) AS cardMinor,
+               COALESCE(SUM(CASE WHEN d.paymentMethod = 'WALLET' THEN d.amountMinor ELSE 0 END), 0) AS walletMinor,
+               COALESCE(SUM(CASE WHEN d.paymentMethod = 'CREDIT' THEN d.amountMinor ELSE 0 END), 0) AS creditMinor
+        FROM employees e
+        JOIN employee_shops es ON es.employeeId = e.id AND es.shopId = :shopId AND es.active = 1
+        LEFT JOIN documents d ON d.employeeId = e.id AND d.shopId = :shopId
+             AND d.type = 'SALE' AND d.deletedAt IS NULL AND d.occurredAt BETWEEN :from AND :to
+        GROUP BY e.id
+        ORDER BY salesMinor DESC, transactionCount DESC, e.name
+    """)
+    suspend fun performance(shopId: Long, from: Long, to: Long): List<EmployeePerformanceRow>
+
+    @Query("SELECT * FROM documents WHERE employeeId = :employeeId AND type = 'SALE' AND deletedAt IS NULL AND occurredAt BETWEEN :from AND :to ORDER BY occurredAt DESC LIMIT :limit")
+    suspend fun sales(employeeId: Long, from: Long, to: Long, limit: Int = 500): List<DocumentEntity>
+}
+
+@Dao
+interface EmployeeShopDao {
+    @Insert suspend fun insert(link: EmployeeShopEntity): Long
+    @Update suspend fun update(link: EmployeeShopEntity)
+    @Query("SELECT * FROM employee_shops WHERE employeeId = :employeeId ORDER BY assignedAt")
+    suspend fun listForEmployee(employeeId: Long): List<EmployeeShopEntity>
+    @Query("SELECT * FROM employee_shops WHERE employeeId = :employeeId AND shopId = :shopId AND active = 1 ORDER BY assignedAt DESC LIMIT 1")
+    suspend fun getActive(employeeId: Long, shopId: Long): EmployeeShopEntity?
+}
+
+@Dao
+interface EmployeeShiftDao {
+    @Insert suspend fun insert(shift: EmployeeShiftEntity): Long
+    @Update suspend fun update(shift: EmployeeShiftEntity)
+    @Query("SELECT * FROM employee_shifts WHERE id = :id")
+    suspend fun get(id: Long): EmployeeShiftEntity?
+    @Query("SELECT * FROM employee_shifts WHERE shopId = :shopId AND employeeId = :employeeId AND status = 'OPEN' ORDER BY openedAt DESC LIMIT 1")
+    suspend fun openShift(shopId: Long, employeeId: Long): EmployeeShiftEntity?
+    @Query("SELECT * FROM employee_shifts WHERE shopId = :shopId AND openedAt BETWEEN :from AND :to ORDER BY openedAt DESC")
+    suspend fun listPeriod(shopId: Long, from: Long, to: Long): List<EmployeeShiftEntity>
+}
+
+@Dao
 interface AuditDao {
     @Insert suspend fun insert(a: AuditLogEntity)
     @Query("SELECT * FROM audit_logs ORDER BY at DESC LIMIT 200")
     fun observe(): Flow<List<AuditLogEntity>>
+    @Query("SELECT * FROM audit_logs WHERE actorEmployeeId = :employeeId ORDER BY at DESC LIMIT :limit")
+    suspend fun byActor(employeeId: Long, limit: Int = 200): List<AuditLogEntity>
 }
 
 @Dao

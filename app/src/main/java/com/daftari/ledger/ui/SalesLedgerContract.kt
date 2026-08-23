@@ -3,6 +3,7 @@ package com.daftari.ledger.ui
 import com.daftari.ledger.data.CategoryTotal
 import com.daftari.ledger.data.DailyBookSummary
 import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.EmployeePerformanceRow
 import com.daftari.ledger.data.SalesBookPeriodSummary
 
 enum class SalesBookView { WEEK, CALENDAR, ANALYTICS, SEARCH }
@@ -16,6 +17,7 @@ data class SalesLedgerState(
     val range: SalesBookRange = SalesBookRange.THIS_WEEK,
     val days: List<DailyBookSummary> = emptyList(),
     val entries: List<DocumentEntity> = emptyList(),
+    val dayEmployeePerformance: List<EmployeePerformanceRow> = emptyList(),
     val periodSummary: SalesBookPeriodSummary? = null,
     val previousPeriodSummary: SalesBookPeriodSummary? = null,
     val outflowCategories: List<CategoryTotal> = emptyList(),
@@ -33,6 +35,7 @@ data class SalesEntryDraft(
     val categoryId: Long? = null,
     val paymentMethod: String = "CASH",
     val partyId: Long? = null,
+    val employeeId: Long? = null,
     val newPartyName: String? = null,
     val notes: String = "",
     val documentNumber: String = "",

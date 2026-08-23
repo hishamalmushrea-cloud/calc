@@ -162,4 +162,90 @@
     <string name="close_day_review">Review day closing</string><string name="close_day_question">Close this day?</string><string name="sales_count_value">Sales transactions: %1$d</string><string name="outflows_count_value">Outflow transactions: %1$d</string><string name="sales_total_value">Total sales: %1$s</string><string name="outflows_total_value">Total outflows: %1$s</string><string name="cash_movement_value">Net movement: %1$s</string><string name="transactions_count_value">Transactions: %1$d</string><string name="sales_book_share_title">Daily sales book</string>
     <string name="notes_optional">Optional note</string><string name="more_details">More details</string><string name="fewer_details">Fewer details</string><string name="entry_time_value">Time: %1$s</string><string name="select_time">Select time</string><string name="save_sale">Save sale</string><string name="save_outflow">Save outflow</string>
     <string name="msg_sales_entry_saved">Book entry saved</string><string name="msg_sales_entry_duplicated">Transaction duplicated after confirmation</string><string name="msg_day_notes_saved">Day notes saved</string><string name="msg_sales_day_closed">Day closed</string><string name="msg_sales_day_reopened">Day reopened; changes will appear in the audit log</string><string name="msg_export_ready">Export file ready to share</string>
+    <!-- Employees, roles and shifts -->
+    <string name="section_employees">Employees and users</string>
+    <string name="employees_title">Employees</string>
+    <string name="enable_employee_system">Enable employee sign-in</string>
+    <string name="employee_system_optional_hint">This system is optional. Enable it to add employee accounts and switch securely between users.</string>
+    <string name="current_user_value">Current user: %1$s</string>
+    <string name="owner_mode">Shop owner</string>
+    <string name="owner_or_no_employee">Shop owner / no employee</string>
+    <string name="switch_employee">Switch user</string>
+    <string name="manage_employees">Manage employees</string>
+    <string name="add_employee">Add employee</string>
+    <string name="edit_employee">Edit employee</string>
+    <string name="search_employee">Search by name or phone</string>
+    <string name="employee_name">Employee name</string>
+    <string name="job_title">Job title</string>
+    <string name="employee_start_date">Start date (YYYY-MM-DD)</string>
+    <string name="employee_role">Role</string>
+    <string name="role_manager">Manager</string>
+    <string name="role_seller">Seller</string>
+    <string name="role_accountant">Accountant</string>
+    <string name="employee_active">Active</string>
+    <string name="employee_leave">On leave</string>
+    <string name="employee_suspended">Suspended</string>
+    <string name="employee_left">Left employment</string>
+    <string name="change_status">Change status</string>
+    <string name="view_details">View details</string>
+    <string name="username_optional">Username or phone (optional)</string>
+    <string name="employee_pin_optional">Account PIN (optional)</string>
+    <string name="base_salary_optional">Estimated base salary (optional)</string>
+    <string name="commission_optional">Commission percentage %% (optional)</string>
+    <string name="monthly_target_optional">Monthly target (optional)</string>
+    <string name="employee_sales_value">Sales: %1$s</string>
+    <string name="employee_operations_value">Transactions: %1$d</string>
+    <string name="employee_report_total">Total sales: %1$s</string>
+    <string name="employee_report_operations">Transactions: %1$d</string>
+    <string name="employee_sales_today">Employee sales today</string>
+    <string name="employee_sales_operations">Sales attributed to this employee</string>
+    <string name="employee_total_operations">Monthly transactions: %1$d</string>
+    <string name="employee_average_sale">Average transaction: %1$s</string>
+    <string name="employee_target_progress">Target progress: %1$s of %2$s</string>
+    <string name="employee_estimated_commission">Estimated commission: %1$s</string>
+    <string name="employee_base_salary">Estimated base salary: %1$s</string>
+    <string name="employee_activity">Permanent activity log</string>
+    <string name="employee_shifts">Shifts</string>
+    <string name="assign_branch">Assign branch: %1$s</string>
+    <string name="sold_by_employee">Salesperson attribution</string>
+
+    <string name="permissions">Custom permissions</string>
+    <string name="permission_record_sale">Record sales</string>
+    <string name="permission_record_outflow">Record outflows</string>
+    <string name="permission_edit_own">Edit own transactions</string>
+    <string name="permission_edit_any">Edit any transaction</string>
+    <string name="permission_delete_own">Archive own transactions</string>
+    <string name="permission_delete_any">Archive any transaction</string>
+    <string name="permission_view_own">View own sales</string>
+    <string name="permission_view_all">View all sales</string>
+    <string name="permission_accounts">View accounts</string>
+    <string name="permission_reports">View reports</string>
+    <string name="permission_profit">View profit</string>
+    <string name="permission_employees">Manage employees</string>
+    <string name="permission_payroll">View salary and commission</string>
+    <string name="permission_settings">Manage settings</string>
+    <string name="permission_shifts">Manage shifts and day closing</string>
+    <string name="permission_audit">View audit log</string>
+    <string name="permission_assign_salesperson">Assign another salesperson</string>
+    <string name="access_denied">You do not have permission to view this section.</string>
+
+    <string name="open_shift">Open shift</string>
+    <string name="close_shift">Close shift</string>
+    <string name="shift_label">Shift label (optional)</string>
+    <string name="opening_cash">Opening cash</string>
+    <string name="blind_cash_count_hint">Enter the cash counted. Expected cash and the difference will be shown after closing.</string>
+    <string name="shift_open">Open</string>
+    <string name="shift_closed">Closed</string>
+    <string name="shift_expected_actual">Expected: %1$s — actual: %2$s — difference: %3$s</string>
+
+    <string name="msg_employee_added">Employee added</string>
+    <string name="msg_employee_updated">Employee details updated</string>
+    <string name="msg_employee_status_changed">Employee status changed; history was preserved</string>
+    <string name="msg_employee_branch_updated">Employee branch assignment updated</string>
+    <string name="msg_employee_login_success">Signed in</string>
+    <string name="msg_employee_login_failed">Could not sign in. Check the account and PIN.</string>
+    <string name="msg_owner_mode">Switched to shop owner mode</string>
+    <string name="msg_owner_pin_required">Set the shop owner PIN first to protect switching from employee accounts.</string>
+    <string name="msg_shift_opened">Shift opened</string>
+    <string name="msg_shift_closed">Shift closed and cash difference calculated</string>
 </resources>

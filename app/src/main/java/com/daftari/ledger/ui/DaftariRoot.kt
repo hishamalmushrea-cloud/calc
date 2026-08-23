@@ -62,6 +62,7 @@ import androidx.fragment.app.FragmentActivity
 import com.daftari.ledger.R
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.domain.DocType
+import com.daftari.ledger.domain.StaffPermission
 import com.daftari.ledger.security.AppLock
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -134,6 +135,11 @@ fun DaftariRoot(
                     }
                 },
                 actions = {
+                    if (state.employees.enabled) {
+                        TextButton(onClick = { onEvent(UiEvent.SetEmployeeSwitcher(true)) }) {
+                            Text(state.employees.currentEmployee?.name ?: stringResource(R.string.owner_mode))
+                        }
+                    }
                     if (state.agingAlert > 0) {
                         BadgedBox(badge = { Badge { Text(state.agingAlert.toString()) } }) {
                             IconButton(onClick = { tab = REPORTS_TAB }) {
@@ -203,12 +209,22 @@ fun DaftariRoot(
                 }
             }
             Box(Modifier.weight(1f)) {
-                when (tab) {
-                    0 -> DashboardScreen(state, onEvent, padding) { addType = it }
-                    1 -> PartiesScreen(state, onEvent, padding)
-                    2 -> DocsScreen(state, onEvent, padding)
-                    SALES_TAB -> SalesLedgerScreen(state, onEvent, padding)
-                    REPORTS_TAB -> ReportsScreen(state, onEvent, padding)
+                if (state.employees.screenOpen && (
+                        state.can(StaffPermission.MANAGE_EMPLOYEES) || state.can(StaffPermission.VIEW_REPORTS) ||
+                            state.employees.selectedEmployee?.id == state.employees.currentEmployee?.id
+                    )
+                ) {
+                    EmployeesScreen(state, onEvent, padding)
+                } else if (state.employees.screenOpen) {
+                    AccessDenied(padding)
+                } else when (tab) {
+                    0 -> if (state.can(StaffPermission.VIEW_REPORTS) || state.can(StaffPermission.VIEW_ACCOUNTS)) DashboardScreen(state, onEvent, padding) { addType = it } else AccessDenied(padding)
+                    1 -> if (state.can(StaffPermission.VIEW_ACCOUNTS)) PartiesScreen(state, onEvent, padding) else AccessDenied(padding)
+                    2 -> if (state.can(StaffPermission.VIEW_ALL_SALES)) DocsScreen(state, onEvent, padding) else AccessDenied(padding)
+                    SALES_TAB -> if (
+                        state.can(StaffPermission.RECORD_SALE) || state.can(StaffPermission.VIEW_OWN_SALES) || state.can(StaffPermission.VIEW_ALL_SALES)
+                    ) SalesLedgerScreen(state, onEvent, padding) else AccessDenied(padding)
+                    REPORTS_TAB -> if (state.can(StaffPermission.VIEW_REPORTS)) ReportsScreen(state, onEvent, padding) else AccessDenied(padding)
                     else -> MoreScreen(state, onEvent, padding)
                 }
             }
@@ -236,7 +252,15 @@ fun DaftariRoot(
             quickType = null
         }
     }
+    if (state.employees.switcherOpen) EmployeeSwitcherDialog(state, onEvent)
     if (state.locked) LockDialog(state, onEvent, activity)
+    }
+}
+
+@Composable
+private fun AccessDenied(padding: androidx.compose.foundation.layout.PaddingValues) {
+    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        Text(stringResource(R.string.access_denied), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
     }
 }
 
