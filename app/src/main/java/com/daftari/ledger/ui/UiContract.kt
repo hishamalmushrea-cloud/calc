@@ -9,6 +9,7 @@ import com.daftari.ledger.data.AuditLogEntity
 import com.daftari.ledger.data.CategoryEntity
 import com.daftari.ledger.data.CategoryTotal
 import com.daftari.ledger.data.CsvPreviewRow
+import com.daftari.ledger.data.DatabaseHealthCheck
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.PartyEntity
@@ -73,6 +74,8 @@ data class UiState(
     val salesLedger: SalesLedgerState = SalesLedgerState(),
     val employees: EmployeeUiState = EmployeeUiState(),
     val googleBackup: GoogleBackupUiState = GoogleBackupUiState(),
+    val healthIssues: List<DatabaseHealthCheck.Issue> = emptyList(),
+    val healthCheckedAt: Long = 0,
     val restartRequested: Boolean = false
 )
 
@@ -156,6 +159,8 @@ sealed interface UiEvent {
     data object ClosePartyDialog : UiEvent
     data class ShareStatement(val party: PartyEntity) : UiEvent
     data object ExportCsv : UiEvent
+    data object RunDatabaseHealthCheck : UiEvent
+    data object ClearDatabaseHealthCheck : UiEvent
     data object ChooseCloudFolder : UiEvent
     data class CloudFolderSelected(val uri: String) : UiEvent
     data object ClearCloudFolder : UiEvent

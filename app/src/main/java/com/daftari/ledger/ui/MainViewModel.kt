@@ -18,6 +18,7 @@ import com.daftari.ledger.domain.PartyKind
 import com.daftari.ledger.domain.StaffPermission
 import com.daftari.ledger.widget.DaftariWidget
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -32,6 +33,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val repo = (app as DaftariApp).repo
@@ -137,6 +139,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.ClosePartyDialog -> mutableState.update { it.copy(selectedParty = null, partyStats = null) }
             is UiEvent.ShareStatement -> shareStatement(event.party)
             UiEvent.ExportCsv -> exportCsv()
+            UiEvent.RunDatabaseHealthCheck -> runDatabaseHealthCheck()
+            UiEvent.ClearDatabaseHealthCheck -> mutableState.update { it.copy(healthIssues = emptyList(), healthCheckedAt = 0) }
             UiEvent.ChooseCloudFolder -> mutableEffects.tryEmit(UiEffect.PickCloudFolder)
             is UiEvent.CloudFolderSelected -> saveCloudFolder(event.uri)
             UiEvent.ClearCloudFolder -> clearCloudFolder()
@@ -552,6 +556,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun exportCsv() {
         val shop = state.value.shop ?: return
         createFile(R.string.msg_csv_exported, R.string.msg_export_failed) { services.exportCsv(shop.id) }
+    }
+
+    private fun runDatabaseHealthCheck() = viewModelScope.launch {
+        try {
+            val report = withContext(Dispatchers.IO) { repo.healthCheck() }
+            mutableState.update {
+                it.copy(
+                    healthIssues = report.issues,
+                    healthCheckedAt = System.currentTimeMillis(),
+                    message = if (report.ok) text(R.string.msg_database_health_ok) else text(R.string.msg_database_health_issues, report.issues.size)
+                )
+            }
+        } catch (error: Exception) {
+            message(R.string.msg_database_health_failed, error.message.orEmpty())
+        }
     }
 
     private fun createFile(@StringRes success: Int, @StringRes failure: Int, block: suspend () -> File) =

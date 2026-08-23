@@ -125,6 +125,12 @@
     <string name="csv_row">Row %1$d: %2$s %3$s %4$s</string>
     <string name="csv_ready">Ready</string>
     <string name="section_audit">Audit log</string>
+    <string name="section_database_health">Data health check</string>
+    <string name="database_health_hint">Checks relationships, journal balance, credit entries, and cached balances before data problems become misleading reports.</string>
+    <string name="database_health_run">Run check now</string>
+    <string name="database_health_clear">Hide result</string>
+    <string name="database_health_ok">No database issues detected.</string>
+    <string name="database_health_issue_row">%1$s — count: %2$d</string>
     <string name="no_audit">No audit entries yet.</string>
     <string name="new_document">New transaction</string>
     <string name="edit_document">Edit transaction</string>
@@ -147,7 +153,7 @@
     <string name="msg_enter_actual_cash">Enter actual cash</string><string name="msg_day_closed">Day closed</string><string name="msg_account_closed">Account closed; history was preserved</string>
     <string name="msg_import_result">Imported %1$d rows; skipped %2$d</string><string name="msg_import_failed">Import failed; no partial data was saved</string>
     <string name="msg_pdf_ready">PDF created</string><string name="msg_pdf_failed">Could not create PDF: %1$s</string><string name="msg_excel_ready">Excel file created</string><string name="msg_excel_failed">Could not create Excel file: %1$s</string>
-    <string name="msg_backup_ready">Backup ready</string><string name="msg_restore_restarting">Restore complete. Restarting…</string><string name="msg_restore_failed">Restore failed: %1$s</string><string name="msg_enter_backup_password">Enter a password for the encrypted backup</string><string name="msg_encrypted_backup_ready">Encrypted backup ready</string><string name="msg_backup_failed">Could not create backup: %1$s</string><string name="msg_csv_exported">Full CSV exported</string><string name="msg_export_failed">Export failed: %1$s</string>
+    <string name="msg_backup_ready">Backup ready</string><string name="msg_restore_restarting">Restore complete. Restarting…</string><string name="msg_restore_failed">Restore failed: %1$s</string><string name="msg_enter_backup_password">Enter a password for the encrypted backup</string><string name="msg_encrypted_backup_ready">Encrypted backup ready</string><string name="msg_backup_failed">Could not create backup: %1$s</string><string name="msg_database_health_ok">Data health check passed</string><string name="msg_database_health_issues">Data health check found %1$d issue(s)</string><string name="msg_database_health_failed">Data health check failed: %1$s</string><string name="msg_csv_exported">Full CSV exported</string><string name="msg_export_failed">Export failed: %1$s</string>
     <string name="report_financial_title">Daftari — Financial report</string><string name="report_item">Item</string><string name="report_value">Amount</string><string name="other_income">Other income</string><string name="date">Date</string><string name="type">Type</string><string name="party">Party</string><string name="document_number">Document number</string><string name="customer">Customer</string><string name="supplier">Supplier</string><string name="sheet_summary">Summary</string><string name="sheet_documents">Transactions</string><string name="sheet_accounts">Accounts</string><string name="report_line">%1$s: %2$s</string><string name="report_receivables_payables">Receivables: %1$s  Payables: %2$s</string>
     <string name="action_undo">Undo</string><string name="action_remove">Remove</string><string name="action_call">Call</string><string name="action_whatsapp">WhatsApp</string><string name="search_name_phone">Search by name or phone</string>
     <string name="due_date_value">Due date: %1$s</string><string name="due_notification_channel">Account due dates</string><string name="due_notification_title">Accounts due today</string><string name="due_notification_body">%1$d customers have overdue credit sales</string>

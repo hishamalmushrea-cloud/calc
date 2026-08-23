@@ -141,6 +141,12 @@
     <string name="csv_row">سطر %1$d: %2$s %3$s %4$s</string>
     <string name="csv_ready">جاهز</string>
     <string name="section_audit">سجل التدقيق</string>
+    <string name="section_database_health">فحص صحة البيانات</string>
+    <string name="database_health_hint">يفحص العلاقات والقيود والعمليات الآجلة والأرصدة المخزنة قبل أن تتحول الأخطاء إلى تقارير مضللة.</string>
+    <string name="database_health_run">تشغيل الفحص الآن</string>
+    <string name="database_health_clear">إخفاء النتيجة</string>
+    <string name="database_health_ok">لا توجد مشاكل مكتشفة في قاعدة البيانات.</string>
+    <string name="database_health_issue_row">%1$s — العدد: %2$d</string>
     <string name="no_audit">لا سجل بعد.</string>
 
     <string name="new_document">عملية جديدة</string>
@@ -200,6 +206,9 @@
     <string name="msg_enter_backup_password">أدخل كلمة مرور للنسخة المشفرة</string>
     <string name="msg_encrypted_backup_ready">نسخة مشفرة جاهزة</string>
     <string name="msg_backup_failed">فشل إنشاء النسخة: %1$s</string>
+    <string name="msg_database_health_ok">فحص البيانات سليم</string>
+    <string name="msg_database_health_issues">اكتشف فحص البيانات %1$d مشكلة</string>
+    <string name="msg_database_health_failed">فشل فحص البيانات: %1$s</string>
     <string name="msg_csv_exported">تم تصدير CSV كامل</string>
     <string name="msg_export_failed">فشل التصدير: %1$s</string>
 

@@ -690,6 +690,8 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun overdueParties(shopId: Long, now: Long = System.currentTimeMillis()): List<OverduePartyRow> =
         documents.overdueParties(shopId, now)
 
+    fun healthCheck(): DatabaseHealthCheck.Report = DatabaseHealthCheck.inspect(db)
+
     suspend fun salesBookDays(shopId: Long, from: Long, to: Long, employeeId: Long? = null): List<DailyBookSummary> {
         val zone = ZoneId.systemDefault()
         val startDate = Instant.ofEpochMilli(from).atZone(zone).toLocalDate()

@@ -138,6 +138,39 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
             }
         }
 
+        Section(stringResource(R.string.section_database_health)) {
+            Text(stringResource(R.string.database_health_hint), style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { onEvent(UiEvent.RunDatabaseHealthCheck) }) {
+                    Text(stringResource(R.string.database_health_run))
+                }
+                if (state.healthCheckedAt > 0) {
+                    TextButton(onClick = { onEvent(UiEvent.ClearDatabaseHealthCheck) }) {
+                        Text(stringResource(R.string.database_health_clear))
+                    }
+                }
+            }
+            if (state.healthCheckedAt > 0) {
+                val healthFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+                Text(healthFormat.format(Date(state.healthCheckedAt)), style = MaterialTheme.typography.bodySmall)
+                if (state.healthIssues.isEmpty()) {
+                    Text(
+                        stringResource(R.string.database_health_ok),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    state.healthIssues.forEach { issue ->
+                        Text(
+                            stringResource(R.string.database_health_issue_row, issue.message, issue.count),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        }
+
         Section(stringResource(R.string.section_categories)) {
             Row {
                 TextButton(onClick = { categoryKind = "EXPENSE" }) {
