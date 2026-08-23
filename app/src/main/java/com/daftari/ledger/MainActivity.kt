@@ -27,10 +27,14 @@ class MainActivity : FragmentActivity() {
     private val vm: MainViewModel by viewModels()
     private val cloudFolderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
-            contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
+            try {
+                contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // بعض مزودي الملفات يمنحون إذن الجلسة فقط ولا يدعمون الإذن الدائم.
+            }
             vm.onEvent(UiEvent.CloudFolderSelected(it.toString()))
         }
     }
