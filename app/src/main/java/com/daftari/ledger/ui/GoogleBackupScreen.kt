@@ -101,7 +101,12 @@ internal fun GoogleBackupScreen(state: UiState, onEvent: (UiEvent) -> Unit, padd
                 item { Text(stringResource(R.string.no_google_backups)) }
             }
             items(backup.remoteBackups, key = { it.id }) { remote ->
-                RemoteBackupCard(remote, onRestore = { onEvent(UiEvent.PrepareGoogleRestore(remote)) }, onDelete = { onEvent(UiEvent.PrepareGoogleBackupDelete(remote)) })
+                RemoteBackupCard(
+                    remote,
+                    latest = remote.id == backup.remoteBackups.firstOrNull()?.id,
+                    onRestore = { onEvent(UiEvent.PrepareGoogleRestore(remote)) },
+                    onDelete = { onEvent(UiEvent.PrepareGoogleBackupDelete(remote)) }
+                )
             }
         }
     }
@@ -132,10 +137,11 @@ internal fun GoogleBackupScreen(state: UiState, onEvent: (UiEvent) -> Unit, padd
 }
 
 @Composable
-private fun RemoteBackupCard(remote: RemoteBackup, onRestore: () -> Unit, onDelete: () -> Unit) {
+private fun RemoteBackupCard(remote: RemoteBackup, latest: Boolean, onRestore: () -> Unit, onDelete: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(formatRemoteDate(remote), fontWeight = FontWeight.Bold)
+            if (latest) Text(stringResource(R.string.latest_backup_label), color = MaterialTheme.colorScheme.primary)
             Text(stringResource(R.string.backup_device_value, remote.deviceName.ifBlank { stringResource(R.string.unknown_device) }))
             Text(stringResource(R.string.backup_size_value, formatBytes(remote.size)))
             Text(stringResource(R.string.database_version_value, remote.databaseVersion))

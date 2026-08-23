@@ -453,6 +453,7 @@
     <string name="wifi_only">Wi‑Fi فقط</string>
     <string name="wifi_and_mobile">Wi‑Fi وبيانات الهاتف</string>
     <string name="available_backups">النسخ الاحتياطية المتاحة</string>
+    <string name="latest_backup_label">أحدث نسخة</string>
     <string name="no_google_backups">لا توجد نسخة احتياطية في هذا الحساب بعد.</string>
     <string name="last_backup_value">آخر نسخة: %1$s</string>
     <string name="backup_size_value">الحجم: %1$s</string>

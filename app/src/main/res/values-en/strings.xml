@@ -264,6 +264,7 @@
     <string name="wifi_only">Wi‑Fi only</string>
     <string name="wifi_and_mobile">Wi‑Fi and mobile data</string>
     <string name="available_backups">Available backups</string>
+    <string name="latest_backup_label">Latest backup</string>
     <string name="no_google_backups">No backup exists in this account yet.</string>
     <string name="last_backup_value">Last backup: %1$s</string>
     <string name="backup_size_value">Size: %1$s</string>

@@ -42,8 +42,7 @@ class GoogleBackupManager(
                 preferences.setStatus(BackupRunStatus.SUCCESS)
                 return@withContext BackupResult(existing.firstOrNull { it.id == settings.lastRemoteId }, true, false)
             }
-            val remoteHead = existing.firstOrNull { it.datasetId == settings.datasetId && !it.conflict }
-            val conflict = settings.lastRemoteId.isNotBlank() && remoteHead != null && remoteHead.id != settings.lastRemoteId
+            val conflict = BackupPolicy.hasDiverged(settings, existing)
             val appVersion = runCatching {
                 context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
             }.getOrDefault("")
@@ -123,15 +122,7 @@ class GoogleBackupManager(
     }.getOrDefault(false)
 
     private fun rotate(token: String, all: List<RemoteBackup>, settings: GoogleBackupSettings) {
-        val own = all.filter { it.deviceId == settings.deviceId }.sortedByDescending { it.createdAt }
-        val protected = own.filter { it.conflict }.mapTo(mutableSetOf()) { it.id }
-        own.firstOrNull()?.let { protected += it.id }
-        val daily = own.take(settings.keepDaily).mapTo(protected) { it.id }
-        val older = own.drop(settings.keepDaily)
-        val weekly = older.groupBy { it.createdAt / WEEK_MILLIS }.values
-            .mapNotNull { it.maxByOrNull(RemoteBackup::createdAt) }.take(settings.keepWeekly)
-        weekly.forEach { protected += it.id }
-        own.filterNot { it.id in protected }.forEach { runCatching { drive.delete(token, it.id) } }
+        BackupPolicy.deletionCandidates(all, settings).forEach { runCatching { drive.delete(token, it.id) } }
     }
 
     private fun verifyAccount(token: String) {
@@ -152,6 +143,4 @@ class GoogleBackupManager(
         }
         preferences.recordFailure(status, error.message.orEmpty())
     }
-
-    private companion object { const val WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000 }
 }

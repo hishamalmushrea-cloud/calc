@@ -18,14 +18,19 @@ class DriveBackupException(
     val authorizationRequired: Boolean = false
 ) : Exception(message)
 
-class GoogleDriveBackupClient(private val http: OkHttpClient = OkHttpClient()) {
+class GoogleDriveBackupClient(
+    private val http: OkHttpClient = OkHttpClient(),
+    private val driveApiBase: String = "https://www.googleapis.com/drive/v3",
+    private val driveUploadBase: String = "https://www.googleapis.com/upload/drive/v3",
+    private val userInfoEndpoint: String = "https://www.googleapis.com/oauth2/v3/userinfo"
+) {
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val backupMedia = CLOUD_BACKUP_MIME.toMediaType()
 
     data class GoogleUser(val subject: String, val email: String)
 
     fun userInfo(accessToken: String): GoogleUser {
-        val request = authorized(Request.Builder().url("https://www.googleapis.com/oauth2/v3/userinfo"), accessToken).get().build()
+        val request = authorized(Request.Builder().url(userInfoEndpoint), accessToken).get().build()
         return execute(request) { body ->
             val json = JsonParser.parseString(body).asJsonObject
             GoogleUser(json.get("sub")?.asString.orEmpty(), json.get("email")?.asString.orEmpty())
@@ -33,18 +38,26 @@ class GoogleDriveBackupClient(private val http: OkHttpClient = OkHttpClient()) {
     }
 
     fun list(accessToken: String): List<RemoteBackup> {
-        val url = "https://www.googleapis.com/drive/v3/files".toHttpUrl().newBuilder()
-            .addQueryParameter("spaces", "appDataFolder")
-            .addQueryParameter("q", "mimeType = '$CLOUD_BACKUP_MIME'")
-            .addQueryParameter("orderBy", "createdTime desc")
-            .addQueryParameter("pageSize", "100")
-            .addQueryParameter("fields", "files(id,name,size,createdTime,modifiedTime,md5Checksum,sha256Checksum,appProperties)")
-            .build()
-        val request = authorized(Request.Builder().url(url), accessToken).get().build()
-        return execute(request) { body ->
-            val root = JsonParser.parseString(body).asJsonObject
-            root.getAsJsonArray("files")?.mapNotNull { element -> runCatching { parseRemote(element.asJsonObject) }.getOrNull() }.orEmpty()
-        }
+        val backups = mutableListOf<RemoteBackup>()
+        var pageToken: String? = null
+        do {
+            val builder = "$driveApiBase/files".toHttpUrl().newBuilder()
+                .addQueryParameter("spaces", "appDataFolder")
+                .addQueryParameter("q", "mimeType = '$CLOUD_BACKUP_MIME'")
+                .addQueryParameter("orderBy", "createdTime desc")
+                .addQueryParameter("pageSize", "100")
+                .addQueryParameter("fields", "nextPageToken,files(id,name,size,createdTime,modifiedTime,md5Checksum,sha256Checksum,appProperties)")
+            pageToken?.let { builder.addQueryParameter("pageToken", it) }
+            val request = authorized(Request.Builder().url(builder.build()), accessToken).get().build()
+            pageToken = execute(request) { body ->
+                val root = JsonParser.parseString(body).asJsonObject
+                root.getAsJsonArray("files")?.forEach { element ->
+                    runCatching { parseRemote(element.asJsonObject) }.getOrNull()?.let(backups::add)
+                }
+                root.get("nextPageToken")?.asString
+            }
+        } while (!pageToken.isNullOrBlank() && backups.size < 1_000)
+        return backups.sortedByDescending { it.createdAt }
     }
 
     fun upload(accessToken: String, archive: BackupArchive.Created): RemoteBackup {
@@ -69,7 +82,7 @@ class GoogleDriveBackupClient(private val http: OkHttpClient = OkHttpClient()) {
                 addProperty("conflict", manifest.conflict.toString())
             })
         }
-        val startUrl = "https://www.googleapis.com/upload/drive/v3/files".toHttpUrl().newBuilder()
+        val startUrl = "$driveUploadBase/files".toHttpUrl().newBuilder()
             .addQueryParameter("uploadType", "resumable")
             .addQueryParameter("fields", "id,name,size,createdTime,modifiedTime,md5Checksum,sha256Checksum,appProperties")
             .build()
@@ -97,7 +110,7 @@ class GoogleDriveBackupClient(private val http: OkHttpClient = OkHttpClient()) {
     fun download(accessToken: String, remote: RemoteBackup, destination: File): File {
         destination.parentFile?.mkdirs()
         val temporary = File(destination.parentFile, destination.name + ".partial")
-        val url = "https://www.googleapis.com/drive/v3/files/${remote.id}".toHttpUrl().newBuilder()
+        val url = "$driveApiBase/files/${remote.id}".toHttpUrl().newBuilder()
             .addQueryParameter("alt", "media").build()
         val request = authorized(Request.Builder().url(url), accessToken).get().build()
         try {
@@ -118,7 +131,7 @@ class GoogleDriveBackupClient(private val http: OkHttpClient = OkHttpClient()) {
     }
 
     fun delete(accessToken: String, remoteId: String) {
-        val request = authorized(Request.Builder().url("https://www.googleapis.com/drive/v3/files/$remoteId"), accessToken)
+        val request = authorized(Request.Builder().url("$driveApiBase/files/$remoteId"), accessToken)
             .delete().build()
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful && response.code != 404) throw driveError(response.code, response.body?.string().orEmpty())
