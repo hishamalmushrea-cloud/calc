@@ -7,7 +7,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.daftari.ledger.DaftariApp
 import com.daftari.ledger.R
-import com.daftari.ledger.backup.AutoBackupWorker
 import com.daftari.ledger.data.AccountCodes
 import com.daftari.ledger.data.LedgerException
 import com.daftari.ledger.data.LedgerRepository
@@ -34,13 +33,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
-    private val repo = (app as DaftariApp).repo
-    private val services = MainUiServices(app, repo)
-    private val mutableState = MutableStateFlow(
+    internal val repo = (app as DaftariApp).repo
+    internal val services = MainUiServices(app, repo)
+    internal val mutableState = MutableStateFlow(
         UiState(cloudSettings = (app as DaftariApp).cloudBackup.settings())
     )
     val state: StateFlow<UiState> = mutableState.asStateFlow()
-    private val mutableEffects = MutableSharedFlow<UiEffect>(extraBufferCapacity = 4)
+    internal val mutableEffects = MutableSharedFlow<UiEffect>(extraBufferCapacity = 4)
     val effects: SharedFlow<UiEffect> = mutableEffects.asSharedFlow()
 
     private val totalsMutex = Mutex()
@@ -328,85 +327,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun unlock(pin: String) = viewModelScope.launch {
-        val now = System.currentTimeMillis()
-        val settings = repo.settings.get()
-        val lockedUntil = settings?.pinLockedUntil ?: 0L
-        if (lockedUntil > now) {
-            message(R.string.msg_pin_locked, ((lockedUntil - now + 999) / 1000).toInt())
-            return@launch
-        }
-        if (repo.pinOk(pin)) {
-            repo.updatePinProtection(0, 0)
-            mutableState.update { it.copy(locked = false, pinLockedUntil = 0, message = text(R.string.msg_unlocked)) }
-        } else {
-            val attempts = (settings?.failedPinAttempts ?: 0) + 1
-            if (attempts >= MAX_PIN_ATTEMPTS) {
-                val until = now + PIN_LOCK_MILLIS
-                repo.updatePinProtection(0, until)
-                mutableState.update { it.copy(pinLockedUntil = until, message = text(R.string.msg_pin_locked, 30)) }
-            } else {
-                repo.updatePinProtection(attempts, 0)
-                message(R.string.msg_wrong_pin_attempts, MAX_PIN_ATTEMPTS - attempts)
-            }
-        }
-    }
-
-    private fun savePin(pin: String) = viewModelScope.launch {
-        if (pin.length < 4) return@launch message(R.string.msg_pin_too_short)
-        repo.setPin(pin)
-        repo.updatePinProtection(0, 0)
-        mutableState.update { it.copy(hasPin = true, pinLockedUntil = 0, message = text(R.string.msg_pin_saved)) }
-    }
-
-    private fun clearPin() = viewModelScope.launch {
-        repo.setPin(null)
-        repo.updatePinProtection(0, 0)
-        mutableState.update { it.copy(hasPin = false, locked = false, pinLockedUntil = 0, message = text(R.string.msg_pin_removed)) }
-    }
-
-    private fun toggleBackup(enabled: Boolean) = viewModelScope.launch {
-        repo.setAutoBackup(enabled)
-        mutableState.update { it.copy(autoBackup = enabled) }
-        AutoBackupWorker.schedule(getApplication(), enabled)
-    }
-
-    private fun toggleBiometric(enabled: Boolean) = viewModelScope.launch {
-        repo.setBiometric(enabled)
-        mutableState.update { it.copy(biometric = enabled) }
-    }
-
-    private fun togglePrivacy(enabled: Boolean) = viewModelScope.launch {
-        repo.setPrivacyMode(enabled)
-        mutableState.update { it.copy(hideBalances = enabled) }
-    }
-
-    private fun toggleLatinDigits(enabled: Boolean) = viewModelScope.launch {
-        repo.setLatinDigits(enabled)
-        mutableState.update { it.copy(latinDigits = enabled) }
-    }
-
-    private fun updateCurrency(code: String) = viewModelScope.launch {
-        val shop = state.value.shop ?: return@launch
-        try {
-            repo.updateShopCurrency(shop.id, code)
-            val updated = repo.shops.get(shop.id)
-            mutableState.update { it.copy(shop = updated ?: shop, message = text(R.string.msg_currency_saved)) }
-        } catch (error: LedgerException) {
-            dynamicError(error)
-        }
-    }
-
-    private fun addCategory(kind: String, name: String) = viewModelScope.launch {
-        val shop = state.value.shop ?: return@launch
-        try {
-            repo.addCategory(shop.id, kind, name)
-            message(R.string.msg_category_added)
-        } catch (error: Exception) {
-            dynamicError(error)
-        }
-    }
-
     private fun closeDay(actual: String, notes: String) = viewModelScope.launch {
         val shop = state.value.shop ?: return@launch
         val money = Money.fromMajor(actual) ?: return@launch message(R.string.msg_enter_actual_cash)
@@ -509,63 +429,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         createFile(R.string.msg_csv_exported, R.string.msg_export_failed) { services.exportCsv(shop.id) }
     }
 
-    private fun saveCloudFolder(uri: String) {
-        val app = getApplication<DaftariApp>()
-        app.cloudBackup.saveTreeUri(Uri.parse(uri))
-        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings(), message = text(R.string.msg_cloud_folder_saved)) }
-    }
-
-    private fun clearCloudFolder() {
-        val app = getApplication<DaftariApp>()
-        app.cloudBackup.clearTreeUri()
-        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings()) }
-    }
-
-    private fun saveWebDav(url: String, user: String, password: String) {
-        val app = getApplication<DaftariApp>()
-        app.cloudBackup.saveWebDav(url, user, password)
-        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings(), message = text(R.string.msg_webdav_saved)) }
-    }
-
-    private fun clearWebDav() {
-        val app = getApplication<DaftariApp>()
-        app.cloudBackup.clearWebDav()
-        mutableState.update { it.copy(cloudSettings = app.cloudBackup.settings()) }
-    }
-
-    private fun cloudBackupNow() = viewModelScope.launch {
-        try {
-            val app = getApplication<DaftariApp>()
-            val (_, result) = app.cloudBackup.backupNow()
-            mutableState.update {
-                it.copy(
-                    backups = app.backup.listBackups(),
-                    message = text(if (result.anyUploaded) R.string.msg_cloud_backup_ready else R.string.msg_cloud_not_configured)
-                )
-            }
-        } catch (error: Exception) {
-            message(R.string.msg_cloud_backup_failed, error.message.orEmpty())
-        }
-    }
-
-    private fun restoreCloudFile(uri: String) = viewModelScope.launch {
-        try {
-            getApplication<DaftariApp>().cloudBackup.restoreFromUri(Uri.parse(uri))
-            mutableState.update { it.copy(restartRequested = true, message = text(R.string.msg_restore_restarting)) }
-        } catch (error: Exception) {
-            message(R.string.msg_restore_failed, error.message.orEmpty())
-        }
-    }
-
-    private fun restoreLatestWebDav() = viewModelScope.launch {
-        try {
-            getApplication<DaftariApp>().cloudBackup.restoreLatestWebDav()
-            mutableState.update { it.copy(restartRequested = true, message = text(R.string.msg_restore_restarting)) }
-        } catch (error: Exception) {
-            message(R.string.msg_restore_failed, error.message.orEmpty())
-        }
-    }
-
     private fun createFile(@StringRes success: Int, @StringRes failure: Int, block: suspend () -> File) =
         viewModelScope.launch {
             try {
@@ -582,19 +445,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         DaftariWidget.updateAll(getApplication())
     }
 
-    private fun dynamicError(error: Exception) {
+    internal fun dynamicError(error: Exception) {
         mutableState.update { it.copy(message = UiText.Dynamic(error.message.orEmpty())) }
     }
 
-    private fun message(@StringRes id: Int, vararg args: Any) {
+    internal fun message(@StringRes id: Int, vararg args: Any) {
         mutableState.update { it.copy(message = text(id, *args)) }
     }
 
-    private fun text(@StringRes id: Int, vararg args: Any): UiText = UiText.Resource(id, args.toList())
+    internal fun text(@StringRes id: Int, vararg args: Any): UiText = UiText.Resource(id, args.toList())
 
     private companion object {
         const val AGING_REFRESH_INTERVAL_MS = 60L * 60L * 1000L
-        const val MAX_PIN_ATTEMPTS = 5
-        const val PIN_LOCK_MILLIS = 30_000L
     }
 }
