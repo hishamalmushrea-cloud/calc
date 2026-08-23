@@ -79,7 +79,7 @@ fun Modifier.pulseOnClick(): Modifier = composed {
 fun AnimatedCounter(
     targetValue: Long,
     modifier: Modifier = Modifier,
-    format: (Long) -> String = { it.toString() },
+    format: @Composable (Long) -> String = { it.toString() },
     style: TextStyle = TextStyle.Default
 ) {
     val animatedValue = remember { Animatable(0f) }
