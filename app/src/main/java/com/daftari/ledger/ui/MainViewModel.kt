@@ -595,7 +595,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    private fun refreshAll() {
+    internal fun refreshAll() {
         refreshTotals()
         refreshInsights()
         loadSalesLedger()
