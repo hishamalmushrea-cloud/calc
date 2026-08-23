@@ -32,7 +32,8 @@ android {
         compose = true
         buildConfig = true
     }
-    val googleWebClientId = providers.gradleProperty("GOOGLE_WEB_CLIENT_ID").orElse("")
+    val googleWebClientId = providers.gradleProperty("GOOGLE_WEB_CLIENT_ID")
+        .orElse("466687335416-bu46jej7d5mccp16ehp4l83afia195fg.apps.googleusercontent.com")
     defaultConfig {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${googleWebClientId.get()}\"")
     }

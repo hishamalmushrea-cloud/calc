@@ -15,15 +15,21 @@
 6. أضف SHA-1 لشهادة debug أثناء التطوير، ثم SHA-1 لشهادة App Signing من Google Play للإصدار المنشور.
 7. أنشئ Web OAuth Client ID لاستخدام Credential Manager. الـClient ID قيمة عامة؛ لا تضف Client Secret إلى Android.
 
-## 2. تمرير Web Client ID للبناء
+## 2. Web Client ID
 
-ضع القيمة في `~/.gradle/gradle.properties` (خارج Git):
+المشروع مهيأ افتراضيًا بالـWeb Client ID العام:
+
+```text
+466687335416-bu46jej7d5mccp16ehp4l83afia195fg.apps.googleusercontent.com
+```
+
+يمكن استبداله لبيئة أخرى دون تعديل Git بوضع القيمة التالية في `~/.gradle/gradle.properties`:
 
 ```properties
 GOOGLE_WEB_CLIENT_ID=000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
 ```
 
-إذا لم توضع القيمة يبقى المشروع قابلًا للبناء، لكن شاشة الربط تعرض رسالة أن Google OAuth غير مهيأ.
+هذه القيمة معرف عام وليست Client Secret. يجب أن يكون نوعها في Google Cloud هو **Web application**، مع وجود Android OAuth Client منفصل للحزمة وشهادة التوقيع.
 
 ## 3. سلوك الأمان
 
