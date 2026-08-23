@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +18,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -53,7 +56,9 @@ internal fun SalesEntryDialog(
     }
     val initialTime = Calendar.getInstance().apply { timeInMillis = existing?.occurredAt ?: System.currentTimeMillis() }
     var occurredAt by remember { mutableStateOf(existing?.occurredAt ?: mergeDayAndTime(dayStart, initialTime.get(Calendar.HOUR_OF_DAY), initialTime.get(Calendar.MINUTE))) }
+    var dueAt by remember { mutableStateOf(existing?.dueAt) }
     var showTime by remember { mutableStateOf(false) }
+    var showDueDate by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf(existing != null) }
     var submitted by remember { mutableStateOf(false) }
 
@@ -76,7 +81,11 @@ internal fun SalesEntryDialog(
                     methods.forEach { method ->
                         FilterChip(
                             selected = payment == method,
-                            onClick = { payment = method },
+                            onClick = {
+                                payment = method
+                                if (method == "CREDIT" && dueAt == null) dueAt = occurredAt + 30L * 86_400_000L
+                                if (method != "CREDIT") dueAt = null
+                            },
                             label = { Text(paymentLabel(method)) }
                         )
                     }
@@ -115,6 +124,14 @@ internal fun SalesEntryDialog(
                         }.take(5).forEach { customer ->
                             TextButton(onClick = { partyId = customer.id; partyQuery = customer.name }) { Text(customer.name) }
                         }
+                        TextButton(onClick = { showDueDate = true }) {
+                            Text(
+                                stringResource(
+                                    R.string.due_date_value,
+                                    java.text.DateFormat.getDateInstance().format(java.util.Date(dueAt ?: occurredAt + 30L * 86_400_000L))
+                                )
+                            )
+                        }
                     }
                     OutlinedTextField(
                         value = documentNumber,
@@ -144,7 +161,7 @@ internal fun SalesEntryDialog(
                             newPartyName = if (payment == "CREDIT" && partyId == null) partyQuery.trim().takeIf { it.isNotBlank() } else null,
                             notes = notes,
                             documentNumber = documentNumber,
-                            dueAt = if (payment == "CREDIT") occurredAt + 30L * 86_400_000L else null
+                            dueAt = if (payment == "CREDIT") dueAt ?: occurredAt + 30L * 86_400_000L else null
                         )
                     )
                 }
@@ -168,6 +185,19 @@ internal fun SalesEntryDialog(
             },
             dismissButton = { TextButton(onClick = { showTime = false }) { Text(stringResource(R.string.action_cancel)) } }
         )
+    }
+    if (showDueDate) {
+        val picker = rememberDatePickerState(initialSelectedDateMillis = dueAt ?: occurredAt + 30L * 86_400_000L)
+        DatePickerDialog(
+            onDismissRequest = { showDueDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dueAt = picker.selectedDateMillis
+                    showDueDate = false
+                }) { Text(stringResource(R.string.action_ok)) }
+            },
+            dismissButton = { TextButton(onClick = { showDueDate = false }) { Text(stringResource(R.string.action_cancel)) } }
+        ) { DatePicker(picker) }
     }
 }
 

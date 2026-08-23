@@ -1,5 +1,6 @@
 package com.daftari.ledger.ui
 
+import com.daftari.ledger.data.CategoryTotal
 import com.daftari.ledger.data.DailyBookSummary
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.SalesBookPeriodSummary
@@ -16,6 +17,8 @@ data class SalesLedgerState(
     val days: List<DailyBookSummary> = emptyList(),
     val entries: List<DocumentEntity> = emptyList(),
     val periodSummary: SalesBookPeriodSummary? = null,
+    val previousPeriodSummary: SalesBookPeriodSummary? = null,
+    val outflowCategories: List<CategoryTotal> = emptyList(),
     val query: String = "",
     val entryType: String? = null,
     val paymentMethod: String? = null,

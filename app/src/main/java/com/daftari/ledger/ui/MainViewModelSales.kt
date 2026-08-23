@@ -27,6 +27,16 @@ internal fun MainViewModel.loadSalesLedger() {
         mutableState.update { it.copy(salesLedger = it.salesLedger.copy(loading = true, visibleFrom = from, visibleTo = to)) }
         val days = repo.salesBookDays(shop.id, from, to)
         val summary = repo.salesBookPeriodSummary(shop.id, from, to)
+        val periodLength = (to - from + 1).coerceAtLeast(1)
+        val previousSummary = repo.salesBookPeriodSummary(shop.id, from - periodLength, from - 1)
+        val uncategorized = getApplication<android.app.Application>().getString(R.string.uncategorized)
+        val outflowCategories = repo.totalsByCategory(
+            shop.id,
+            com.daftari.ledger.domain.DocType.EXPENSE,
+            from,
+            to,
+            uncategorized
+        )
         val selected = state.value.salesLedger.selectedDayStart
         val entries = selected?.let { repo.salesBookEntries(shop.id, it) }.orEmpty()
         mutableState.update {
@@ -35,6 +45,8 @@ internal fun MainViewModel.loadSalesLedger() {
                     days = days,
                     entries = entries,
                     periodSummary = summary,
+                    previousPeriodSummary = previousSummary,
+                    outflowCategories = outflowCategories,
                     visibleFrom = from,
                     visibleTo = to,
                     loading = false
@@ -141,9 +153,9 @@ internal fun MainViewModel.saveSalesDayNotes(dayStart: Long, notes: String) = vi
     }
 }
 
-internal fun MainViewModel.closeSalesBookDay(dayStart: Long) = viewModelScope.launch {
+internal fun MainViewModel.closeSalesBookDay(dayStart: Long, notes: String) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
-    repo.closeSalesDay(shop.id, dayStart)
+    repo.closeSalesDay(shop.id, dayStart, notes)
     message(R.string.msg_sales_day_closed)
     loadSalesLedger()
 }

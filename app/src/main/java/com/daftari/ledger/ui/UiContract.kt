@@ -173,7 +173,7 @@ sealed interface UiEvent {
     data class ArchiveSalesEntry(val id: Long) : UiEvent
     data class DuplicateSalesEntry(val id: Long, val occurredAt: Long) : UiEvent
     data class SaveSalesDayNotes(val dayStart: Long, val notes: String) : UiEvent
-    data class CloseSalesBookDay(val dayStart: Long) : UiEvent
+    data class CloseSalesBookDay(val dayStart: Long, val notes: String) : UiEvent
     data class ReopenSalesBookDay(val dayStart: Long) : UiEvent
     data class SearchSalesBook(
         val query: String,

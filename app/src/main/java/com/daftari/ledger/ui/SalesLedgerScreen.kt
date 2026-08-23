@@ -148,13 +148,18 @@ private fun SalesCalendar(days: List<DailyBookSummary>, onEvent: (UiEvent) -> Un
             listOf(R.string.day_sat, R.string.day_sun, R.string.day_mon, R.string.day_tue, R.string.day_wed, R.string.day_thu, R.string.day_fri)
                 .forEach { Text(stringResource(it), style = MaterialTheme.typography.labelSmall) }
         }
+        val firstOffset = days.firstOrNull()?.let { day ->
+            java.util.Calendar.getInstance().apply { timeInMillis = day.dayStart }.get(java.util.Calendar.DAY_OF_WEEK) % 7
+        } ?: 0
         LazyVerticalGrid(columns = GridCells.Fixed(7), modifier = Modifier.fillMaxSize()) {
+            items(firstOffset) { Spacer(Modifier.padding(3.dp)) }
             items(days, key = { it.dayStart }) { day ->
                 Card(
                     Modifier.padding(3.dp).clickable { onEvent(UiEvent.SelectSalesDay(day.dayStart)) },
                     colors = CardDefaults.cardColors(
                         containerColor = when (day.status) {
                             "CLOSED" -> MaterialTheme.colorScheme.primaryContainer
+                            "REOPENED" -> MaterialTheme.colorScheme.errorContainer
                             "HAS_RECORDS" -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)
                         }
@@ -180,11 +185,13 @@ private fun SalesDayCard(day: DailyBookSummary, onClick: () -> Unit) {
                 Text(
                     when (day.status) {
                         "CLOSED" -> stringResource(R.string.sales_day_closed)
+                        "REOPENED" -> stringResource(R.string.sales_day_reopened_alert)
                         "HAS_RECORDS" -> stringResource(R.string.sales_day_has_entries)
                         else -> stringResource(R.string.sales_day_empty)
                     },
                     color = when (day.status) {
                         "CLOSED" -> MaterialTheme.colorScheme.primary
+                        "REOPENED" -> MaterialTheme.colorScheme.error
                         "HAS_RECORDS" -> Color(0xFF9A6B00)
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
@@ -218,6 +225,9 @@ private fun SalesAnalytics(ledger: SalesLedgerState) {
                 stringResource(R.string.sales_book_cash_disclaimer)
             )
             Metric(stringResource(R.string.daily_sales_average), summary.dailyAverageSalesMinor, true)
+            ledger.previousPeriodSummary?.let { previous ->
+                ComparisonCard(summary.salesMinor, previous.salesMinor)
+            }
             Text(stringResource(R.string.active_days_value, summary.activeDays))
             summary.bestDay?.let {
                 Text(stringResource(R.string.best_sales_day, DateFormat.getDateInstance().format(Date(it.dayStart)), displayMoney(it.salesMinor)))
@@ -233,6 +243,11 @@ private fun SalesAnalytics(ledger: SalesLedgerState) {
             if (summary.paymentTotals.isNotEmpty()) {
                 Text(stringResource(R.string.payment_distribution), fontWeight = FontWeight.Bold)
                 DoughnutChart(summary.paymentTotals.map { paymentLabel(it.method) to it.amountMinor })
+            }
+            if (ledger.outflowCategories.isNotEmpty()) {
+                Text(stringResource(R.string.outflow_category_distribution), fontWeight = FontWeight.Bold)
+                DoughnutChart(ledger.outflowCategories.map { it.categoryName to it.totalMinor })
+                Text(stringResource(R.string.top_outflow_category, ledger.outflowCategories.first().categoryName))
             }
             if (summary.outflowsMinor > summary.salesMinor && summary.outflowsMinor > 0) {
                 Text(stringResource(R.string.smart_alert_outflows_high), color = MaterialTheme.colorScheme.error)

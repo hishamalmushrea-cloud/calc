@@ -52,6 +52,7 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
     var addType by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<DocumentEntity?>(null) }
     var pendingArchive by remember { mutableStateOf<DocumentEntity?>(null) }
+    var pendingDuplicate by remember { mutableStateOf<DocumentEntity?>(null) }
     var showCloseReview by remember { mutableStateOf(false) }
     var notes by remember(summary.notes) { mutableStateOf(summary.notes) }
 
@@ -115,7 +116,8 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                     onEvent = onEvent,
                     readOnly = closed,
                     onEdit = { editing = entry },
-                    onArchive = { pendingArchive = entry }
+                    onArchive = { pendingArchive = entry },
+                    onDuplicate = { pendingDuplicate = entry }
                 )
             }
         }
@@ -164,10 +166,23 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
             dismissButton = { TextButton(onClick = { pendingArchive = null }) { Text(stringResource(R.string.action_cancel)) } }
         )
     }
+    pendingDuplicate?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pendingDuplicate = null },
+            title = { Text(stringResource(R.string.duplicate_confirm_title)) },
+            text = { Text(stringResource(R.string.duplicate_confirm_body)) },
+            confirmButton = {
+                Button(onClick = {
+                    onEvent(UiEvent.DuplicateSalesEntry(entry.id, System.currentTimeMillis()))
+                    pendingDuplicate = null
+                }) { Text(stringResource(R.string.action_duplicate)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDuplicate = null }) { Text(stringResource(R.string.action_cancel)) } }
+        )
+    }
     if (showCloseReview) {
         SalesDayCloseDialog(summary, onDismiss = { showCloseReview = false }) {
-            onEvent(UiEvent.SaveSalesDayNotes(dayStart, notes))
-            onEvent(UiEvent.CloseSalesBookDay(dayStart))
+            onEvent(UiEvent.CloseSalesBookDay(dayStart, notes))
             showCloseReview = false
         }
     }
@@ -180,7 +195,8 @@ internal fun SalesBookEntryRow(
     onEvent: (UiEvent) -> Unit,
     readOnly: Boolean,
     onEdit: (() -> Unit)? = null,
-    onArchive: (() -> Unit)? = null
+    onArchive: (() -> Unit)? = null,
+    onDuplicate: (() -> Unit)? = null
 ) {
     val sale = entry.type == "SALE"
     val category = entry.categoryId?.let { id -> state.categories.firstOrNull { it.id == id }?.name }
@@ -207,8 +223,8 @@ internal fun SalesBookEntryRow(
             )
             if (!readOnly) {
                 Column {
-                    TextButton(onClick = { onEvent(UiEvent.DuplicateSalesEntry(entry.id, System.currentTimeMillis())) }) {
-                        Text(stringResource(R.string.action_duplicate))
+                    onDuplicate?.let {
+                        TextButton(onClick = it) { Text(stringResource(R.string.action_duplicate)) }
                     }
                     onArchive?.let {
                         TextButton(onClick = it) { Text(stringResource(R.string.action_archive), color = MaterialTheme.colorScheme.error) }

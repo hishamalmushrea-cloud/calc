@@ -273,6 +273,7 @@ class LedgerRepository(private val db: AppDb) {
         categoryId: Long? = null
     ): Long = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
+        if (type == DocType.SALE || type == DocType.EXPENSE) ensureSalesDayOpen(shopId, occurredAt)
         val st = settings.get()
         if (st?.fiscalEnabled == true) {
             val a = st.fiscalStart; val b = st.fiscalEnd
@@ -325,6 +326,10 @@ class LedgerRepository(private val db: AppDb) {
         if (d.deletedAt != null) throw LedgerException("لا يمكن تعديل عملية مؤرشفة")
         val type = runCatching { DocType.valueOf(d.type) }.getOrNull()
             ?: throw LedgerException("نوع العملية غير معروف")
+        if (type == DocType.SALE || type == DocType.EXPENSE) {
+            ensureSalesDayOpen(d.shopId, d.occurredAt)
+            ensureSalesDayOpen(d.shopId, occurredAt)
+        }
         if (docNumber.isNotBlank()) {
             val c = documents.countDocNumber(d.shopId, docNumber, d.partyId, id)
             if (c > 0) throw LedgerException("رقم المستند مستخدم مسبقًا")
@@ -355,6 +360,9 @@ class LedgerRepository(private val db: AppDb) {
         db.withTransaction {
             val d = documents.get(id)
             if (d != null && d.deletedAt == null) {
+                if (d.type == DocType.SALE.name || d.type == DocType.EXPENSE.name) {
+                    ensureSalesDayOpen(d.shopId, d.occurredAt)
+                }
                 documents.update(
                     d.copy(
                         deletedAt = System.currentTimeMillis(),
@@ -591,6 +599,7 @@ class LedgerRepository(private val db: AppDb) {
             }.sortedByDescending { it.amountMinor }
             val status = when {
                 book?.status == "CLOSED" -> "CLOSED"
+                book?.reopenedAt != null -> "REOPENED"
                 docs.isNotEmpty() || !book?.notes.isNullOrBlank() -> "HAS_RECORDS"
                 else -> "EMPTY"
             }
@@ -747,12 +756,13 @@ class LedgerRepository(private val db: AppDb) {
         )
     }
 
-    suspend fun closeSalesDay(shopId: Long, dayStart: Long) {
+    suspend fun closeSalesDay(shopId: Long, dayStart: Long, notes: String? = null) {
         val current = dailyBooks.get(shopId, dayStart)
         val now = System.currentTimeMillis()
         dailyBooks.upsert(
             (current ?: DailyBookEntity(shopId = shopId, dayStart = dayStart)).copy(
                 status = "CLOSED",
+                notes = notes ?: current?.notes.orEmpty(),
                 closedAt = now,
                 updatedAt = now
             )

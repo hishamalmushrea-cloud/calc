@@ -281,6 +281,7 @@
     <string name="sales_book_no_days">لا توجد أيام ضمن الفترة المحددة.</string>
     <string name="sales_day_closed">● مكتمل</string>
     <string name="sales_day_has_entries">● يوجد تسجيلات</string>
+    <string name="sales_day_reopened_alert">● أُعيد فتحه للتعديل</string>
     <string name="sales_day_empty">○ لم يُسجل</string>
     <string name="sales_short">مبيعات: %1$s</string>
     <string name="outflows_short">مخارج: %1$s</string>
@@ -293,6 +294,8 @@
     <string name="best_sales_day">أفضل يوم: %1$s — %2$s</string>
     <string name="weakest_sales_day">أضعف يوم: %1$s — %2$s</string>
     <string name="payment_distribution">توزيع طرق الدفع</string>
+    <string name="outflow_category_distribution">توزيع المخارج حسب التصنيف</string>
+    <string name="top_outflow_category">أعلى تصنيف مخارج: %1$s</string>
     <string name="smart_alert_outflows_high">تنبيه: المخارج في هذه الفترة أعلى من المبيعات.</string>
     <string name="sales_search_hint">ابحث بالمبلغ أو العميل أو التصنيف أو الملاحظة</string>
     <string name="this_week">هذا الأسبوع</string>
@@ -324,6 +327,8 @@
     <string name="save_notes">حفظ الملاحظات</string>
     <string name="close_sales_day">إغلاق اليوم</string>
     <string name="action_duplicate">تكرار</string>
+    <string name="duplicate_confirm_title">تكرار العملية؟</string>
+    <string name="duplicate_confirm_body">سيتم إنشاء عملية جديدة بنفس البيانات والوقت الحالي بعد التأكيد.</string>
     <string name="close_day_review">مراجعة إغلاق اليوم</string>
     <string name="close_day_question">هل تريد إغلاق هذا اليوم؟</string>
     <string name="sales_count_value">عمليات البيع: %1$d</string>

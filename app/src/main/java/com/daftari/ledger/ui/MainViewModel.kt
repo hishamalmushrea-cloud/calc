@@ -146,7 +146,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.ArchiveSalesEntry -> archiveSalesEntry(event.id)
             is UiEvent.DuplicateSalesEntry -> duplicateSalesEntry(event.id, event.occurredAt)
             is UiEvent.SaveSalesDayNotes -> saveSalesDayNotes(event.dayStart, event.notes)
-            is UiEvent.CloseSalesBookDay -> closeSalesBookDay(event.dayStart)
+            is UiEvent.CloseSalesBookDay -> closeSalesBookDay(event.dayStart, event.notes)
             is UiEvent.ReopenSalesBookDay -> reopenSalesBookDay(event.dayStart)
             is UiEvent.SearchSalesBook -> searchSalesBook(event)
             is UiEvent.ShareSalesDay -> shareSalesDay(event.dayStart, event.detailed)
@@ -325,9 +325,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun deleteDocument(id: Long) = viewModelScope.launch {
-        repo.softDeleteDocument(id)
-        refreshAll()
-        mutableState.update { it.copy(message = text(R.string.msg_archived), undoDocumentId = id) }
+        try {
+            repo.softDeleteDocument(id)
+            refreshAll()
+            mutableState.update { it.copy(message = text(R.string.msg_archived), undoDocumentId = id) }
+        } catch (error: LedgerException) {
+            dynamicError(error)
+        }
     }
 
     private fun undoDeleteDocument() = viewModelScope.launch {
