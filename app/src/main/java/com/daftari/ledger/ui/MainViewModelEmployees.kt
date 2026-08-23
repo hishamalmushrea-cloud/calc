@@ -185,7 +185,7 @@ internal fun MainViewModel.assignEmployeeShop(employeeId: Long, shopId: Long, ac
 
 internal fun MainViewModel.openEmployeeShift(employeeId: Long, label: String, openingCash: String) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
-    val amount = Money.fromMajor(openingCash)?.minor ?: return@launch message(R.string.msg_invalid_amount)
+    val amount = Money.fromMajor(openingCash, shop.fractionDigits)?.minor ?: return@launch message(R.string.msg_invalid_amount)
     try {
         staff.openShift(shop.id, employeeId, label, amount, currentActorId())
         message(R.string.msg_shift_opened)
@@ -196,7 +196,8 @@ internal fun MainViewModel.openEmployeeShift(employeeId: Long, label: String, op
 }
 
 internal fun MainViewModel.closeEmployeeShift(shiftId: Long, actualCash: String, notes: String) = viewModelScope.launch {
-    val amount = Money.fromMajor(actualCash)?.minor ?: return@launch message(R.string.msg_invalid_amount)
+    val shop = state.value.shop
+    val amount = Money.fromMajor(actualCash, shop?.fractionDigits ?: 2)?.minor ?: return@launch message(R.string.msg_invalid_amount)
     try {
         staff.closeShift(shiftId, amount, notes, currentActorId())
         message(R.string.msg_shift_closed)

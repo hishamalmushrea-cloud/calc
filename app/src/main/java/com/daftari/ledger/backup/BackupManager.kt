@@ -87,6 +87,10 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
             val counts = expectedTables.associateWith { table ->
                 sqlite.rawQuery("SELECT COUNT(*) FROM `$table`", null).use { it.moveToFirst(); it.getLong(0) }
             }
+            orphanChecks(version).forEach { (label, sql) ->
+                val broken = sqlite.rawQuery(sql, null).use { it.moveToFirst(); it.getLong(0) }
+                check(broken == 0L) { "Backup contains orphaned $label rows" }
+            }
             val latestQueries = buildList {
                 add("SELECT COALESCE(MAX(updatedAt),0) FROM documents")
                 add("SELECT COALESCE(MAX(at),0) FROM audit_logs")
@@ -99,6 +103,33 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
             check(integrity) { "Backup database is damaged" }
             check(foreignKeys) { "Backup contains broken data relationships" }
             DatabaseInspection(version, integrity, foreignKeys, counts, latest)
+        }
+    }
+
+    private fun orphanChecks(version: Int): List<Pair<String, String>> = buildList {
+        add("party" to "SELECT COUNT(*) FROM parties p WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = p.shopId)")
+        add("account" to "SELECT COUNT(*) FROM accounts a WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = a.shopId)")
+        add("document shop" to "SELECT COUNT(*) FROM documents d WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = d.shopId)")
+        add("document party" to "SELECT COUNT(*) FROM documents d WHERE d.partyId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM parties p WHERE p.id = d.partyId)")
+        add("journal document" to "SELECT COUNT(*) FROM journal_lines j WHERE NOT EXISTS (SELECT 1 FROM documents d WHERE d.id = j.documentId)")
+        add("journal account" to "SELECT COUNT(*) FROM journal_lines j WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.id = j.accountId)")
+        add("journal party" to "SELECT COUNT(*) FROM journal_lines j WHERE j.partyId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM parties p WHERE p.id = j.partyId)")
+        add("daily closing" to "SELECT COUNT(*) FROM daily_closings c WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = c.shopId)")
+        if (version >= 5) {
+            add("category" to "SELECT COUNT(*) FROM categories c WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = c.shopId)")
+            add("document category" to "SELECT COUNT(*) FROM documents d WHERE d.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM categories c WHERE c.id = d.categoryId)")
+        }
+        if (version >= 6) {
+            add("daily book" to "SELECT COUNT(*) FROM daily_books b WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = b.shopId)")
+        }
+        if (version >= 7) {
+            add("employee shop employee" to "SELECT COUNT(*) FROM employee_shops es WHERE NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = es.employeeId)")
+            add("employee shop branch" to "SELECT COUNT(*) FROM employee_shops es WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = es.shopId)")
+            add("employee shift employee" to "SELECT COUNT(*) FROM employee_shifts sh WHERE NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = sh.employeeId)")
+            add("employee shift branch" to "SELECT COUNT(*) FROM employee_shifts sh WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = sh.shopId)")
+            add("document employee" to "SELECT COUNT(*) FROM documents d WHERE d.employeeId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = d.employeeId)")
+            add("document shift" to "SELECT COUNT(*) FROM documents d WHERE d.shiftId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM employee_shifts sh WHERE sh.id = d.shiftId)")
+            add("audit actor" to "SELECT COUNT(*) FROM audit_logs a WHERE a.actorEmployeeId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = a.actorEmployeeId)")
         }
     }
 

@@ -87,4 +87,82 @@ class LedgerRepositoryIntegrationTest {
 
         assertEquals(before, repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size)
     }
+
+    @Test
+    fun creditSaleWithoutCustomerIsRejectedAndDoesNotCreateDocument() = runBlocking {
+        val before = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size
+
+        assertThrows(LedgerException::class.java) {
+            runBlocking {
+                repo.postDocument(
+                    shopId, DocType.SALE, 1_000L, System.currentTimeMillis(), paymentMethod = "CREDIT"
+                )
+            }
+        }
+
+        assertEquals(before, repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size)
+    }
+
+    @Test
+    fun creditPurchaseWithoutSupplierIsRejectedAndDoesNotCreateDocument() = runBlocking {
+        val before = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size
+
+        assertThrows(LedgerException::class.java) {
+            runBlocking {
+                repo.postDocument(
+                    shopId, DocType.PURCHASE, 1_000L, System.currentTimeMillis(), paymentMethod = "CREDIT"
+                )
+            }
+        }
+
+        assertEquals(before, repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size)
+    }
+
+    @Test
+    fun saleCannotUseSupplierAsParty() = runBlocking {
+        val supplier = repo.addParty(shopId, PartyKind.SUPPLIER, "مورد")
+
+        assertThrows(LedgerException::class.java) {
+            runBlocking {
+                repo.postDocument(
+                    shopId, DocType.SALE, 1_000L, System.currentTimeMillis(), partyId = supplier, paymentMethod = "CREDIT"
+                )
+            }
+        }
+    }
+
+    @Test
+    fun updatingCreditSalePartyRefreshesOldAndNewBalances() = runBlocking {
+        val oldCustomer = repo.addParty(shopId, PartyKind.CUSTOMER, "العميل القديم")
+        val newCustomer = repo.addParty(shopId, PartyKind.CUSTOMER, "العميل الجديد")
+        val documentId = repo.postDocument(
+            shopId, DocType.SALE, 2_500L, System.currentTimeMillis(),
+            partyId = oldCustomer, paymentMethod = "CREDIT"
+        )
+
+        repo.updateDocument(
+            id = documentId,
+            amountMinor = 3_000L,
+            occurredAt = System.currentTimeMillis(),
+            notes = "نقل للعميل الصحيح",
+            docNumber = "",
+            paymentMethod = "CREDIT",
+            partyId = newCustomer,
+            replaceParty = true
+        )
+
+        assertEquals(0L, repo.parties.get(oldCustomer)?.cachedBalanceMinor)
+        assertEquals(3_000L, repo.parties.get(newCustomer)?.cachedBalanceMinor)
+    }
+
+    @Test
+    fun receivablesSummaryUsesPositiveBalancesOnly() = runBlocking {
+        val debtor = repo.addParty(shopId, PartyKind.CUSTOMER, "مدين", openingMinor = 1_000L)
+        val advance = repo.addParty(shopId, PartyKind.CUSTOMER, "دفع مقدم", openingMinor = -700L)
+
+        assertEquals(1_000L, repo.parties.get(debtor)?.cachedBalanceMinor)
+        assertEquals(-700L, repo.parties.get(advance)?.cachedBalanceMinor)
+        assertEquals(1_000L, repo.youAreOwed(shopId))
+        assertEquals(700L, repo.customerAdvances(shopId))
+    }
 }

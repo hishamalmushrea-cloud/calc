@@ -66,26 +66,35 @@ object JournalLineBuilder {
     ): List<JournalLineEntity> {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val lines = when (type) {
-            DocType.SALE -> if (credit && partyId != null) listOf(
-                JournalLineEntity(documentId = docId, accountId = refs.arId, partyId = partyId, debitMinor = amountMinor, memo = "بيع آجل"),
-                JournalLineEntity(documentId = docId, accountId = refs.salesId, creditMinor = amountMinor)
-            ) else listOf(
+            DocType.SALE -> if (credit) {
+                val id = partyId ?: throw LedgerException("البيع الآجل يتطلب اختيار عميل")
+                listOf(
+                    JournalLineEntity(documentId = docId, accountId = refs.arId, partyId = id, debitMinor = amountMinor, memo = "بيع آجل"),
+                    JournalLineEntity(documentId = docId, accountId = refs.salesId, creditMinor = amountMinor)
+                )
+            } else listOf(
                 JournalLineEntity(documentId = docId, accountId = refs.cashId, debitMinor = amountMinor, memo = "بيع نقدي"),
                 JournalLineEntity(documentId = docId, accountId = refs.salesId, creditMinor = amountMinor)
             )
 
-            DocType.PURCHASE -> if (credit && partyId != null) listOf(
-                JournalLineEntity(documentId = docId, accountId = refs.purchasesId, debitMinor = amountMinor),
-                JournalLineEntity(documentId = docId, accountId = refs.apId, partyId = partyId, creditMinor = amountMinor, memo = "شراء آجل")
-            ) else listOf(
+            DocType.PURCHASE -> if (credit) {
+                val id = partyId ?: throw LedgerException("الشراء الآجل يتطلب اختيار مورد")
+                listOf(
+                    JournalLineEntity(documentId = docId, accountId = refs.purchasesId, debitMinor = amountMinor),
+                    JournalLineEntity(documentId = docId, accountId = refs.apId, partyId = id, creditMinor = amountMinor, memo = "شراء آجل")
+                )
+            } else listOf(
                 JournalLineEntity(documentId = docId, accountId = refs.purchasesId, debitMinor = amountMinor),
                 JournalLineEntity(documentId = docId, accountId = refs.cashId, creditMinor = amountMinor)
             )
 
-            DocType.EXPENSE -> listOf(
-                JournalLineEntity(documentId = docId, accountId = refs.expensesId, debitMinor = amountMinor, memo = notes),
-                JournalLineEntity(documentId = docId, accountId = refs.cashId, creditMinor = amountMinor)
-            )
+            DocType.EXPENSE -> {
+                if (credit) throw LedgerException("المصروف الآجل يحتاج عملية شراء آجل مرتبطة بمورد")
+                listOf(
+                    JournalLineEntity(documentId = docId, accountId = refs.expensesId, debitMinor = amountMinor, memo = notes),
+                    JournalLineEntity(documentId = docId, accountId = refs.cashId, creditMinor = amountMinor)
+                )
+            }
 
             DocType.INCOME -> listOf(
                 JournalLineEntity(documentId = docId, accountId = refs.cashId, debitMinor = amountMinor),
@@ -261,6 +270,39 @@ class LedgerRepository(private val db: AppDb) {
         if (dr != cr) throw LedgerException("القيد غير متوازن")
     }
 
+    private fun validatePartyAndPayment(type: DocType, partyId: Long?, paymentMethod: String) {
+        val method = paymentMethod.uppercase()
+        when (type) {
+            DocType.SALE -> if (method == "CREDIT" && partyId == null) {
+                throw LedgerException("البيع الآجل يتطلب اختيار عميل")
+            }
+            DocType.PURCHASE -> if (method == "CREDIT" && partyId == null) {
+                throw LedgerException("الشراء الآجل يتطلب اختيار مورد")
+            }
+            DocType.COLLECT -> if (partyId == null) throw LedgerException("اختر العميل")
+            DocType.PAY -> if (partyId == null) throw LedgerException("اختر المورد")
+            DocType.EXPENSE -> if (method == "CREDIT") {
+                throw LedgerException("المصروف الآجل يحتاج عملية شراء آجل مرتبطة بمورد")
+            }
+            else -> Unit
+        }
+    }
+
+    private suspend fun validatePartyKind(shopId: Long, type: DocType, partyId: Long?) {
+        val expected = when (type) {
+            DocType.SALE, DocType.COLLECT -> PartyKind.CUSTOMER.name
+            DocType.PURCHASE, DocType.PAY -> PartyKind.SUPPLIER.name
+            else -> null
+        }
+        if (expected != null && partyId != null) {
+            val party = parties.get(partyId) ?: throw LedgerException("الحساب غير موجود")
+            if (party.shopId != shopId || party.deletedAt != null) throw LedgerException("الحساب غير موجود في هذا المحل")
+            if (party.kind != expected) {
+                throw LedgerException(if (expected == PartyKind.CUSTOMER.name) "اختر عميلًا صحيحًا" else "اختر موردًا صحيحًا")
+            }
+        }
+    }
+
     suspend fun postDocument(
         shopId: Long,
         type: DocType,
@@ -279,6 +321,9 @@ class LedgerRepository(private val db: AppDb) {
         actorEmployeeId: Long? = null
     ): Long = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
+        val normalizedPaymentMethod = paymentMethod.uppercase()
+        validatePartyAndPayment(type, partyId, normalizedPaymentMethod)
+        validatePartyKind(shopId, type, partyId)
         if (type == DocType.SALE || type == DocType.EXPENSE) ensureSalesDayOpen(shopId, occurredAt)
         val st = settings.get()
         if (st?.fiscalEnabled == true) {
@@ -297,20 +342,20 @@ class LedgerRepository(private val db: AppDb) {
         }
         // نجمع المعرفات ونبني القيد قبل أي إدراج حتى لا يبقى مستند بلا قيود.
         val refs = refsFor(shopId, type, cashCode, transferToCode)
-        val credit = paymentMethod == "CREDIT"
+        val credit = normalizedPaymentMethod == "CREDIT"
         val docId = documents.insert(
             DocumentEntity(
                 shopId = shopId, type = type.name, partyId = partyId, cashAccountId = refs.cashId,
                 amountMinor = amountMinor,
                 occurredAt = occurredAt,
-                dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
+                dueAt = dueAt.takeIf { normalizedPaymentMethod == "CREDIT" && type == DocType.SALE },
                 categoryId = categoryId.takeIf { type == DocType.EXPENSE || type == DocType.INCOME },
                 employeeId = employeeId,
                 shiftId = shiftId,
                 createdByEmployeeId = actorEmployeeId,
                 docNumber = finalDocumentNumber,
                 notes = notes,
-                paymentMethod = paymentMethod
+                paymentMethod = normalizedPaymentMethod
             )
         )
         if (finalDocumentNumber.isNotBlank() && type != DocType.OPENING) {
@@ -325,7 +370,7 @@ class LedgerRepository(private val db: AppDb) {
             AuditLogEntity(
                 action = "CREATE", entity = "document", entityId = docId, detail = type.name,
                 actorEmployeeId = actorEmployeeId,
-                afterValue = "amount=$amountMinor;payment=$paymentMethod;employee=$employeeId;party=$partyId"
+                afterValue = "amount=$amountMinor;payment=$normalizedPaymentMethod;employee=$employeeId;party=$partyId"
             )
         )
         docId
@@ -336,30 +381,36 @@ class LedgerRepository(private val db: AppDb) {
         docNumber: String, paymentMethod: String, dueAt: Long? = null,
         categoryId: Long? = null, cashCode: String = AccountCodes.CASH,
         actorEmployeeId: Long? = null, employeeId: Long? = null,
-        shiftId: Long? = null, replaceEmployeeAssignment: Boolean = false
+        shiftId: Long? = null, replaceEmployeeAssignment: Boolean = false,
+        partyId: Long? = null, replaceParty: Boolean = false
     ) = db.withTransaction {
         if (amountMinor <= 0) throw LedgerException("أدخل مبلغًا أكبر من صفر")
         val d = documents.get(id) ?: throw LedgerException("العملية غير موجودة")
         if (d.deletedAt != null) throw LedgerException("لا يمكن تعديل عملية مؤرشفة")
         val type = runCatching { DocType.valueOf(d.type) }.getOrNull()
             ?: throw LedgerException("نوع العملية غير معروف")
+        val normalizedPaymentMethod = paymentMethod.uppercase()
+        val finalPartyId = if (replaceParty) partyId else d.partyId
+        validatePartyAndPayment(type, finalPartyId, normalizedPaymentMethod)
+        validatePartyKind(d.shopId, type, finalPartyId)
         if (type == DocType.SALE || type == DocType.EXPENSE) {
             ensureSalesDayOpen(d.shopId, d.occurredAt)
             ensureSalesDayOpen(d.shopId, occurredAt)
         }
         if (docNumber.isNotBlank()) {
-            val c = documents.countDocNumber(d.shopId, docNumber, d.partyId, id)
+            val c = documents.countDocNumber(d.shopId, docNumber, finalPartyId, id)
             if (c > 0) throw LedgerException("رقم المستند مستخدم مسبقًا")
         }
         val refs = refsFor(d.shopId, type, cashCode, null)
-        val lines = JournalLineBuilder.build(id, type, amountMinor, d.partyId, paymentMethod == "CREDIT", notes, refs)
+        val lines = JournalLineBuilder.build(id, type, amountMinor, finalPartyId, normalizedPaymentMethod == "CREDIT", notes, refs)
         journal.deleteForDoc(id)
         journal.insertAll(lines)
         documents.update(
             d.copy(
+                partyId = finalPartyId,
                 amountMinor = amountMinor,
                 occurredAt = occurredAt,
-                dueAt = dueAt.takeIf { paymentMethod == "CREDIT" && type == DocType.SALE },
+                dueAt = dueAt.takeIf { normalizedPaymentMethod == "CREDIT" && type == DocType.SALE },
                 categoryId = categoryId.takeIf { type == DocType.EXPENSE || type == DocType.INCOME },
                 cashAccountId = refs.cashId,
                 updatedByEmployeeId = actorEmployeeId,
@@ -367,17 +418,18 @@ class LedgerRepository(private val db: AppDb) {
                 shiftId = if (replaceEmployeeAssignment) shiftId else d.shiftId,
                 notes = notes,
                 docNumber = docNumber,
-                paymentMethod = paymentMethod,
+                paymentMethod = normalizedPaymentMethod,
                 updatedAt = System.currentTimeMillis()
             )
         )
         d.partyId?.let { refreshPartyBalance(it) }
+        if (finalPartyId != d.partyId) finalPartyId?.let { refreshPartyBalance(it) }
         audit.insert(
             AuditLogEntity(
                 action = "UPDATE", entity = "document", entityId = id, detail = type.name,
                 actorEmployeeId = actorEmployeeId,
                 beforeValue = "amount=${d.amountMinor};payment=${d.paymentMethod};employee=${d.employeeId};notes=${d.notes}",
-                afterValue = "amount=$amountMinor;payment=$paymentMethod;employee=${if (replaceEmployeeAssignment) employeeId else (employeeId ?: d.employeeId)};notes=$notes"
+                afterValue = "amount=$amountMinor;payment=$normalizedPaymentMethod;employee=${if (replaceEmployeeAssignment) employeeId else (employeeId ?: d.employeeId)};notes=$notes"
             )
         )
         Unit
@@ -464,8 +516,10 @@ class LedgerRepository(private val db: AppDb) {
         return PeriodTotals(sales, purchases, expenses, income, col, pay, cashIn, cashOut)
     }
 
-    suspend fun youAreOwed(shopId: Long): Long = parties.sumBalance(shopId, "CUSTOMER")
-    suspend fun youOwe(shopId: Long): Long = parties.sumBalance(shopId, "SUPPLIER")
+    suspend fun youAreOwed(shopId: Long): Long = parties.sumPositiveBalance(shopId, "CUSTOMER")
+    suspend fun customerAdvances(shopId: Long): Long = parties.sumNegativeBalanceAbs(shopId, "CUSTOMER")
+    suspend fun youOwe(shopId: Long): Long = parties.sumPositiveBalance(shopId, "SUPPLIER")
+    suspend fun supplierCredits(shopId: Long): Long = parties.sumNegativeBalanceAbs(shopId, "SUPPLIER")
 
     fun observeCustomers(shopId: Long): Flow<List<PartyEntity>> = parties.observe(shopId, "CUSTOMER")
     fun observeSuppliers(shopId: Long): Flow<List<PartyEntity>> = parties.observe(shopId, "SUPPLIER")
@@ -488,9 +542,14 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun updateShopCurrency(shopId: Long, currencyCode: String) {
         val shop = shops.get(shopId) ?: throw LedgerException("المحل غير موجود")
         val normalized = currencyCode.trim().uppercase()
-        runCatching { java.util.Currency.getInstance(normalized) }
+        val currency = runCatching { java.util.Currency.getInstance(normalized) }
             .getOrElse { throw LedgerException("رمز العملة غير صالح") }
-        shops.update(shop.copy(currencyCode = normalized))
+        shops.update(
+            shop.copy(
+                currencyCode = normalized,
+                fractionDigits = currency.defaultFractionDigits.coerceAtLeast(0)
+            )
+        )
     }
 
     /** بحث بادئة FTS4؛ لا يستخدم LIKE الذي يبدأ بعلامة % ولا يفقد الفهرس. */
@@ -628,8 +687,8 @@ class LedgerRepository(private val db: AppDb) {
         }
     }
 
-    suspend fun overdueParties(now: Long = System.currentTimeMillis()): List<OverduePartyRow> =
-        documents.overdueParties(now)
+    suspend fun overdueParties(shopId: Long, now: Long = System.currentTimeMillis()): List<OverduePartyRow> =
+        documents.overdueParties(shopId, now)
 
     suspend fun salesBookDays(shopId: Long, from: Long, to: Long, employeeId: Long? = null): List<DailyBookSummary> {
         val zone = ZoneId.systemDefault()
@@ -694,16 +753,19 @@ class LedgerRepository(private val db: AppDb) {
         paymentMethod: String?,
         categoryId: Long?,
         employeeId: Long? = null
-    ): List<DocumentEntity> = documents.searchSalesBook(
-        shopId = shopId,
-        from = from,
-        to = to,
-        query = query.trim(),
-        amountMinor = com.daftari.ledger.domain.Money.fromMajor(query)?.minor,
-        entryType = entryType,
-        paymentMethod = paymentMethod,
-        categoryId = categoryId
-    ).filter { employeeId == null || it.employeeId == employeeId }
+    ): List<DocumentEntity> {
+        val fractionDigits = shops.get(shopId)?.fractionDigits ?: 2
+        return documents.searchSalesBook(
+            shopId = shopId,
+            from = from,
+            to = to,
+            query = query.trim(),
+            amountMinor = com.daftari.ledger.domain.Money.fromMajor(query, fractionDigits)?.minor,
+            entryType = entryType,
+            paymentMethod = paymentMethod,
+            categoryId = categoryId
+        ).filter { employeeId == null || it.employeeId == employeeId }
+    }
 
     suspend fun postSalesBookEntry(
         shopId: Long,
@@ -777,6 +839,12 @@ class LedgerRepository(private val db: AppDb) {
         if (current.type == DocType.EXPENSE.name && method == "CREDIT") {
             throw LedgerException("المخرج الآجل يُسجل كشراء من شاشة العمليات")
         }
+        var partyId = input.partyId
+        if (current.type == DocType.SALE.name && method == "CREDIT" && partyId == null) {
+            val name = input.newPartyName?.trim().orEmpty()
+            if (name.isBlank()) throw LedgerException("اختر العميل للبيع الآجل")
+            partyId = addParty(current.shopId, PartyKind.CUSTOMER, name)
+        }
         val assignedShiftId = if (input.employeeId == current.employeeId) current.shiftId
         else input.employeeId?.let { staffAccess.openShiftFor(current.shopId, it)?.id }
         updateDocument(
@@ -792,7 +860,9 @@ class LedgerRepository(private val db: AppDb) {
             actorEmployeeId = actorEmployeeId,
             employeeId = input.employeeId,
             shiftId = assignedShiftId,
-            replaceEmployeeAssignment = true
+            replaceEmployeeAssignment = true,
+            partyId = partyId,
+            replaceParty = true
         )
         touchSalesDay(current.shopId, current.occurredAt)
         touchSalesDay(current.shopId, input.occurredAt)
@@ -900,7 +970,8 @@ class LedgerRepository(private val db: AppDb) {
             val existing = searchParties(shopId, r.name).firstOrNull { it.name == r.name }
             val kind = if (r.kind.contains("مورد") || r.kind.equals("SUPPLIER", true)) PartyKind.SUPPLIER else PartyKind.CUSTOMER
             val pid = existing?.id ?: addParty(shopId, kind, r.name)
-            val money = com.daftari.ledger.domain.Money.fromMajor(r.amount)
+            val fractionDigits = shops.get(shopId)?.fractionDigits ?: 2
+            val money = com.daftari.ledger.domain.Money.fromMajor(r.amount, fractionDigits)
             if (money != null && money.minor > 0) {
                 val t = runCatching { DocType.valueOf(r.type.uppercase()) }.getOrDefault(DocType.SALE)
                 postDocument(shopId, t, money.minor, System.currentTimeMillis(), pid)

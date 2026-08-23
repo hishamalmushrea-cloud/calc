@@ -121,7 +121,7 @@ internal fun MainViewModel.closeSalesDayPage() {
 
 internal fun MainViewModel.saveSalesEntry(draft: SalesEntryDraft) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
-    val amount = Money.fromMajor(draft.amount) ?: return@launch message(R.string.msg_invalid_amount)
+    val amount = Money.fromMajor(draft.amount, shop.fractionDigits) ?: return@launch message(R.string.msg_invalid_amount)
     try {
         repo.postSalesBookEntry(shop.id, draft.toInput(amount.minor), currentActorId())
         message(R.string.msg_sales_entry_saved)
@@ -132,7 +132,8 @@ internal fun MainViewModel.saveSalesEntry(draft: SalesEntryDraft) = viewModelSco
 }
 
 internal fun MainViewModel.updateSalesEntry(id: Long, draft: SalesEntryDraft) = viewModelScope.launch {
-    val amount = Money.fromMajor(draft.amount) ?: return@launch message(R.string.msg_invalid_amount)
+    val shop = state.value.shop ?: return@launch
+    val amount = Money.fromMajor(draft.amount, shop.fractionDigits) ?: return@launch message(R.string.msg_invalid_amount)
     try {
         repo.updateSalesBookEntry(id, draft.toInput(amount.minor), currentActorId())
         message(R.string.msg_edited)

@@ -24,8 +24,10 @@ import java.util.concurrent.TimeUnit
 
 class DueReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = runCatching {
-        val overdue = LedgerRepository(AppDb.get(applicationContext)).overdueParties()
-        if (overdue.isNotEmpty()) notify(overdue.size)
+        val repo = LedgerRepository(AppDb.get(applicationContext))
+        var overdue = 0
+        repo.shops.listActive().forEach { shop -> overdue += repo.overdueParties(shop.id).size }
+        if (overdue > 0) notify(overdue)
         Result.success()
     }.getOrElse { Result.retry() }
 

@@ -34,7 +34,9 @@
     <string name="cash_net_title">Net cash for the period</string>
     <string name="cash_net_subtitle">Cash received minus cash paid</string>
     <string name="owed_to_you">Receivables</string>
+    <string name="customer_advances">Customer advances</string>
     <string name="you_owe">Payables</string>
+    <string name="supplier_credits">Supplier credits</string>
     <plurals name="aging_alert"><item quantity="one">Alert: one account has debt older than 60 days</item><item quantity="other">Alert: %d accounts have debt older than 60 days</item></plurals>
     <string name="top_late_customers">Most overdue</string>
     <string name="period_indicators">Period indicators</string>

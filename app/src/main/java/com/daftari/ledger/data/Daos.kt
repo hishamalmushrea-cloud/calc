@@ -34,8 +34,10 @@ interface PartyDao {
     @Update suspend fun update(p: PartyEntity)
     @Query("SELECT COUNT(*) FROM parties WHERE shopId = :shopId AND kind = :kind AND deletedAt IS NULL")
     suspend fun count(shopId: Long, kind: String): Int
-    @Query("SELECT COALESCE(SUM(cachedBalanceMinor),0) FROM parties WHERE shopId = :shopId AND kind = :kind AND deletedAt IS NULL")
-    suspend fun sumBalance(shopId: Long, kind: String): Long
+    @Query("SELECT COALESCE(SUM(CASE WHEN cachedBalanceMinor > 0 THEN cachedBalanceMinor ELSE 0 END),0) FROM parties WHERE shopId = :shopId AND kind = :kind AND deletedAt IS NULL")
+    suspend fun sumPositiveBalance(shopId: Long, kind: String): Long
+    @Query("SELECT COALESCE(SUM(CASE WHEN cachedBalanceMinor < 0 THEN 0 - cachedBalanceMinor ELSE 0 END),0) FROM parties WHERE shopId = :shopId AND kind = :kind AND deletedAt IS NULL")
+    suspend fun sumNegativeBalanceAbs(shopId: Long, kind: String): Long
     @Query("SELECT * FROM parties WHERE shopId = :shopId AND deletedAt IS NULL")
     suspend fun listAll(shopId: Long): List<PartyEntity>
 }
@@ -196,13 +198,15 @@ interface DocumentDao {
           AND d.paymentMethod = 'CREDIT'
           AND d.dueAt IS NOT NULL
           AND d.dueAt <= :now
+          AND p.shopId = :shopId
+          AND d.shopId = :shopId
           AND p.deletedAt IS NULL
           AND p.cachedBalanceMinor > 0
         GROUP BY p.id
         ORDER BY oldestDueAt
         """
     )
-    suspend fun overdueParties(now: Long): List<OverduePartyRow>
+    suspend fun overdueParties(shopId: Long, now: Long): List<OverduePartyRow>
 
     @Query(
         """

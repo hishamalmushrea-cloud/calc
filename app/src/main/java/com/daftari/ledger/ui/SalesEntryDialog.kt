@@ -46,7 +46,7 @@ internal fun SalesEntryDialog(
     onSave: (SalesEntryDraft) -> Unit
 ) {
     val sale = type == "SALE"
-    var amount by remember { mutableStateOf(existing?.let { Money(it.amountMinor).toBigDecimal().toPlainString() }.orEmpty()) }
+    var amount by remember { mutableStateOf(existing?.let { Money(it.amountMinor, state.shop?.fractionDigits ?: 2).toBigDecimal().toPlainString() }.orEmpty()) }
     var payment by remember { mutableStateOf(existing?.paymentMethod ?: "CASH") }
     var categoryId by remember { mutableStateOf(existing?.categoryId) }
     var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }

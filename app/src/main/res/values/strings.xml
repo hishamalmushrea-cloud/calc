@@ -37,7 +37,9 @@
     <string name="cash_net_title">صافي النقد خلال الفترة</string>
     <string name="cash_net_subtitle">النقد الداخل ناقص الخارج (مبيعات نقدية + تحصيل + إيراد − مصروف − شراء − سداد)</string>
     <string name="owed_to_you">لك (عملاء)</string>
+    <string name="customer_advances">عليك لعملاء</string>
     <string name="you_owe">عليك (موردون)</string>
+    <string name="supplier_credits">لك عند موردين</string>
     <plurals name="aging_alert">
         <item quantity="one">تنبيه: حساب واحد بديون أقدم من 60 يومًا</item>
         <item quantity="other">تنبيه: %d حسابات بديون أقدم من 60 يومًا</item>

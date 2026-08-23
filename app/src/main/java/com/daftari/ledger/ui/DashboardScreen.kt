@@ -109,6 +109,12 @@ internal fun DashboardScreen(
             SplitMetric(stringResource(R.string.owed_to_you), state.owedToYou, true, Modifier.weight(1f))
             SplitMetric(stringResource(R.string.you_owe), state.youOwe, false, Modifier.weight(1f))
         }
+        if (state.customerAdvances > 0 || state.supplierCredits > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SplitMetric(stringResource(R.string.customer_advances), state.customerAdvances, false, Modifier.weight(1f))
+                SplitMetric(stringResource(R.string.supplier_credits), state.supplierCredits, true, Modifier.weight(1f))
+            }
+        }
         Spacer(Modifier.height(8.dp))
         ComparisonCard(state.totals.sales, state.prevTotals.sales)
         if (state.agingAlert > 0) {

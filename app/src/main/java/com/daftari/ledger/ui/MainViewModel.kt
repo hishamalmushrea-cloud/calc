@@ -267,7 +267,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         prevTotals = previous,
                         docs = docs.sortedByDescending { document -> document.occurredAt },
                         owedToYou = repo.youAreOwed(shop.id),
+                        customerAdvances = repo.customerAdvances(shop.id),
                         youOwe = repo.youOwe(shop.id),
+                        supplierCredits = repo.supplierCredits(shop.id),
                         nextDocumentNumber = repo.shops.get(shop.id)?.nextDocumentNumber ?: it.nextDocumentNumber,
                         categoryTotals = categoryTotals
                     )
@@ -301,9 +303,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 event.kind,
                 event.name,
                 event.phone,
-                Money.fromMajor(event.openingMajor)?.minor ?: 0L,
+                Money.fromMajor(event.openingMajor, shop.fractionDigits)?.minor ?: 0L,
                 category = event.category,
-                creditLimitMinor = Money.fromMajor(event.limitMajor)?.minor ?: 0L
+                creditLimitMinor = Money.fromMajor(event.limitMajor, shop.fractionDigits)?.minor ?: 0L
             )
             refreshAll()
         } catch (error: LedgerException) {
@@ -313,7 +315,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun updateParty(event: UiEvent.UpdateParty) = viewModelScope.launch {
         try {
-            repo.updatePartyExtra(event.id, event.category, Money.fromMajor(event.limitMajor)?.minor ?: 0L)
+            val party = repo.parties.get(event.id) ?: throw LedgerException("الحساب غير موجود")
+            val shop = repo.shops.get(party.shopId) ?: state.value.shop
+            repo.updatePartyExtra(event.id, event.category, Money.fromMajor(event.limitMajor, shop?.fractionDigits ?: 2)?.minor ?: 0L)
             val updated = repo.parties.get(event.id)
             mutableState.update {
                 it.copy(selectedParty = updated ?: it.selectedParty, message = text(R.string.msg_updated))
@@ -325,7 +329,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun addDocument(draft: DocumentDraft) = viewModelScope.launch {
         val shop = state.value.shop ?: return@launch
-        val money = Money.fromMajor(draft.amount) ?: return@launch message(R.string.msg_invalid_amount)
+        val money = Money.fromMajor(draft.amount, shop.fractionDigits) ?: return@launch message(R.string.msg_invalid_amount)
         try {
             val actorId = currentActorId()
             if (actorId != null) {
@@ -367,15 +371,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun updateDocument(event: UiEvent.UpdateDocument) = viewModelScope.launch {
-        val money = Money.fromMajor(event.amount) ?: return@launch message(R.string.msg_invalid_amount)
         try {
             val actorId = currentActorId()
             val existing = repo.documents.get(event.id) ?: throw LedgerException("العملية غير موجودة")
+            val shop = repo.shops.get(existing.shopId) ?: state.value.shop
+            val money = Money.fromMajor(event.amount, shop?.fractionDigits ?: 2) ?: return@launch message(R.string.msg_invalid_amount)
             if (actorId != null) {
                 val permission = if (existing.type == DocType.SALE.name || existing.type == DocType.EXPENSE.name) {
                     if (existing.employeeId == actorId) StaffPermission.EDIT_OWN_SALE else StaffPermission.EDIT_ANY_SALE
                 } else StaffPermission.VIEW_ACCOUNTS
                 staff.requirePermission(actorId, permission)
+            }
+            var partyId = event.partyId
+            if (partyId == null && !event.newPartyName.isNullOrBlank()) {
+                val kind = if (existing.type in listOf(DocType.SALE.name, DocType.COLLECT.name)) PartyKind.CUSTOMER else PartyKind.SUPPLIER
+                partyId = repo.addParty(existing.shopId, kind, event.newPartyName.trim())
             }
             repo.updateDocument(
                 event.id,
@@ -386,7 +396,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (event.credit) "CREDIT" else "CASH",
                 event.dueAt,
                 event.categoryId,
-                actorEmployeeId = actorId
+                actorEmployeeId = actorId,
+                partyId = partyId,
+                replaceParty = existing.type in listOf(DocType.SALE.name, DocType.COLLECT.name, DocType.PURCHASE.name, DocType.PAY.name)
             )
             refreshAll()
             message(R.string.msg_edited)
@@ -441,7 +453,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun closeDay(actual: String, notes: String) = viewModelScope.launch {
         val shop = state.value.shop ?: return@launch
-        val money = Money.fromMajor(actual) ?: return@launch message(R.string.msg_enter_actual_cash)
+        val money = Money.fromMajor(actual, shop.fractionDigits) ?: return@launch message(R.string.msg_enter_actual_cash)
         try {
             currentActorId()?.let { staff.requirePermission(it, StaffPermission.MANAGE_SHIFTS) }
             repo.closeDay(shop.id, money.minor, notes, currentActorId())

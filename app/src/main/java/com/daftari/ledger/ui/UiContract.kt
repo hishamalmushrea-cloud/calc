@@ -39,7 +39,9 @@ data class UiState(
     val docs: List<DocumentEntity> = emptyList(),
     val totals: LedgerRepository.PeriodTotals = EMPTY_TOTALS,
     val owedToYou: Long = 0,
+    val customerAdvances: Long = 0,
     val youOwe: Long = 0,
+    val supplierCredits: Long = 0,
     val period: Period = Period.TODAY,
     val customFrom: Long? = null,
     val customTo: Long? = null,
@@ -122,7 +124,9 @@ sealed interface UiEvent {
         val credit: Boolean,
         val occurredAt: Long,
         val dueAt: Long?,
-        val categoryId: Long?
+        val categoryId: Long?,
+        val partyId: Long? = null,
+        val newPartyName: String? = null
     ) : UiEvent
     data class DeleteDocument(val id: Long) : UiEvent
     data object UndoDeleteDocument : UiEvent

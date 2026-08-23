@@ -45,7 +45,7 @@ internal fun DocumentSheet(
     val existingType = existing?.type?.let { runCatching { DocType.valueOf(it) }.getOrNull() } ?: initialType
     var type by remember { mutableStateOf(existingType) }
     var amount by remember {
-        mutableStateOf(existing?.let { Money(it.amountMinor).toBigDecimal().toPlainString() }.orEmpty())
+        mutableStateOf(existing?.let { Money(it.amountMinor, state.shop?.fractionDigits ?: 2).toBigDecimal().toPlainString() }.orEmpty())
     }
     var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }
     var documentNumber by remember {
@@ -83,7 +83,7 @@ internal fun DocumentSheet(
                     )
                 }
                 OutlinedTextField(amount, { amount = it }, label = { Text(stringResource(R.string.amount)) })
-                if (existing == null && type in PARTY_DOCUMENT_TYPES) {
+                if (type in PARTY_DOCUMENT_TYPES) {
                     OutlinedTextField(partyQuery, { partyQuery = it; party = null }, label = { Text(stringResource(R.string.name)) })
                     val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
                     val suggestions = if (partyQuery.isBlank()) {
@@ -122,8 +122,9 @@ internal fun DocumentSheet(
                         })
                     }
                     if (type == DocType.SALE && credit) {
+                        val visibleDueAt = dueAt ?: (occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS)
                         TextButton(onClick = { showDueDate = true }) {
-                            Text(stringResource(R.string.due_date_value, dateFormat.format(Date(requireNotNull(dueAt)))))
+                            Text(stringResource(R.string.due_date_value, dateFormat.format(Date(visibleDueAt))))
                         }
                     }
                 }
@@ -153,10 +154,14 @@ internal fun DocumentSheet(
         },
         confirmButton = {
             Button(onClick = {
+                val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
+                val matched = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
+                val finalPartyId = party?.id ?: matched?.id
+                val newPartyName = if (type in PARTY_DOCUMENT_TYPES && finalPartyId == null) {
+                    partyQuery.trim().takeIf(String::isNotBlank)
+                } else null
+                val finalDueAt = if (type == DocType.SALE && credit) dueAt ?: occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS else null
                 if (existing == null) {
-                    val pool = if (type in CUSTOMER_DOCUMENT_TYPES) state.customers else state.suppliers
-                    val matched = pool.firstOrNull { it.name.equals(partyQuery.trim(), ignoreCase = true) }
-                    val finalPartyId = party?.id ?: matched?.id
                     onEvent(
                         UiEvent.AddDocument(
                             DocumentDraft(
@@ -166,9 +171,9 @@ internal fun DocumentSheet(
                                 credit = credit,
                                 notes = notes,
                                 documentNumber = documentNumber,
-                                newPartyName = if (finalPartyId == null) partyQuery.trim().takeIf(String::isNotBlank) else null,
+                                newPartyName = newPartyName,
                                 occurredAt = occurredAt,
-                                dueAt = dueAt,
+                                dueAt = finalDueAt,
                                 categoryId = categoryId
                             )
                         )
@@ -182,8 +187,10 @@ internal fun DocumentSheet(
                             documentNumber,
                             credit,
                             occurredAt,
-                            dueAt,
-                            categoryId
+                            finalDueAt,
+                            categoryId,
+                            finalPartyId,
+                            newPartyName
                         )
                     )
                 }

@@ -44,11 +44,16 @@ class JournalLineBuilderTest {
         assertEquals(500, ar.debitMinor)
     }
 
-    @Test fun creditSaleWithoutPartyFallsBackToCash() {
-        // لا يمكن بيع آجل بلا طرف → يُعامل كأنه نقدي.
-        val lines = JournalLineBuilder.build(1, DocType.SALE, 300, partyId = null, credit = true, notes = "", refs = refs)
-        assertBalanced(lines)
-        assertEquals(300, lines.first { it.accountId == refs.cashId }.debitMinor)
+    @Test fun creditSaleWithoutPartyIsRejected() {
+        assertThrows(LedgerException::class.java) {
+            JournalLineBuilder.build(1, DocType.SALE, 300, partyId = null, credit = true, notes = "", refs = refs)
+        }
+    }
+
+    @Test fun creditPurchaseWithoutPartyIsRejected() {
+        assertThrows(LedgerException::class.java) {
+            JournalLineBuilder.build(1, DocType.PURCHASE, 300, partyId = null, credit = true, notes = "", refs = refs)
+        }
     }
 
     @Test fun collectRequiresParty() {
@@ -70,6 +75,12 @@ class JournalLineBuilderTest {
         assertEquals(80, lines.first { it.accountId == refs.expensesId }.debitMinor)
         assertEquals(80, lines.first { it.accountId == refs.cashId }.creditMinor)
         assertEquals("إيجار", lines.first { it.accountId == refs.expensesId }.memo)
+    }
+
+    @Test fun creditExpenseIsRejected() {
+        assertThrows(LedgerException::class.java) {
+            JournalLineBuilder.build(1, DocType.EXPENSE, 80, partyId = null, credit = true, notes = "إيجار", refs = refs)
+        }
     }
 
     @Test fun transferRejectsSameAccount() {
