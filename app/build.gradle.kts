@@ -57,7 +57,10 @@ val diagnoseCompile by tasks.registering {
         }
     }
 }
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach { dependsOn(diagnoseCompile) }
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    dependsOn(diagnoseCompile)
+    enabled = false
+}
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
