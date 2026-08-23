@@ -21,8 +21,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import com.daftari.ledger.R
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.PartyEntity
@@ -88,9 +90,51 @@ internal fun DocumentSheet(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                OutlinedTextField(amount, { amount = it }, label = { Text(stringResource(R.string.amount)) })
+                OutlinedTextField(
+                    amount,
+                    { amount = it },
+                    label = { Text(stringResource(R.string.amount)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true
+                )
+                if (type == DocType.SALE || type == DocType.PURCHASE) {
+                    Row {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.credit))
+                            Text(stringResource(R.string.credit_toggle_hint), style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(credit, { enabled ->
+                            credit = enabled
+                            if (enabled && type == DocType.SALE && dueAt == null) {
+                                dueAt = occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS
+                            }
+                            if (!enabled) dueAt = null
+                        })
+                    }
+                    if (type == DocType.SALE && credit) {
+                        val visibleDueAt = dueAt ?: (occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS)
+                        TextButton(onClick = { showDueDate = true }) {
+                            Text(stringResource(R.string.due_date_value, dateFormat.format(Date(visibleDueAt))))
+                        }
+                    }
+                }
                 if (type in PARTY_DOCUMENT_TYPES) {
-                    OutlinedTextField(partyQuery, { partyQuery = it; party = null }, label = { Text(stringResource(R.string.name)) })
+                    OutlinedTextField(
+                        partyQuery,
+                        { partyQuery = it; party = null },
+                        label = {
+                            Text(
+                                stringResource(
+                                    when (type) {
+                                        DocType.COLLECT -> R.string.collect_customer_label
+                                        DocType.PAY -> R.string.pay_supplier_label
+                                        DocType.PURCHASE -> R.string.supplier
+                                        else -> R.string.customer
+                                    }
+                                )
+                            )
+                        }
+                    )
                     val suggestions = if (partyQuery.isBlank()) {
                         partyPool.sortedByDescending { kotlin.math.abs(it.cachedBalanceMinor) }.take(5)
                     } else {
@@ -112,24 +156,6 @@ internal fun DocumentSheet(
                             ),
                             style = MaterialTheme.typography.labelSmall
                         )
-                    }
-                }
-                if (type == DocType.SALE || type == DocType.PURCHASE) {
-                    Row {
-                        Text(stringResource(R.string.credit), modifier = Modifier.weight(1f))
-                        Switch(credit, { enabled ->
-                            credit = enabled
-                            if (enabled && type == DocType.SALE && dueAt == null) {
-                                dueAt = occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS
-                            }
-                            if (!enabled) dueAt = null
-                        })
-                    }
-                    if (type == DocType.SALE && credit) {
-                        val visibleDueAt = dueAt ?: (occurredAt + DEFAULT_DUE_DAYS * DAY_MILLIS)
-                        TextButton(onClick = { showDueDate = true }) {
-                            Text(stringResource(R.string.due_date_value, dateFormat.format(Date(visibleDueAt))))
-                        }
                     }
                 }
                 if (type == DocType.EXPENSE || type == DocType.INCOME) {

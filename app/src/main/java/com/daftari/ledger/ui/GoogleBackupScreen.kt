@@ -22,7 +22,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -112,16 +117,35 @@ internal fun GoogleBackupScreen(state: UiState, onEvent: (UiEvent) -> Unit, padd
     }
 
     backup.pendingRestore?.let { remote ->
+        var confirmPhrase by remember(remote.id) { mutableStateOf("") }
+        val expected = stringResource(R.string.restore_confirm_phrase)
+        val canConfirm = !backup.hasLocalData || confirmPhrase.trim() == expected
         AlertDialog(
             onDismissRequest = { onEvent(UiEvent.PrepareGoogleRestore(null)) },
             title = { Text(stringResource(R.string.restore_backup_question)) },
             text = {
-                Text(
-                    if (backup.hasLocalData) stringResource(R.string.restore_replaces_local_warning, formatRemoteDate(remote))
-                    else stringResource(R.string.restore_empty_device_message, formatRemoteDate(remote))
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (backup.hasLocalData) stringResource(R.string.restore_replaces_local_warning, formatRemoteDate(remote))
+                        else stringResource(R.string.restore_empty_device_message, formatRemoteDate(remote))
+                    )
+                    if (backup.hasLocalData) {
+                        Text(stringResource(R.string.restore_type_confirm_hint, expected), style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(
+                            confirmPhrase,
+                            { confirmPhrase = it },
+                            label = { Text(stringResource(R.string.restore_confirm_field)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             },
-            confirmButton = { Button(onClick = { onEvent(UiEvent.ConfirmGoogleRestore) }) { Text(stringResource(R.string.action_restore)) } },
+            confirmButton = {
+                Button(onClick = { onEvent(UiEvent.ConfirmGoogleRestore) }, enabled = canConfirm) {
+                    Text(stringResource(R.string.action_restore))
+                }
+            },
             dismissButton = { TextButton(onClick = { onEvent(UiEvent.PrepareGoogleRestore(null)) }) { Text(stringResource(R.string.action_cancel)) } }
         )
     }
