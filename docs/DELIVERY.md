@@ -2,8 +2,8 @@
 
 ## الحالة
 - تطبيق Android أصلي باسم **دفتري** مبني بـ Kotlin وCompose وRoom.
-- الإصدار `1.2.0` (`versionCode=3`) و`targetSdk=35`، مع JDK 17.
-- قاعدة البيانات بالإصدار 5 وبمسار ترحيل كامل دون destructive fallback.
+- الإصدار `1.3.0` (`versionCode=4`) و`targetSdk=35`، مع JDK 17.
+- قاعدة البيانات بالإصدار 6 وبمسار ترحيل كامل دون destructive fallback.
 - الميزات المنفذة موثقة في `FEATURES.md`، والاختبارات في `TESTING.md`.
 
 ## فحص CI دون APK

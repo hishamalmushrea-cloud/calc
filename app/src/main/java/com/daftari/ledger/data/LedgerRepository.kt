@@ -6,6 +6,7 @@ import com.daftari.ledger.domain.AccountType
 import com.daftari.ledger.domain.AgingFifo
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.PartyKind
+import com.daftari.ledger.domain.SalesBookAnalytics
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -621,27 +622,8 @@ class LedgerRepository(private val db: AppDb) {
         return result
     }
 
-    suspend fun salesBookPeriodSummary(shopId: Long, from: Long, to: Long): SalesBookPeriodSummary {
-        val days = salesBookDays(shopId, from, to)
-        val active = days.filter { it.transactionCount > 0 }
-        val sales = days.sumOf { it.salesMinor }
-        val outflows = days.sumOf { it.outflowsMinor }
-        val paymentTotals = days.flatMap { it.payments }.groupBy { it.method }.map { (method, rows) ->
-            PaymentTotal(method, rows.sumOf { it.amountMinor }, rows.sumOf { it.count })
-        }.sortedByDescending { it.amountMinor }
-        return SalesBookPeriodSummary(
-            salesMinor = sales,
-            outflowsMinor = outflows,
-            netCashMovementMinor = days.sumOf { it.netCashMovementMinor },
-            saleCount = days.sumOf { it.saleCount },
-            outflowCount = days.sumOf { it.outflowCount },
-            activeDays = active.size,
-            dailyAverageSalesMinor = if (active.isEmpty()) 0 else sales / active.size,
-            bestDay = active.maxByOrNull { it.salesMinor },
-            weakestDay = active.minByOrNull { it.salesMinor },
-            paymentTotals = paymentTotals
-        )
-    }
+    suspend fun salesBookPeriodSummary(shopId: Long, from: Long, to: Long): SalesBookPeriodSummary =
+        SalesBookAnalytics.summarize(salesBookDays(shopId, from, to))
 
     suspend fun salesBookEntries(shopId: Long, dayStart: Long): List<DocumentEntity> =
         documents.listSalesBookPeriod(shopId, dayStart, endOfDay(dayStart)).sortedByDescending { it.occurredAt }
