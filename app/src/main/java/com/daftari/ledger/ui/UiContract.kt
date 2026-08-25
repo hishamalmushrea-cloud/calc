@@ -11,6 +11,7 @@ import com.daftari.ledger.data.CategoryTotal
 import com.daftari.ledger.data.CsvPreviewRow
 import com.daftari.ledger.data.DatabaseHealthCheck
 import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.DocumentLineEntity
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.data.ShopEntity
@@ -77,7 +78,8 @@ data class UiState(
     val inventory: InventoryUiState = InventoryUiState(),
     val healthIssues: List<DatabaseHealthCheck.Issue> = emptyList(),
     val healthCheckedAt: Long = 0,
-    val restartRequested: Boolean = false
+    val restartRequested: Boolean = false,
+    val invoiceLines: List<DocumentLineEntity> = emptyList()
 )
 
 data class PartyStats(
@@ -134,6 +136,8 @@ sealed interface UiEvent {
     ) : UiEvent
     data class DeleteDocument(val id: Long) : UiEvent
     data object UndoDeleteDocument : UiEvent
+    data class LoadInvoiceLines(val documentId: Long) : UiEvent
+    data object ClearInvoiceLines : UiEvent
     data class ShareReceipt(val document: DocumentEntity) : UiEvent
     data class Unlock(val pin: String) : UiEvent
     data object BiometricUnlocked : UiEvent

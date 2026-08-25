@@ -24,11 +24,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import com.daftari.ledger.R
 import com.daftari.ledger.data.DocumentEntity
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.domain.DocType
+import com.daftari.ledger.domain.InventoryMath
 import com.daftari.ledger.domain.Money
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -75,6 +77,8 @@ internal fun DocumentSheet(
     val finalPartyCandidateId = party?.id ?: matchedParty?.id
     val hasPartyInput = finalPartyCandidateId != null || partyQuery.trim().isNotBlank()
     val requiresParty = type == DocType.COLLECT || type == DocType.PAY || ((type == DocType.SALE || type == DocType.PURCHASE) && credit)
+    val invoiceLines = if (existing != null) state.invoiceLines else emptyList()
+    val isInvoice = invoiceLines.isNotEmpty()
     val canSave = amount.isNotBlank() && (!requiresParty || hasPartyInput)
 
     AlertDialog(
@@ -95,8 +99,33 @@ internal fun DocumentSheet(
                     { amount = it },
                     label = { Text(stringResource(R.string.amount)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    singleLine = true,
+                    readOnly = isInvoice
                 )
+                if (isInvoice) {
+                    Text(
+                        stringResource(R.string.invoice_amount_locked),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(stringResource(R.string.invoice_lines_title), fontWeight = FontWeight.Bold)
+                    invoiceLines.forEach { line ->
+                        Text(
+                            stringResource(
+                                R.string.invoice_line_row,
+                                line.itemName,
+                                InventoryMath.formatQty(line.qtyMilli),
+                                displayMoney(line.unitPriceMinor),
+                                displayMoney(line.lineTotalMinor)
+                            ),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.invoice_total_value, displayMoney(existing?.amountMinor ?: 0L)),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 if (type == DocType.SALE || type == DocType.PURCHASE) {
                     Row {
                         Column(Modifier.weight(1f)) {

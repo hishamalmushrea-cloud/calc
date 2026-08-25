@@ -32,4 +32,14 @@ class InventoryMathTest {
         assertEquals("1.5", InventoryMath.formatQty(1_500))
         assertNull(InventoryMath.parseQty("abc"))
     }
+
+    @Test
+    fun qtyParsingPreservesNegativeSignAndRejectsMalformed() {
+        // كان سابقًا يُرجع +500 لـ «-0.5» (فقدان الإشارة عند الصفر) — الآن يجب أن يكون -500.
+        assertEquals(-500L, InventoryMath.parseQty("-0.5"))
+        assertEquals(-1_500L, InventoryMath.parseQty("-1.5"))
+        assertNull("أكثر من فاصل عشري يجب أن يُرفض", InventoryMath.parseQty("1.5.5"))
+        assertNull("أكثر من 3 خانات عشرية يجب أن تُرفض", InventoryMath.parseQty("1.5000"))
+        assertNull("حروف داخل الكسر يجب أن تُرفض", InventoryMath.parseQty("1.5x"))
+    }
 }

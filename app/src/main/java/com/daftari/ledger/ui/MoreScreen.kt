@@ -161,7 +161,9 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                     Switch(state.latinDigits, { onEvent(UiEvent.ToggleLatinDigits(it)) })
                 }
             }
+        }
 
+        if (state.can(StaffPermission.MANAGE_ACCOUNTS) || state.can(StaffPermission.MANAGE_SETTINGS)) {
             Section(stringResource(R.string.section_categories)) {
                 Row {
                     TextButton(onClick = { categoryKind = "EXPENSE" }) {
@@ -185,7 +187,9 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.add_category)) }
                 state.categories.forEach { category -> Text("• ${category.name}") }
             }
+        }
 
+        if (state.can(StaffPermission.MANAGE_SETTINGS)) {
             Section(stringResource(R.string.section_backup_hub), initiallyExpanded = true) {
                 Text(stringResource(R.string.section_backup_hub_hint), style = MaterialTheme.typography.bodySmall)
                 val google = state.googleBackup.settings
@@ -326,7 +330,7 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
             }
         }
 
-        if (state.can(StaffPermission.VIEW_ACCOUNTS)) {
+        if (state.can(StaffPermission.MANAGE_ACCOUNTS)) {
             Section(stringResource(R.string.section_csv_import)) {
                 Text(stringResource(R.string.csv_format_hint), style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(csv, { csv = it }, label = { Text(stringResource(R.string.paste_csv)) }, minLines = 4, modifier = Modifier.fillMaxWidth())

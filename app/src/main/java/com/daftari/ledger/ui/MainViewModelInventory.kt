@@ -41,7 +41,8 @@ internal fun MainViewModel.saveItem(draft: ItemDraft) = viewModelScope.launch {
             costPriceMinor = cost.minor,
             qtyMilli = qty,
             reorderQtyMilli = reorder,
-            trackStock = draft.trackStock
+            trackStock = draft.trackStock,
+            actorEmployeeId = currentActorId()
         )
         message(R.string.msg_item_saved)
     } catch (error: LedgerException) {
@@ -52,7 +53,7 @@ internal fun MainViewModel.saveItem(draft: ItemDraft) = viewModelScope.launch {
 internal fun MainViewModel.archiveItem(id: Long) = viewModelScope.launch {
     try {
         currentActorId()?.let { staff.requirePermission(it, StaffPermission.MANAGE_SETTINGS) }
-        repo.archiveItem(id)
+        repo.archiveItem(id, actorEmployeeId = currentActorId())
         message(R.string.msg_item_archived)
     } catch (error: LedgerException) {
         dynamicError(error)
@@ -68,7 +69,7 @@ internal fun MainViewModel.saveInvoice(draft: InvoiceDraft) = viewModelScope.lau
     try {
         val actorId = currentActorId()
         if (actorId != null) {
-            staff.requirePermission(actorId, if (draft.type == DocType.SALE) StaffPermission.RECORD_SALE else StaffPermission.VIEW_ACCOUNTS)
+            staff.requirePermission(actorId, if (draft.type == DocType.SALE) StaffPermission.RECORD_SALE else StaffPermission.MANAGE_ACCOUNTS)
         }
         val lines = draft.lines.map { line ->
             val qty = InventoryMath.parseQty(line.qty) ?: throw LedgerException(getApplication<Application>().getString(R.string.msg_invalid_qty))
@@ -79,7 +80,7 @@ internal fun MainViewModel.saveInvoice(draft: InvoiceDraft) = viewModelScope.lau
         var partyId = draft.partyId
         if (partyId == null && !draft.newPartyName.isNullOrBlank()) {
             val kind = if (draft.type == DocType.SALE) PartyKind.CUSTOMER else PartyKind.SUPPLIER
-            partyId = repo.addParty(shop.id, kind, draft.newPartyName.trim())
+            partyId = repo.addParty(shop.id, kind, draft.newPartyName.trim(), actorEmployeeId = actorId)
         }
         repo.postInvoice(
             shopId = shop.id,

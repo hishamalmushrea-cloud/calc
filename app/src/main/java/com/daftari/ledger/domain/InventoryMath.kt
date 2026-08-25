@@ -27,11 +27,15 @@ object InventoryMath {
         val text = raw.trim().replace(',', '.')
         if (text.isBlank()) return null
         val parts = text.split('.')
-        val whole = parts[0].toLongOrNull() ?: return null
-        val frac = parts.getOrNull(1).orEmpty().padEnd(3, '0').take(3)
-        val fracValue = if (frac.isBlank()) 0L else frac.toLongOrNull() ?: return null
-        val sign = if (whole < 0) -1 else 1
-        return whole * QTY_SCALE + sign * fracValue
+        if (parts.size > 2) return null
+        val wholeText = parts[0]
+        val negative = wholeText.startsWith('-')
+        val whole = wholeText.toLongOrNull() ?: return null
+        val fracStr = parts.getOrNull(1).orEmpty()
+        if (fracStr.length > 3 || fracStr.any { !it.isDigit() }) return null
+        val fracValue = if (fracStr.isEmpty()) 0L else fracStr.padEnd(3, '0').toLongOrNull() ?: return null
+        val magnitude = kotlin.math.abs(whole) * QTY_SCALE + fracValue
+        return if (negative) -magnitude else magnitude
     }
 
     fun formatQty(qtyMilli: Long): String {

@@ -73,10 +73,19 @@ class MainActivity : FragmentActivity() {
         ) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
             DaftariTheme {
                 val s by vm.state.collectAsState()
+
+                // منع تصوير الشاشة فقط عند تفعيل وضع إخفاء الأرصدة، بدل تقييد المستخدم دائمًا.
+                LaunchedEffect(s.hideBalances) {
+                    val secure = WindowManager.LayoutParams.FLAG_SECURE
+                    if (s.hideBalances) {
+                        window.addFlags(secure)
+                    } else {
+                        window.clearFlags(secure)
+                    }
+                }
 
                 LaunchedEffect(Unit) {
                     vm.effects.collect { effect ->

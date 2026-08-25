@@ -28,6 +28,7 @@ import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.PartyKind
+import com.daftari.ledger.domain.StaffPermission
 
 @Composable
 internal fun PartyDetail(
@@ -121,8 +122,10 @@ internal fun PartyDetail(
         dismissButton = {
             Row {
                 TextButton(onClick = { editing = true }) { Text(stringResource(R.string.action_edit)) }
-                TextButton(onClick = { onEvent(UiEvent.CloseParty(party.id)); onDismiss() }) {
-                    Text(stringResource(R.string.close_account))
+                if (state.can(StaffPermission.MANAGE_ACCOUNTS)) {
+                    TextButton(onClick = { onEvent(UiEvent.CloseParty(party.id)); onDismiss() }) {
+                        Text(stringResource(R.string.close_account))
+                    }
                 }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
             }

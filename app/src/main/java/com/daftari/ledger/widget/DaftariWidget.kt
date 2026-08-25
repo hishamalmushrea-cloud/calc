@@ -26,7 +26,9 @@ class DaftariWidget : AppWidgetProvider() {
             try {
                 val db = AppDb.get(context)
                 val repo = LedgerRepository(db)
-                val shop = repo.shops.listActive().firstOrNull()
+                val activeShops = repo.shops.listActive()
+                val activeId = activeShopId(context)
+                val shop = activeShops.firstOrNull { it.id == activeId } ?: activeShops.firstOrNull()
                 val settings = repo.settings.get()
                 val start = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0)
@@ -78,6 +80,17 @@ class DaftariWidget : AppWidgetProvider() {
     }
 
     companion object {
+        private const val ACTIVE_SHOP_PREFS = "daftari_active_shop"
+
+        /** يحفظ المحل النشط حتى يعرضه الويدجت (بدل أول محل في القائمة). */
+        fun saveActiveShop(context: Context, shopId: Long) {
+            context.getSharedPreferences(ACTIVE_SHOP_PREFS, Context.MODE_PRIVATE)
+                .edit().putLong("shopId", shopId).apply()
+        }
+
+        fun activeShopId(context: Context): Long =
+            context.getSharedPreferences(ACTIVE_SHOP_PREFS, Context.MODE_PRIVATE).getLong("shopId", -1L)
+
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, DaftariWidget::class.java)

@@ -134,7 +134,7 @@
     <string name="age_31_60">31–60</string>
     <string name="age_61_90">61–90</string>
     <string name="age_over_90">+90</string>
-    <string name="last_activity">آخر حركة: %1$s</string>
+    <string name="last_activity">أقدم استحقاق: %1$s</string>
     <plurals name="late_days">
         <item quantity="one">يوم واحد</item>
         <item quantity="other">%d يومًا</item>
@@ -143,7 +143,7 @@
     <string name="section_shops">المحلات</string>
     <string name="new_shop_name">اسم محل جديد</string>
     <string name="create_shop">إنشاء محل</string>
-    <string name="section_day_close">إغلاق اليوم</string>
+    <string name="section_day_close">إغلاق اليوم وتسوية النقد</string>
     <string name="expected_cash">النقد المتوقع: %1$s</string>
     <string name="actual_cash">النقد الفعلي</string>
     <string name="notes">ملاحظات</string>
@@ -218,7 +218,7 @@
     <string name="msg_pin_saved">تم حفظ رمز القفل</string>
     <string name="msg_pin_removed">أُلغي القفل</string>
     <string name="msg_enter_actual_cash">أدخل النقد الفعلي</string>
-    <string name="msg_day_closed">تم إغلاق اليوم</string>
+    <string name="msg_day_closed">تم إغلاق اليوم وتسوية النقد</string>
     <string name="msg_account_closed">أُغلق الحساب مع الاحتفاظ بالسجل</string>
     <string name="msg_import_result">تم استيراد %1$d صفوف، وتخطي %2$d</string>
     <string name="msg_import_failed">فشل الاستيراد ولم تُحفظ بيانات جزئية</string>
@@ -362,7 +362,7 @@
     <string name="daily_transactions">عمليات اليوم</string>
     <string name="day_notes">ملاحظات اليوم</string>
     <string name="save_notes">حفظ الملاحظات</string>
-    <string name="close_sales_day">إغلاق اليوم</string>
+    <string name="close_sales_day">إغلاق يوم البيع</string>
     <string name="action_duplicate">تكرار</string>
     <string name="duplicate_confirm_title">تكرار العملية؟</string>
     <string name="duplicate_confirm_body">سيتم إنشاء عملية جديدة بنفس البيانات والوقت الحالي بعد التأكيد.</string>
@@ -385,7 +385,7 @@
     <string name="msg_sales_entry_saved">تم حفظ إدخال الدفتر</string>
     <string name="msg_sales_entry_duplicated">تم تكرار العملية بعد التأكيد</string>
     <string name="msg_day_notes_saved">تم حفظ ملاحظات اليوم</string>
-    <string name="msg_sales_day_closed">تم إغلاق اليوم</string>
+    <string name="msg_sales_day_closed">تم إغلاق يوم البيع</string>
     <string name="msg_sales_day_reopened">تمت إعادة فتح اليوم، وسيظهر التعديل في سجل التدقيق</string>
     <string name="msg_export_ready">ملف التصدير جاهز للمشاركة</string>
     <!-- نظام الموظفين والصلاحيات -->
@@ -453,6 +453,7 @@
     <string name="permission_shifts">إدارة الورديات وإغلاق الأيام</string>
     <string name="permission_audit">عرض سجل التدقيق</string>
     <string name="permission_assign_salesperson">إسناد البيع لموظف آخر</string>
+    <string name="permission_manage_accounts">إدارة العمليات والحسابات (تسجيل وتعديل العمليات غير البيعية)</string>
     <string name="access_denied">ليست لديك صلاحية لعرض هذا القسم.</string>
 
     <string name="open_shift">فتح وردية</string>
@@ -550,6 +551,10 @@
     <string name="new_sale_invoice">فاتورة بيع</string>
     <string name="new_purchase_invoice">فاتورة شراء</string>
     <string name="invoice_hint">اختر الأصناف والكميات. الإجمالي يصبح عملية بيع أو شراء في الدفتر.</string>
+    <string name="invoice_lines_title">بنود الفاتورة</string>
+    <string name="invoice_line_row">%1$s × %2$s — %3$s = %4$s</string>
+    <string name="invoice_total_value">الإجمالي: %1$s</string>
+    <string name="invoice_amount_locked">المبلغ محسوب من بنود الفاتورة ولا يُعدَّل من هنا.</string>
     <string name="add_invoice_line">إضافة بند</string>
     <string name="add_line">أضف البند</string>
     <string name="invoice_total">الإجمالي: %1$s</string>

@@ -329,7 +329,7 @@ data class AgingDocumentRow(
     val invoiceOccurredAt: Long?
 )
 
-/** آخر حركة بيع/تحصيل محسوبة في SQL بدل استعلام مستقل لكل عميل. */
+/** أقدم تاريخ استحقاق لبيع آجل غير مسدَّد (محسوب في SQL بدل استعلام مستقل لكل عميل). */
 data class PartyLastActivityRow(
     @Embedded val party: PartyEntity,
     val lastDate: Long?
