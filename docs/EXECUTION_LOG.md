@@ -68,3 +68,27 @@
 - **البناء/الاختبار الفعلي:** BLOCKED — لا JDK/Android SDK/Gradle في بيئة العمل؛ كل التحقق ساكن. المطلوب: بيئة Android أو تشغيل CI.
 - **`salesBookDays` SQL:** مؤجّل (يتطلب تصميم تجميع يومي محلي المنطقة الزمنية) — ليس عائق إطلاق للفترات القصيرة.
 - **MainViewModel refactor:** مؤجّل P3 (تحسين بنية دون تغيير سلوك).
+
+## جولة الاختبار الفعلي على GitHub CI (أحدث التزامات)
+
+بعد تجهيز CI، أُجري الاختبار الفعلي على خوادم GitHub وكشفت الاختبارات مشاكل **سابقة الوجود** لم تكن تُكتشف لأن CI لم يكن يشغّل androidTest من قبل:
+
+### الإصلاح 14 — عدم تطابق مخطط الترحيل 7→8 (P1) ✅ DONE
+- **المشكلة:** الترحيل 7→8 ينشئ فهرسًا جزئيًا (`index_items_shopId_sku_present`) غير مُعلن في `ItemEntity` → فشل تحقق Room (`Migration didn't properly handle: items`) واختلاف مخطط "المُهاجَر" عن "التثبيت الجديد".
+- **التغيير:** إزالة الفهرس الزائد من `MIGRATION_7_8` (تفرد SKU يبقى مفروضًا في `upsertItem` عبر `countSku`).
+
+### الإصلاح 15 — اختبار ترحيل FTS (P2) ✅ DONE
+- **المشكلة:** `MigrationTestHelper.runMigrationsAndValidate` يعتبر جدول `parties_fts` الخارجي «جدولًا غير متوقع» (حدّ معروف في Room).
+- **التغيير:** إعادة كتابة `AppDbMigrationTest` لتشغيل كائنات Migration يدويًا للمسارات التي تنشئ FTS، مع إبقاء `runMigrationsAndValidate` لمسار 1→2 (بلا FTS) للحفاظ على تحقق المخطط.
+
+### الإصلاح 16 — خطأ `lateinit` على نوع بدائي (P2) ✅ DONE
+- **المشكلة:** `private lateinit var shopId: Long` في `LedgerRepositoryIntegrationTest` (خطأ ترجمة Kotlin سابق الوجود؛ لم يظهر لأن CI لم يكن يجمّع androidTest).
+- **التغيير:** `private var shopId = 0L`.
+
+### الإصلاح 17 — فشل بناء عدّاء اختبار الفئة (P2) ✅ DONE
+- **المشكلة:** `LedgerRepositoryIntegrationTest > initializationError` (Failed to instantiate test runner) بشكل ثابت عبر 3 تشغيلات — سببه النمط المتداخل `assertThrows { runBlocking { ... } }` (غير ضروري داخل `= runBlocking {}`) الذي يولّد فئات حالة اصطناعية زائدة.
+- **التغيير:** استبدال النمط باستدعاء مباشر للدالة suspend داخل سياق الكوروتين + try/catch عادي.
+
+### النتيجة النهائية (تشغيل CI رقم 32812226963)
+- ✅ `verify`: ترجمة Kotlin + اختبارات وحدة JVM + lint + بناء APK (ورفع artifact).
+- ✅ `android-tests`: **22/22 اختبار جهاز ناجح** (ترحيل 3 + صحة 5 + فواتير 3 + مستودع 8 + دفتر بيع 3).
