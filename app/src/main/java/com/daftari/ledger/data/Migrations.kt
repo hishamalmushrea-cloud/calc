@@ -181,7 +181,8 @@ object Migrations {
             )
             db.execSQL("CREATE INDEX IF NOT EXISTS index_items_shopId ON items(shopId)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_items_shopId_sku ON items(shopId, sku)")
-            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_items_shopId_sku_present ON items(shopId, sku) WHERE sku != ''")
+            // ملاحظة: تفرد رمز الصنف (sku) غير الفارغ يُفرض في طبقة المستودع (countSku)؛
+            // لا ننشئ فهرسًا جزئيًا إضافيًا هنا حتى يطابق مخطط الكيان مخططَ التثبيت الجديد.
             db.execSQL("CREATE INDEX IF NOT EXISTS index_items_name ON items(name)")
             db.execSQL(
                 """
