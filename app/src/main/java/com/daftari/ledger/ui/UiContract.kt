@@ -74,6 +74,7 @@ data class UiState(
     val salesLedger: SalesLedgerState = SalesLedgerState(),
     val employees: EmployeeUiState = EmployeeUiState(),
     val googleBackup: GoogleBackupUiState = GoogleBackupUiState(),
+    val inventory: InventoryUiState = InventoryUiState(),
     val healthIssues: List<DatabaseHealthCheck.Issue> = emptyList(),
     val healthCheckedAt: Long = 0,
     val restartRequested: Boolean = false
@@ -213,6 +214,13 @@ sealed interface UiEvent {
     ) : UiEvent
     data class ShareSalesDay(val dayStart: Long, val detailed: Boolean) : UiEvent
     data class ExportSalesPeriod(val from: Long, val to: Long, val format: String) : UiEvent
+
+    data object OpenInventory : UiEvent
+    data object CloseInventory : UiEvent
+    data class SaveItem(val draft: ItemDraft) : UiEvent
+    data class ArchiveItem(val id: Long) : UiEvent
+    data class SetInvoiceSheet(val open: Boolean, val type: DocType = DocType.SALE) : UiEvent
+    data class SaveInvoice(val draft: InvoiceDraft) : UiEvent
 
     data object OpenEmployees : UiEvent
     data object CloseEmployees : UiEvent

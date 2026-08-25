@@ -25,6 +25,27 @@
     <string name="nav_documents">العمليات</string>
     <string name="nav_reports">التقارير</string>
     <string name="nav_more">المزيد</string>
+    <string name="more_intro">الإعدادات والحماية والنسخ الاحتياطي في مجموعات واضحة.</string>
+    <string name="section_shops_hint">بدّل بين المحلات أو أنشئ محلًا جديدًا.</string>
+    <string name="section_backup_hub">النسخ والاستعادة السحابية</string>
+    <string name="section_backup_hub_hint">احمِ بياناتك أولًا عبر حساب Google. النسخ المحلي والسحابي الاختياري في الأقسام التالية.</string>
+    <string name="section_local_backup_hint">نسخ على الجهاز أو للمشاركة. الاستعادة تستبدل البيانات الحالية بعد نسخة أمان.</string>
+    <string name="section_optional_cloud_hint">مجلد ملفات أو WebDAV اختياري للمتقدمين.</string>
+    <string name="restore_cloud_file_confirm_body">ستختار ملف نسخة ثم تُستبدل بيانات التطبيق. سيُنشئ دفتري نسخة أمان أولًا.</string>
+    <string name="restore_webdav_confirm_body">ستُستعاد أحدث نسخة من WebDAV وتُستبدل بيانات هذا الجهاز بعد إنشاء نسخة أمان.</string>
+    <string name="restore_confirm_phrase">استعادة</string>
+    <string name="restore_type_confirm_hint">للتأكيد اكتب كلمة «%1$s» كما هي.</string>
+    <string name="restore_confirm_field">كلمة التأكيد</string>
+    <string name="credit_toggle_hint">فعّل الآجل إذا لم يدفع العميل الآن.</string>
+    <string name="credit_sale_helper">البيع الآجل يُسجَّل على حساب العميل حتى يسدّد لاحقًا.</string>
+    <string name="collect_customer_label">العميل الذي يسدّد الآن</string>
+    <string name="pay_supplier_label">المورد الذي تسدّد له</string>
+    <string name="dashboard_empty">ابدأ بإضافة محل ثم عملية.</string>
+    <string name="dashboard_empty_hint">استخدم بيع سريع أو التحصيل لتسجيل أول حركة.</string>
+    <string name="dashboard_balances_hint">هذه أرصدة الحسابات، وليست ربحًا. «لك» ما ينتظرك عند العملاء، و«عليك» ما تدين به للموردين.</string>
+    <string name="reports_period_hint">الأرقام تتبع الفترة المختارة في الرئيسية.</string>
+    <string name="export_pdf">تصدير PDF</string>
+    <string name="export_excel">تصدير Excel</string>
 
     <string name="period_today">اليوم</string>
     <string name="period_yesterday">أمس</string>
@@ -151,7 +172,7 @@
     <string name="database_health_ok">لا توجد مشاكل مكتشفة في قاعدة البيانات.</string>
     <string name="database_health_issue_row">%1$s — العدد: %2$d</string>
     <string name="party_required_for_document">اختر الحساب أو اكتب اسمًا جديدًا قبل الحفظ.</string>
-    <string name="credit_sale_customer_required">البيع الآجل يحتاج عميلًا. افتح التفاصيل واختر عميلًا أو اكتب اسم عميل جديد.</string>
+    <string name="credit_sale_customer_required">البيع الآجل يحتاج عميلًا. اختر عميلًا أو اكتب اسم عميل جديد.</string>
     <string name="no_audit">لا سجل بعد.</string>
 
     <string name="new_document">عملية جديدة</string>
@@ -187,7 +208,7 @@
     <string name="statement_columns">التاريخ | النوع | المبلغ</string>
 
     <string name="msg_updated">تم التحديث</string>
-    <string name="msg_invalid_amount">أدخل مبلغًا صحيحًا</string>
+    <string name="msg_invalid_amount">أدخل مبلغًا أكبر من صفر وبأرقام واضحة</string>
     <string name="msg_saved">تم الحفظ</string>
     <string name="msg_edited">تم التعديل</string>
     <string name="msg_archived">تمت الأرشفة. يمكن مراجعة السجل.</string>
@@ -202,15 +223,15 @@
     <string name="msg_import_result">تم استيراد %1$d صفوف، وتخطي %2$d</string>
     <string name="msg_import_failed">فشل الاستيراد ولم تُحفظ بيانات جزئية</string>
     <string name="msg_pdf_ready">تم إنشاء PDF</string>
-    <string name="msg_pdf_failed">فشل إنشاء PDF: %1$s</string>
+    <string name="msg_pdf_failed">تعذر إنشاء ملف PDF. أعد المحاولة. %1$s</string>
     <string name="msg_excel_ready">تم إنشاء Excel</string>
-    <string name="msg_excel_failed">فشل إنشاء Excel: %1$s</string>
+    <string name="msg_excel_failed">تعذر إنشاء ملف Excel. أعد المحاولة. %1$s</string>
     <string name="msg_backup_ready">نسخة احتياطية جاهزة</string>
     <string name="msg_restore_restarting">تمت الاستعادة. تتم إعادة التشغيل…</string>
-    <string name="msg_restore_failed">فشل الاستعادة: %1$s</string>
+    <string name="msg_restore_failed">تعذر استعادة النسخة. تحقق من الملف أو كلمة المرور ثم أعد المحاولة. %1$s</string>
     <string name="msg_enter_backup_password">أدخل كلمة مرور للنسخة المشفرة</string>
     <string name="msg_encrypted_backup_ready">نسخة مشفرة جاهزة</string>
-    <string name="msg_backup_failed">فشل إنشاء النسخة: %1$s</string>
+    <string name="msg_backup_failed">تعذر إنشاء النسخة. تأكد من مساحة الجهاز ثم أعد المحاولة. %1$s</string>
     <string name="msg_database_health_ok">فحص البيانات سليم</string>
     <string name="msg_database_health_issues">اكتشف فحص البيانات %1$d مشكلة</string>
     <string name="msg_database_health_failed">فشل فحص البيانات: %1$s</string>
@@ -505,4 +526,36 @@
     <string name="msg_google_backup_failed">تعذر إكمال النسخ أو الاستعادة: %1$s</string>
     <string name="backup_failure_channel">تنبيهات النسخ الاحتياطي</string>
     <string name="backup_failure_notification">فشل النسخ الاحتياطي عدة مرات. افتح دفتري لإعادة المحاولة أو ربط الحساب.</string>
+
+    <string name="section_inventory">المخزون والفواتير</string>
+    <string name="inventory_title">المخزون والفواتير</string>
+    <string name="inventory_hint">أضف أصنافك ثم أصدر فاتورة بيع أو شراء. المبلغ يُرحَّل كعملية عادية دون تكرار القيود.</string>
+    <string name="open_inventory">فتح المخزون والفواتير</string>
+    <string name="add_item">إضافة صنف</string>
+    <string name="edit_item">تعديل الصنف</string>
+    <string name="no_items">لا أصناف بعد. أضف أول صنف لتبدأ الفواتير.</string>
+    <string name="item_name">اسم الصنف</string>
+    <string name="item_sku_optional">رمز/باركود (اختياري)</string>
+    <string name="item_sku_value">الرمز: %1$s</string>
+    <string name="item_unit">الوحدة</string>
+    <string name="item_sell_price">سعر البيع</string>
+    <string name="item_cost_price">سعر التكلفة (اختياري)</string>
+    <string name="item_qty">الكمية</string>
+    <string name="item_reorder_qty">حد إعادة الطلب</string>
+    <string name="item_track_stock">تتبع الكمية</string>
+    <string name="item_price_value">السعر: %1$s</string>
+    <string name="item_qty_value">المتوفر: %1$s %2$s</string>
+    <string name="item_service">خدمة — بدون كمية</string>
+    <string name="low_stock_alert">تنبيه مخزون منخفض: %1$d أصناف</string>
+    <string name="new_sale_invoice">فاتورة بيع</string>
+    <string name="new_purchase_invoice">فاتورة شراء</string>
+    <string name="invoice_hint">اختر الأصناف والكميات. الإجمالي يصبح عملية بيع أو شراء في الدفتر.</string>
+    <string name="add_invoice_line">إضافة بند</string>
+    <string name="add_line">أضف البند</string>
+    <string name="invoice_total">الإجمالي: %1$s</string>
+    <string name="save_invoice">حفظ الفاتورة</string>
+    <string name="msg_item_saved">تم حفظ الصنف</string>
+    <string name="msg_item_archived">تمت أرشفة الصنف</string>
+    <string name="msg_invoice_saved">تم حفظ الفاتورة وتحديث المخزون</string>
+    <string name="msg_invalid_qty">أدخل كمية أكبر من صفر</string>
 </resources>

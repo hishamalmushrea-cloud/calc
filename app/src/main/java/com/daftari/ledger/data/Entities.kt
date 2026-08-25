@@ -368,6 +368,52 @@ data class AgingRow(
     val b90: Long
 )
 
+@Entity(
+    tableName = "items",
+    foreignKeys = [ForeignKey(entity = ShopEntity::class, parentColumns = ["id"], childColumns = ["shopId"], onDelete = ForeignKey.RESTRICT)],
+    indices = [Index("shopId"), Index(value = ["shopId", "sku"]), Index("name")]
+)
+data class ItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val name: String,
+    val sku: String = "",
+    val unit: String = "قطعة",
+    val sellPriceMinor: Long = 0,
+    val costPriceMinor: Long = 0,
+    val qtyMilli: Long = 0,
+    val reorderQtyMilli: Long = 0,
+    val trackStock: Boolean = true,
+    val archived: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "document_lines",
+    foreignKeys = [
+        ForeignKey(entity = DocumentEntity::class, parentColumns = ["id"], childColumns = ["documentId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = ItemEntity::class, parentColumns = ["id"], childColumns = ["itemId"], onDelete = ForeignKey.RESTRICT)
+    ],
+    indices = [Index("documentId"), Index("itemId")]
+)
+data class DocumentLineEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val documentId: Long,
+    val itemId: Long,
+    val itemName: String,
+    val qtyMilli: Long,
+    val unitPriceMinor: Long,
+    val lineTotalMinor: Long,
+    val trackStock: Boolean = true
+)
+
+data class InvoiceLineInput(
+    val itemId: Long,
+    val qtyMilli: Long,
+    val unitPriceMinor: Long
+)
+
 data class CsvPreviewRow(
     val line: Int,
     val name: String,

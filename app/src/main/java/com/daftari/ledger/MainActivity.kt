@@ -149,6 +149,7 @@ class MainActivity : FragmentActivity() {
             vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(getString(R.string.google_backup_not_configured)))
             return
         }
+        android.util.Log.d("DaftariAuth", "linkGoogleAccount: clientId=$clientId, action=$action")
         runCatching {
             val option = GetGoogleIdOption.Builder()
                 .setServerClientId(clientId)
@@ -156,16 +157,20 @@ class MainActivity : FragmentActivity() {
                 .setAutoSelectEnabled(false)
                 .build()
             val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+            android.util.Log.d("DaftariAuth", "Calling CredentialManager.getCredential...")
             val credential = CredentialManager.create(this).getCredential(this, request).credential
             check(credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL)
             GoogleIdTokenCredential.createFrom(credential.data)
         }.onSuccess { google ->
+            android.util.Log.d("DaftariAuth", "Google sign-in success: ${google.id}")
             pendingGoogleEmail = google.id
             pendingGoogleSubject = google.idToken.split('.').getOrNull(1)?.let(::decodeGoogleSubject).orEmpty()
             pendingGoogleAction = action
             startGoogleAuthorization()
-        }.onFailure {
-            vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(it.message ?: getString(R.string.google_sign_in_failed)))
+        }.onFailure { error ->
+            val detail = "${error.javaClass.simpleName}: ${error.message}"
+            android.util.Log.e("DaftariAuth", "Google sign-in failed: $detail", error)
+            vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(detail))
         }
     }
 
@@ -182,18 +187,30 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun startGoogleAuthorization() {
-        val request = AuthorizationRequest.builder()
+        val builder = AuthorizationRequest.builder()
             .setRequestedScopes(listOf(Scope(GOOGLE_DRIVE_APPDATA_SCOPE), Scope(GOOGLE_OPENID_SCOPE), Scope(GOOGLE_EMAIL_SCOPE)))
-            .build()
+        if (pendingGoogleEmail.isNotBlank()) {
+            builder.setAccount(android.accounts.Account(pendingGoogleEmail, "com.google"))
+        }
+        val request = builder.build()
+        android.util.Log.d("DaftariAuth", "Calling Identity.getAuthorizationClient.authorize for account: $pendingGoogleEmail")
         Identity.getAuthorizationClient(this).authorize(request)
             .addOnSuccessListener { result ->
                 if (result.hasResolution()) {
+                    android.util.Log.d("DaftariAuth", "Authorization requires resolution (user consent UI).")
                     val intent = result.pendingIntent?.intentSender
                     if (intent != null) googleAuthorization.launch(IntentSenderRequest.Builder(intent).build())
                     else vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(getString(R.string.google_authorization_failed)))
-                } else completeGoogleAuthorization(result.accessToken)
+                } else {
+                    android.util.Log.d("DaftariAuth", "Authorization granted without resolution UI.")
+                    completeGoogleAuthorization(result.accessToken)
+                }
             }
-            .addOnFailureListener { vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(it.message.orEmpty())) }
+            .addOnFailureListener { error -> 
+                val detail = "${error.javaClass.simpleName}: ${error.message}"
+                android.util.Log.e("DaftariAuth", "Authorization failed: $detail", error)
+                vm.onEvent(UiEvent.GoogleBackupAuthorizationFailed(error.message ?: detail)) 
+            }
     }
 
     private fun completeGoogleAuthorization(token: String?) {

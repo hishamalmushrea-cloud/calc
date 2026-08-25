@@ -365,6 +365,36 @@ interface ClosingDao {
 }
 
 @Dao
+interface ItemDao {
+    @Query("SELECT * FROM items WHERE shopId = :shopId AND archived = 0 ORDER BY name")
+    fun observe(shopId: Long): Flow<List<ItemEntity>>
+
+    @Query("SELECT * FROM items WHERE shopId = :shopId AND archived = 0 ORDER BY name")
+    suspend fun list(shopId: Long): List<ItemEntity>
+
+    @Query("SELECT * FROM items WHERE id = :id")
+    suspend fun get(id: Long): ItemEntity?
+
+    @Query("SELECT COUNT(*) FROM items WHERE shopId = :shopId AND sku = :sku AND sku != '' AND id != :exceptId")
+    suspend fun countSku(shopId: Long, sku: String, exceptId: Long = -1): Int
+
+    @Query("SELECT COUNT(*) FROM items WHERE shopId = :shopId AND archived = 0 AND trackStock = 1 AND qtyMilli <= reorderQtyMilli")
+    suspend fun lowStockCount(shopId: Long): Int
+
+    @Insert suspend fun insert(item: ItemEntity): Long
+    @Update suspend fun update(item: ItemEntity)
+}
+
+@Dao
+interface DocumentLineDao {
+    @Insert suspend fun insertAll(lines: List<DocumentLineEntity>)
+    @Query("DELETE FROM document_lines WHERE documentId = :documentId")
+    suspend fun deleteForDocument(documentId: Long)
+    @Query("SELECT * FROM document_lines WHERE documentId = :documentId ORDER BY id")
+    suspend fun forDocument(documentId: Long): List<DocumentLineEntity>
+}
+
+@Dao
 interface DailyBookDao {
     @Query("SELECT * FROM daily_books WHERE shopId = :shopId AND dayStart = :dayStart LIMIT 1")
     suspend fun get(shopId: Long, dayStart: Long): DailyBookEntity?

@@ -182,6 +182,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.SearchSalesBook -> searchSalesBook(event)
             is UiEvent.ShareSalesDay -> shareSalesDay(event.dayStart, event.detailed)
             is UiEvent.ExportSalesPeriod -> exportSalesPeriod(event.from, event.to, event.format)
+            UiEvent.OpenInventory -> openInventory()
+            UiEvent.CloseInventory -> closeInventory()
+            is UiEvent.SaveItem -> saveItem(event.draft)
+            is UiEvent.ArchiveItem -> archiveItem(event.id)
+            is UiEvent.SetInvoiceSheet -> setInvoiceSheet(event.open, event.type)
+            is UiEvent.SaveInvoice -> saveInvoice(event.draft)
             UiEvent.OpenEmployees -> openEmployees()
             UiEvent.CloseEmployees -> closeEmployees()
             is UiEvent.SetEmployeesEnabled -> setEmployeesEnabled(event.enabled)
@@ -226,6 +232,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             launch {
                 staff.observeForShop(id).collectLatest { employees ->
                     mutableState.update { it.copy(employees = it.employees.copy(employees = employees)) }
+                }
+            }
+            launch {
+                repo.observeItems(id).collectLatest { items ->
+                    mutableState.update {
+                        it.copy(
+                            inventory = it.inventory.copy(
+                                items = items,
+                                lowStockCount = items.count { item -> item.trackStock && item.qtyMilli <= item.reorderQtyMilli }
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -583,7 +601,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    private fun refreshAll() {
+    internal fun refreshAll() {
         refreshTotals()
         refreshInsights()
         loadSalesLedger()

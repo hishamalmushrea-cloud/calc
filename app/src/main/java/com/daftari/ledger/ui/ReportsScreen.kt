@@ -31,7 +31,12 @@ internal fun ReportsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
     LaunchedEffect(state.shop?.id) { onEvent(UiEvent.LoadInsights) }
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState())) {
         Text(stringResource(R.string.period_report), style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.reports_period_hint), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.padding(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SplitMetric(stringResource(R.string.owed_to_you), state.owedToYou, true, Modifier.weight(1f))
+            SplitMetric(stringResource(R.string.you_owe), state.youOwe, false, Modifier.weight(1f))
+        }
         Metric(stringResource(R.string.sales), totals.sales, true)
         Metric(stringResource(R.string.purchases), totals.purchases, false)
         Metric(stringResource(R.string.expenses), totals.expenses, false)
