@@ -8,7 +8,7 @@ import com.daftari.ledger.domain.PartyKind
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -76,59 +76,61 @@ class LedgerRepositoryIntegrationTest {
     @Test
     fun invalidPostRollsBackDocumentInsertion() = runBlocking {
         val before = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size
-
-        assertThrows(LedgerException::class.java) {
-            runBlocking {
-                repo.postDocument(
-                    shopId, DocType.COLLECT, 1_000L, System.currentTimeMillis(), partyId = null
-                )
-            }
+        var rejected = false
+        try {
+            repo.postDocument(
+                shopId, DocType.COLLECT, 1_000L, System.currentTimeMillis(), partyId = null
+            )
+        } catch (e: LedgerException) {
+            rejected = true
         }
-
+        assertTrue(rejected)
         assertEquals(before, repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size)
     }
 
     @Test
     fun creditSaleWithoutCustomerIsRejectedAndDoesNotCreateDocument() = runBlocking {
         val before = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size
-
-        assertThrows(LedgerException::class.java) {
-            runBlocking {
-                repo.postDocument(
-                    shopId, DocType.SALE, 1_000L, System.currentTimeMillis(), paymentMethod = "CREDIT"
-                )
-            }
+        var rejected = false
+        try {
+            repo.postDocument(
+                shopId, DocType.SALE, 1_000L, System.currentTimeMillis(), paymentMethod = "CREDIT"
+            )
+        } catch (e: LedgerException) {
+            rejected = true
         }
-
+        assertTrue(rejected)
         assertEquals(before, repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size)
     }
 
     @Test
     fun creditPurchaseWithoutSupplierIsRejectedAndDoesNotCreateDocument() = runBlocking {
         val before = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size
-
-        assertThrows(LedgerException::class.java) {
-            runBlocking {
-                repo.postDocument(
-                    shopId, DocType.PURCHASE, 1_000L, System.currentTimeMillis(), paymentMethod = "CREDIT"
-                )
-            }
+        var rejected = false
+        try {
+            repo.postDocument(
+                shopId, DocType.PURCHASE, 1_000L, System.currentTimeMillis(), paymentMethod = "CREDIT"
+            )
+        } catch (e: LedgerException) {
+            rejected = true
         }
-
+        assertTrue(rejected)
         assertEquals(before, repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE).size)
     }
 
     @Test
     fun saleCannotUseSupplierAsParty() = runBlocking {
         val supplier = repo.addParty(shopId, PartyKind.SUPPLIER, "مورد")
-
-        assertThrows(LedgerException::class.java) {
-            runBlocking {
-                repo.postDocument(
-                    shopId, DocType.SALE, 1_000L, System.currentTimeMillis(), partyId = supplier, paymentMethod = "CREDIT"
-                )
-            }
+        var rejected = false
+        try {
+            repo.postDocument(
+                shopId, DocType.SALE, 1_000L, System.currentTimeMillis(),
+                partyId = supplier, paymentMethod = "CREDIT"
+            )
+        } catch (e: LedgerException) {
+            rejected = true
         }
+        assertTrue(rejected)
     }
 
     @Test
