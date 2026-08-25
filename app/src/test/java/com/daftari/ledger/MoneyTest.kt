@@ -51,10 +51,12 @@ class MoneyTest {
     }
 
     @Test
-    fun currencyFormatFallsBackToIsoCodeRatherThanWrongSymbol() {
-        // أي عملة غير مدعومة محليًا يجب أن تعرض رمز ISO وليس رمز عملة أخرى.
-        val formatted = Money(1000).format(java.util.Locale.US, "YER", includeCurrency = true)
-        assertFalse(formatted.contains('$'))
-        assertTrue(formatted.contains("YER"))
+    fun nonUsdCurrenciesNeverShowDollarSign() {
+        // عند تفعيل الأرقام اللاتينية يُستخدم Locale.US؛ أي عملة غير الدولار يجب ألا تعرض «$»
+        // حتى لو كان رمزها المحلي غير متاح في JDK (سيُعرض الرمز المحلي أو رمز ISO، وليس دولارًا).
+        val sar = Money(1000).format(java.util.Locale.US, "SAR", includeCurrency = true)
+        val yer = Money(1000).format(java.util.Locale.US, "YER", includeCurrency = true)
+        assertFalse("SAR مع Locale.US يجب ألا يعرض «$»: $sar", sar.contains('$'))
+        assertFalse("YER مع Locale.US يجب ألا يعرض «$»: $yer", yer.contains('$'))
     }
 }
