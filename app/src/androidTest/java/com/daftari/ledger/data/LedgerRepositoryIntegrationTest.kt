@@ -21,7 +21,7 @@ import org.junit.runner.RunWith
 class LedgerRepositoryIntegrationTest {
     private lateinit var db: AppDb
     private lateinit var repo: LedgerRepository
-    private lateinit var shopId: Long
+    private var shopId = 0L
 
     @Before
     fun setUp() = runBlocking {
