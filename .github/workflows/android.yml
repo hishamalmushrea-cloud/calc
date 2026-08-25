@@ -1,10 +1,3 @@
-# ملف CI — احتياطي للاستخدام اليدوي
-
-> **السبب:** رُفع من مسار `.github/workflows/` لأن تطبيق GitHub المتصل حاليًا لا يملك
-> صلاحية `workflows` (رفض الدفع). لإعادة تفعيل CI، أنشئ الملف يدويًا في
-> `.github/workflows/android.yml` بالمحتوى التالي (أو امنح التطبيق صلاحية workflows).
-
-```yaml
 name: Android CI
 
 on:
@@ -42,15 +35,12 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # يترجم كود التطبيق واختبارات JVM ويشغلها.
       - name: Compile and run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon
 
-      # يفحص كود Android والموارد وملف Manifest.
       - name: Run Android lint
         run: ./gradlew :app:lintDebug --no-daemon
 
-      # بناء APK فعلي للتحقق من التغليف (compile + dex + packaging).
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
 
@@ -94,4 +84,3 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: ./gradlew connectedDebugAndroidTest --no-daemon
-```
