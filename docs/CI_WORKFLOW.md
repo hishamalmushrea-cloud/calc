@@ -1,3 +1,10 @@
+# ملف CI — احتياطي للاستخدام اليدوي
+
+> **السبب:** رُفع من مسار `.github/workflows/` لأن تطبيق GitHub المتصل حاليًا لا يملك
+> صلاحية `workflows` (رفض الدفع). لإعادة تفعيل CI، أنشئ الملف يدويًا في
+> `.github/workflows/android.yml` بالمحتوى التالي (أو امنح التطبيق صلاحية workflows).
+
+```yaml
 name: Android CI
 
 on:
@@ -87,3 +94,4 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: ./gradlew connectedDebugAndroidTest --no-daemon
+```
