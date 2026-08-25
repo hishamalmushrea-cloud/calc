@@ -54,6 +54,6 @@ class StaffPermissionsTest {
     fun permissionBitsDoNotOverlap() {
         // كل صلاحية تملك bit مستقلًا حتى لا تتعارض أقنعة الصلاحيات.
         val bits = StaffPermission.entries.map { it.bit }
-        assertEquals("صلاحيات مكررة في البتات", bits.size, bits.toSet().size)
+        assertTrue("صلاحيات مكررة في البتات", bits.size == bits.toSet().size)
     }
 }

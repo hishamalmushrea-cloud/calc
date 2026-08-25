@@ -160,7 +160,9 @@ class LedgerRepository(private val db: AppDb) {
     /** فرض «أو» بين عدة صلاحيات (مثل إضافة طرف: بائع أو محاسب). */
     private suspend fun requireAny(actorId: Long?, vararg permissions: StaffPermission) {
         if (actorId == null) return
-        if (permissions.any { staffAccess.can(actorId, it) }) return
+        for (permission in permissions) {
+            if (staffAccess.can(actorId, permission)) return
+        }
         throw LedgerException("ليست لديك صلاحية لهذه العملية")
     }
 
