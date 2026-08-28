@@ -306,8 +306,6 @@ internal object BookLedgerBridge {
 
     fun statement(rows: List<BookEntryEntity>) = AccountsBookMath.statement(rows.map { it.toCore() })
 
-    fun toCore(entry: BookEntryEntity): BookEntryCore = entry.toCore()
-
     private fun BookEntryEntity.toCore() = BookEntryCore(
         kind = runCatching { BookEntryKind.valueOf(kind) }.getOrDefault(BookEntryKind.DEBT),
         side = runCatching { BookSide.valueOf(side) }.getOrDefault(BookSide.DEBT),
