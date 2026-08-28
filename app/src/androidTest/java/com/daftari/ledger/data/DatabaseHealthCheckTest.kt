@@ -28,6 +28,8 @@ class DatabaseHealthCheckTest {
         repo = LedgerRepository(db)
         repo.ensureSettings()
         shopId = repo.createShop("فحص السلامة")
+        // فحص سلامة v9 يتوقع وجود عملات، وهي في التطبيق تُدرج عند فتح القاعدة.
+        AccountsBookRepository(db).ensureSeeded()
     }
 
     @After

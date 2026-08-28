@@ -1,5 +1,6 @@
 package com.daftari.ledger.data
 
+import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -36,6 +37,9 @@ class AccountsBookIntegrationTest {
         ledger = LedgerRepository(db)
         ledger.ensureSettings()
         shopId = ledger.createShop("محل الاختبار")
+        // في التطبيق تُدرج البذور عبر RoomDatabase.Callback داخل AppDb.get،
+        // وقاعدة الاختبار تُبنى مباشرة في الذاكرة فلا يمرّ عليها ذلك النداء.
+        book.ensureSeeded()
     }
 
     @After
@@ -44,13 +48,29 @@ class AccountsBookIntegrationTest {
     }
 
     @Test
-    fun seededCurrenciesExistOnFreshDatabase() = runBlocking {
+    fun seedCurrenciesCoverTheRequestedOnes() = runBlocking {
         val codes = book.listCurrencies().map { it.code }
 
         assertTrue(codes.toString(), codes.containsAll(listOf("LOCAL", "YER", "SAR", "USD")))
         assertNotNull(book.defaultCurrency("SAR"))
         // العملة المحلية بلا رمز كما طلب المستخدم.
         assertEquals("", book.listCurrencies().first { it.code == "LOCAL" }.symbol)
+    }
+
+    /** يبني القاعدة بنفس طريقة التطبيق ليتأكد أن البذور تُدرج فعلًا عند أول فتح. */
+    @Test
+    fun appDatabaseSeedsCurrenciesOnFirstOpen() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(APP_DB_NAME)
+        try {
+            val appDb = AppDb.get(context)
+            val codes = runBlocking { appDb.currencies().list() }.map { it.code }
+
+            assertTrue(codes.toString(), codes.containsAll(listOf("LOCAL", "YER", "SAR", "USD")))
+        } finally {
+            AppDb.invalidate(context)
+            context.deleteDatabase(APP_DB_NAME)
+        }
     }
 
     @Test
@@ -294,5 +314,9 @@ class AccountsBookIntegrationTest {
         val result = runCatching { book.addPerson(shopId, "   ") }
 
         assertTrue(result.exceptionOrNull() is LedgerException)
+    }
+
+    private companion object {
+        private const val APP_DB_NAME = "daftari.db"
     }
 }
