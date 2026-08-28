@@ -534,9 +534,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun backupNow() = viewModelScope.launch {
-        val file = services.backupDatabase()
-        mutableState.update {
-            it.copy(shareFile = file, backups = services.listBackups(), message = text(R.string.msg_backup_ready))
+        try {
+            val file = services.backupDatabase()
+            mutableState.update {
+                it.copy(shareFile = file, backups = services.listBackups(), message = text(R.string.msg_backup_ready))
+            }
+        } catch (error: Exception) {
+            message(R.string.msg_backup_failed, error.message.orEmpty())
         }
     }
 
