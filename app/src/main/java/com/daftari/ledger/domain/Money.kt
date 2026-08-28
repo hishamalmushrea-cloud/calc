@@ -32,12 +32,31 @@ data class Money(val minor: Long, val fractionDigits: Int = 2) {
     ): String {
         val formatter = if (includeCurrency && currencyCode != null) {
             NumberFormat.getCurrencyInstance(locale).apply {
-                runCatching { Currency.getInstance(currencyCode) }.getOrNull()?.let { currency = it }
+                val currency = runCatching { Currency.getInstance(currencyCode) }.getOrNull()
+                if (currency != null) {
+                    this.currency = currency
+                    // ضبط الرمز صراحةً: getCurrencyInstance(locale) قد يعرض «$» الافتراضي
+                    // حتى بعد تغيير العملة، فيجب استبدال الرمز برمز العملة الصحيح.
+                    if (this is java.text.DecimalFormat) {
+                        val symbols = decimalFormatSymbols
+                        symbols.currencySymbol = currencySymbol(currency, locale)
+                        decimalFormatSymbols = symbols
+                    }
+                }
             }
         } else NumberFormat.getNumberInstance(locale)
         formatter.minimumFractionDigits = if (minor % powerOfTen(fractionDigits) == 0L) 0 else fractionDigits
         formatter.maximumFractionDigits = fractionDigits
         return formatter.format(toBigDecimal())
+    }
+
+    /** رمز عرض العملة: الرمز المحلي إن وُجد، وإلا رمز العملة الدولي (وليس رمزًا خاطئًا من Locale آخر). */
+    private fun currencySymbol(currency: Currency, locale: Locale): String {
+        val local = currency.getSymbol(locale)
+        if (local != currency.currencyCode) return local
+        return currency.getSymbol(Locale("ar")).takeIf { it != currency.currencyCode }
+            ?: currency.getSymbol(Locale.US).takeIf { it != currency.currencyCode }
+            ?: currency.currencyCode
     }
 
     private fun powerOfTen(digits: Int): Long = (1..digits).fold(1L) { value, _ -> value * 10L }

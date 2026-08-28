@@ -11,6 +11,7 @@ import com.daftari.ledger.data.CategoryTotal
 import com.daftari.ledger.data.CsvPreviewRow
 import com.daftari.ledger.data.DatabaseHealthCheck
 import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.DocumentLineEntity
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.data.ShopEntity
@@ -74,9 +75,11 @@ data class UiState(
     val salesLedger: SalesLedgerState = SalesLedgerState(),
     val employees: EmployeeUiState = EmployeeUiState(),
     val googleBackup: GoogleBackupUiState = GoogleBackupUiState(),
+    val inventory: InventoryUiState = InventoryUiState(),
     val healthIssues: List<DatabaseHealthCheck.Issue> = emptyList(),
     val healthCheckedAt: Long = 0,
-    val restartRequested: Boolean = false
+    val restartRequested: Boolean = false,
+    val invoiceLines: List<DocumentLineEntity> = emptyList()
 )
 
 data class PartyStats(
@@ -133,6 +136,8 @@ sealed interface UiEvent {
     ) : UiEvent
     data class DeleteDocument(val id: Long) : UiEvent
     data object UndoDeleteDocument : UiEvent
+    data class LoadInvoiceLines(val documentId: Long) : UiEvent
+    data object ClearInvoiceLines : UiEvent
     data class ShareReceipt(val document: DocumentEntity) : UiEvent
     data class Unlock(val pin: String) : UiEvent
     data object BiometricUnlocked : UiEvent
@@ -213,6 +218,13 @@ sealed interface UiEvent {
     ) : UiEvent
     data class ShareSalesDay(val dayStart: Long, val detailed: Boolean) : UiEvent
     data class ExportSalesPeriod(val from: Long, val to: Long, val format: String) : UiEvent
+
+    data object OpenInventory : UiEvent
+    data object CloseInventory : UiEvent
+    data class SaveItem(val draft: ItemDraft) : UiEvent
+    data class ArchiveItem(val id: Long) : UiEvent
+    data class SetInvoiceSheet(val open: Boolean, val type: DocType = DocType.SALE) : UiEvent
+    data class SaveInvoice(val draft: InvoiceDraft) : UiEvent
 
     data object OpenEmployees : UiEvent
     data object CloseEmployees : UiEvent

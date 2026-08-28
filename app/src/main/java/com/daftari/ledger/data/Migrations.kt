@@ -156,8 +156,57 @@ object Migrations {
         }
     }
 
+    /** v7 → v8: أصناف المخزون وبنود الفاتورة دون تكرار القيود المالية. */
+    val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    shopId INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    sku TEXT NOT NULL,
+                    unit TEXT NOT NULL,
+                    sellPriceMinor INTEGER NOT NULL,
+                    costPriceMinor INTEGER NOT NULL,
+                    qtyMilli INTEGER NOT NULL,
+                    reorderQtyMilli INTEGER NOT NULL,
+                    trackStock INTEGER NOT NULL,
+                    archived INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL,
+                    FOREIGN KEY(shopId) REFERENCES shops(id) ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_items_shopId ON items(shopId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_items_shopId_sku ON items(shopId, sku)")
+            // ملاحظة: تفرد رمز الصنف (sku) غير الفارغ يُفرض في طبقة المستودع (countSku)؛
+            // لا ننشئ فهرسًا جزئيًا إضافيًا هنا حتى يطابق مخطط الكيان مخططَ التثبيت الجديد.
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_items_name ON items(name)")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS document_lines (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    documentId INTEGER NOT NULL,
+                    itemId INTEGER NOT NULL,
+                    itemName TEXT NOT NULL,
+                    qtyMilli INTEGER NOT NULL,
+                    unitPriceMinor INTEGER NOT NULL,
+                    lineTotalMinor INTEGER NOT NULL,
+                    trackStock INTEGER NOT NULL,
+                    FOREIGN KEY(documentId) REFERENCES documents(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(itemId) REFERENCES items(id) ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_document_lines_documentId ON document_lines(documentId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_document_lines_itemId ON document_lines(itemId)")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-        MIGRATION_6_7
+        MIGRATION_6_7, MIGRATION_7_8
     )
 }

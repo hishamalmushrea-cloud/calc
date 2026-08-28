@@ -139,7 +139,10 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                                         contentPadding = PaddingValues(horizontal = 4.dp)
                                     ) { Text(stringResource(R.string.receipt_pdf), style = MaterialTheme.typography.labelSmall) }
                                     TextButton(
-                                        onClick = { editing = document },
+                                        onClick = {
+                                            onEvent(UiEvent.LoadInvoiceLines(document.id))
+                                            editing = document
+                                        },
                                         contentPadding = PaddingValues(horizontal = 6.dp)
                                     ) { Text(stringResource(R.string.action_edit), style = MaterialTheme.typography.labelSmall) }
                                     TextButton(
@@ -161,7 +164,10 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
         }
     }
     editing?.let { document ->
-        DocumentSheet(state, onEvent, DocType.SALE, document) { editing = null }
+        DocumentSheet(state, onEvent, DocType.SALE, document, onDismiss = {
+            editing = null
+            onEvent(UiEvent.ClearInvoiceLines)
+        })
     }
     pendingArchive?.let { document ->
         AlertDialog(

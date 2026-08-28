@@ -146,12 +146,39 @@ class LedgerRepository(private val db: AppDb) {
     val audit = db.audit()
     val settings = db.settings()
     val dailyBooks = db.dailyBooks()
+    val items = db.items()
+    val documentLines = db.documentLines()
+
+    /**
+     * فرض صلاحية واحدة على منفّذ العملية (قيمة null تعني صاحب المحل/بدون نظام موظفين).
+     * طبقة دفاع حاسمة: لا نعتمد على إخفاء الأزرار في الواجهة فقط.
+     */
+    private suspend fun requireActor(actorId: Long?, permission: StaffPermission) {
+        staffAccess.requirePermission(actorId, permission)
+    }
+
+    /** فرض «أو» بين عدة صلاحيات (مثل إضافة طرف: بائع أو محاسب). */
+    private suspend fun requireAny(actorId: Long?, vararg permissions: StaffPermission) {
+        if (actorId == null) return
+        for (permission in permissions) {
+            if (staffAccess.can(actorId, permission)) return
+        }
+        throw LedgerException("ليست لديك صلاحية لهذه العملية")
+    }
+
+    /** صلاحية الكتابة المطلوبة لتسجيل نوع عملية معيّن (البيع/المصروف لهما صلاحيات مستقلة). */
+    private fun writePermissionFor(type: DocType): StaffPermission = when (type) {
+        DocType.SALE -> StaffPermission.RECORD_SALE
+        DocType.EXPENSE -> StaffPermission.RECORD_OUTFLOW
+        else -> StaffPermission.MANAGE_ACCOUNTS
+    }
 
     suspend fun ensureSettings() {
         if (settings.get() == null) settings.insert(SettingsEntity())
     }
 
-    suspend fun createShop(name: String, currency: String = "SAR"): Long = db.withTransaction {
+    suspend fun createShop(name: String, currency: String = "SAR", actorEmployeeId: Long? = null): Long = db.withTransaction {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SETTINGS)
         val id = shops.insert(ShopEntity(name = name.trim(), currencyCode = currency))
         seedAccounts(id)
         audit.insert(AuditLogEntity(action = "CREATE", entity = "shop", entityId = id, detail = name))
@@ -176,9 +203,11 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun addParty(
         shopId: Long, kind: PartyKind, name: String, phone: String = "",
         openingMinor: Long = 0, notes: String = "",
-        category: String = DEFAULT_PARTY_CATEGORY, creditLimitMinor: Long = 0
+        category: String = DEFAULT_PARTY_CATEGORY, creditLimitMinor: Long = 0,
+        actorEmployeeId: Long? = null
     ): Long = db.withTransaction {
         if (name.isBlank()) throw LedgerException("أدخل اسم الحساب")
+        requireAny(actorEmployeeId, StaffPermission.RECORD_SALE, StaffPermission.MANAGE_ACCOUNTS)
         val id = parties.insert(
             PartyEntity(
                 shopId = shopId, kind = kind.name, name = name.trim(),
@@ -195,7 +224,8 @@ class LedgerRepository(private val db: AppDb) {
         id
     }
 
-    suspend fun updatePartyExtra(partyId: Long, category: String, creditLimitMinor: Long) {
+    suspend fun updatePartyExtra(partyId: Long, category: String, creditLimitMinor: Long, actorEmployeeId: Long? = null) {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_ACCOUNTS)
         val p = parties.get(partyId) ?: throw LedgerException("الحساب غير موجود")
         parties.update(
             p.copy(
@@ -324,6 +354,7 @@ class LedgerRepository(private val db: AppDb) {
         val normalizedPaymentMethod = paymentMethod.uppercase()
         validatePartyAndPayment(type, partyId, normalizedPaymentMethod)
         validatePartyKind(shopId, type, partyId)
+        requireActor(actorEmployeeId, writePermissionFor(type))
         if (type == DocType.SALE || type == DocType.EXPENSE) ensureSalesDayOpen(shopId, occurredAt)
         val st = settings.get()
         if (st?.fiscalEnabled == true) {
@@ -389,10 +420,19 @@ class LedgerRepository(private val db: AppDb) {
         if (d.deletedAt != null) throw LedgerException("لا يمكن تعديل عملية مؤرشفة")
         val type = runCatching { DocType.valueOf(d.type) }.getOrNull()
             ?: throw LedgerException("نوع العملية غير معروف")
+        requireActor(actorEmployeeId, writePermissionFor(type))
         val normalizedPaymentMethod = paymentMethod.uppercase()
         val finalPartyId = if (replaceParty) partyId else d.partyId
         validatePartyAndPayment(type, finalPartyId, normalizedPaymentMethod)
         validatePartyKind(d.shopId, type, finalPartyId)
+        // فاتورة ذات بنود: المبلغ مشتق من البنود والمخزون؛ لا نسمح بتغيير المالي من الشاشة العامة
+        // حتى لا ينفصل المبلغ عن البنود أو المخزون (تعديل البنود من شاشة الفاتورة مستقبلًا).
+        val hasLines = documentLines.forDocument(id).isNotEmpty()
+        if (hasLines) {
+            if (d.amountMinor != amountMinor) throw LedgerException("مبلغ هذه العملية محسوب من بنود الفاتورة؛ عدّل البنود بدلًا من المبلغ")
+            if (finalPartyId != d.partyId) throw LedgerException("لا يمكن تغيير طرف فاتورة لها بنود")
+            if (normalizedPaymentMethod != d.paymentMethod) throw LedgerException("لا يمكن تغيير طريقة دفع فاتورة لها بنود")
+        }
         if (type == DocType.SALE || type == DocType.EXPENSE) {
             ensureSalesDayOpen(d.shopId, d.occurredAt)
             ensureSalesDayOpen(d.shopId, occurredAt)
@@ -439,9 +479,13 @@ class LedgerRepository(private val db: AppDb) {
         db.withTransaction {
             val d = documents.get(id)
             if (d != null && d.deletedAt == null) {
+                val type = runCatching { DocType.valueOf(d.type) }.getOrNull()
+                    ?: throw LedgerException("نوع العملية غير معروف")
+                requireActor(actorEmployeeId, writePermissionFor(type))
                 if (d.type == DocType.SALE.name || d.type == DocType.EXPENSE.name) {
                     ensureSalesDayOpen(d.shopId, d.occurredAt)
                 }
+                applyStockForDocument(d.id, d.type, reverse = true)
                 documents.update(
                     d.copy(
                         deletedAt = System.currentTimeMillis(),
@@ -464,6 +508,10 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun restoreDocument(id: Long, actorEmployeeId: Long? = null) = db.withTransaction {
         val document = documents.get(id) ?: return@withTransaction
         if (document.deletedAt != null) {
+            val type = runCatching { DocType.valueOf(document.type) }.getOrNull()
+                ?: throw LedgerException("نوع العملية غير معروف")
+            requireActor(actorEmployeeId, writePermissionFor(type))
+            applyStockForDocument(document.id, document.type, reverse = false)
             documents.update(
                 document.copy(
                     deletedAt = null,
@@ -525,8 +573,9 @@ class LedgerRepository(private val db: AppDb) {
     fun observeSuppliers(shopId: Long): Flow<List<PartyEntity>> = parties.observe(shopId, "SUPPLIER")
     fun observeCategories(shopId: Long): Flow<List<CategoryEntity>> = categories.observe(shopId)
 
-    suspend fun addCategory(shopId: Long, kind: String, name: String): Long {
+    suspend fun addCategory(shopId: Long, kind: String, name: String, actorEmployeeId: Long? = null): Long {
         if (name.isBlank()) throw LedgerException("أدخل اسم التصنيف")
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_ACCOUNTS)
         return categories.insert(CategoryEntity(shopId = shopId, kind = kind, name = name.trim()))
     }
 
@@ -539,7 +588,8 @@ class LedgerRepository(private val db: AppDb) {
         employeeId: Long? = null
     ): List<CategoryTotal> = documents.totalsByCategory(shopId, type.name, from, to, uncategorized, employeeId)
 
-    suspend fun updateShopCurrency(shopId: Long, currencyCode: String) {
+    suspend fun updateShopCurrency(shopId: Long, currencyCode: String, actorEmployeeId: Long? = null) {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SETTINGS)
         val shop = shops.get(shopId) ?: throw LedgerException("المحل غير موجود")
         val normalized = currencyCode.trim().uppercase()
         val currency = runCatching { java.util.Currency.getInstance(normalized) }
@@ -581,6 +631,7 @@ class LedgerRepository(private val db: AppDb) {
     val closings = db.closings()
 
     suspend fun closeDay(shopId: Long, cashActualMinor: Long, notes: String, actorEmployeeId: Long? = null): Long = db.withTransaction {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SHIFTS)
         val cal = java.util.Calendar.getInstance()
         cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
         cal.set(java.util.Calendar.MINUTE, 0)
@@ -613,7 +664,8 @@ class LedgerRepository(private val db: AppDb) {
      * أرشفة عمليات الطرف وإنشاء رصيد افتتاحي جديد بنفس القيمة دون حذف تاريخي نهائي.
      * كل العملية تتم في معاملة واحدة؛ أي فشل يُرجع كل شيء كما كان.
      */
-    suspend fun closePartyAccount(partyId: Long) = db.withTransaction {
+    suspend fun closePartyAccount(partyId: Long, actorEmployeeId: Long? = null) = db.withTransaction {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_ACCOUNTS)
         val p = parties.get(partyId) ?: throw LedgerException("الحساب غير موجود")
         // نعيد حساب الرصيد من القيود مباشرة (لا نثق بالكاش) قبل الأرشفة.
         refreshPartyBalance(partyId)
@@ -796,7 +848,7 @@ class LedgerRepository(private val db: AppDb) {
         if (type == DocType.SALE && method == "CREDIT" && partyId == null) {
             val name = input.newPartyName?.trim().orEmpty()
             if (name.isBlank()) throw LedgerException("اختر العميل للبيع الآجل")
-            partyId = addParty(shopId, PartyKind.CUSTOMER, name)
+            partyId = addParty(shopId, PartyKind.CUSTOMER, name, actorEmployeeId = actorEmployeeId)
         }
         val cashCode = if (method == "CASH") AccountCodes.CASH else AccountCodes.BANK
         val shiftId = attributedEmployeeId?.let { staffAccess.openShiftFor(shopId, it)?.id }
@@ -845,7 +897,7 @@ class LedgerRepository(private val db: AppDb) {
         if (current.type == DocType.SALE.name && method == "CREDIT" && partyId == null) {
             val name = input.newPartyName?.trim().orEmpty()
             if (name.isBlank()) throw LedgerException("اختر العميل للبيع الآجل")
-            partyId = addParty(current.shopId, PartyKind.CUSTOMER, name)
+            partyId = addParty(current.shopId, PartyKind.CUSTOMER, name, actorEmployeeId = actorEmployeeId)
         }
         val assignedShiftId = if (input.employeeId == current.employeeId) current.shiftId
         else input.employeeId?.let { staffAccess.openShiftFor(current.shopId, it)?.id }
@@ -903,6 +955,7 @@ class LedgerRepository(private val db: AppDb) {
     }
 
     suspend fun saveSalesDayNotes(shopId: Long, dayStart: Long, notes: String, actorEmployeeId: Long? = null) {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SHIFTS)
         val current = dailyBooks.get(shopId, dayStart)
         if (current?.status == "CLOSED") throw LedgerException("أعد فتح اليوم قبل تعديل ملاحظاته")
         dailyBooks.upsert(
@@ -921,6 +974,7 @@ class LedgerRepository(private val db: AppDb) {
     }
 
     suspend fun closeSalesDay(shopId: Long, dayStart: Long, notes: String? = null, actorEmployeeId: Long? = null) {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SHIFTS)
         val current = dailyBooks.get(shopId, dayStart)
         val now = System.currentTimeMillis()
         dailyBooks.upsert(
@@ -935,6 +989,7 @@ class LedgerRepository(private val db: AppDb) {
     }
 
     suspend fun reopenSalesDay(shopId: Long, dayStart: Long, actorEmployeeId: Long? = null) {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SHIFTS)
         val current = dailyBooks.get(shopId, dayStart) ?: DailyBookEntity(shopId = shopId, dayStart = dayStart)
         val now = System.currentTimeMillis()
         dailyBooks.upsert(current.copy(status = "OPEN", reopenedAt = now, updatedAt = now))
@@ -965,7 +1020,8 @@ class LedgerRepository(private val db: AppDb) {
 
     fun parseCsv(text: String): List<CsvPreviewRow> = CsvParser.parse(text)
 
-    suspend fun importCsv(shopId: Long, rows: List<CsvPreviewRow>): CsvCommit = db.withTransaction {
+    suspend fun importCsv(shopId: Long, rows: List<CsvPreviewRow>, actorEmployeeId: Long? = null): CsvCommit = db.withTransaction {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_ACCOUNTS)
         var ok = 0; var skip = 0
         rows.forEach { r ->
             if (r.error != null) { skip++; return@forEach }
@@ -974,10 +1030,9 @@ class LedgerRepository(private val db: AppDb) {
             val pid = existing?.id ?: addParty(shopId, kind, r.name)
             val fractionDigits = shops.get(shopId)?.fractionDigits ?: 2
             val money = com.daftari.ledger.domain.Money.fromMajor(r.amount, fractionDigits)
-            if (money != null && money.minor > 0) {
-                val t = runCatching { DocType.valueOf(r.type.uppercase()) }.getOrDefault(DocType.SALE)
-                postDocument(shopId, t, money.minor, System.currentTimeMillis(), pid)
-            }
+            if (money == null || money.minor <= 0) { skip++; return@forEach }
+            val t = runCatching { DocType.valueOf(r.type.uppercase()) }.getOrDefault(DocType.SALE)
+            postDocument(shopId, t, money.minor, System.currentTimeMillis(), pid)
             ok++
         }
         CsvCommit(ok, skip)
@@ -1018,5 +1073,145 @@ class LedgerRepository(private val db: AppDb) {
     suspend fun updatePinProtection(failedAttempts: Int, lockedUntil: Long) {
         val st = settings.get() ?: return
         settings.update(st.copy(failedPinAttempts = failedAttempts, pinLockedUntil = lockedUntil))
+    }
+
+    fun observeItems(shopId: Long): Flow<List<ItemEntity>> = items.observe(shopId)
+
+    suspend fun upsertItem(
+        shopId: Long,
+        id: Long?,
+        name: String,
+        sku: String,
+        unit: String,
+        sellPriceMinor: Long,
+        costPriceMinor: Long,
+        qtyMilli: Long,
+        reorderQtyMilli: Long,
+        trackStock: Boolean,
+        actorEmployeeId: Long? = null
+    ): Long = db.withTransaction {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SETTINGS)
+        if (name.isBlank()) throw LedgerException("أدخل اسم الصنف")
+        if (sellPriceMinor < 0 || costPriceMinor < 0) throw LedgerException("سعر الصنف غير صالح")
+        val normalizedSku = sku.trim()
+        if (normalizedSku.isNotBlank() && items.countSku(shopId, normalizedSku, id ?: -1) > 0) {
+            throw LedgerException("رمز الصنف مستخدم مسبقًا")
+        }
+        val now = System.currentTimeMillis()
+        if (id == null) {
+            val newId = items.insert(
+                ItemEntity(
+                    shopId = shopId,
+                    name = name.trim(),
+                    sku = normalizedSku,
+                    unit = unit.trim().ifBlank { "قطعة" },
+                    sellPriceMinor = sellPriceMinor,
+                    costPriceMinor = costPriceMinor,
+                    qtyMilli = qtyMilli,
+                    reorderQtyMilli = reorderQtyMilli.coerceAtLeast(0),
+                    trackStock = trackStock,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+            audit.insert(AuditLogEntity(action = "CREATE", entity = "item", entityId = newId, detail = name.trim()))
+            newId
+        } else {
+            val current = items.get(id) ?: throw LedgerException("الصنف غير موجود")
+            items.update(
+                current.copy(
+                    name = name.trim(),
+                    sku = normalizedSku,
+                    unit = unit.trim().ifBlank { current.unit },
+                    sellPriceMinor = sellPriceMinor,
+                    costPriceMinor = costPriceMinor,
+                    qtyMilli = qtyMilli,
+                    reorderQtyMilli = reorderQtyMilli.coerceAtLeast(0),
+                    trackStock = trackStock,
+                    updatedAt = now
+                )
+            )
+            audit.insert(AuditLogEntity(action = "UPDATE", entity = "item", entityId = id, detail = name.trim()))
+            id
+        }
+    }
+
+    suspend fun archiveItem(id: Long, actorEmployeeId: Long? = null) {
+        requireActor(actorEmployeeId, StaffPermission.MANAGE_SETTINGS)
+        val item = items.get(id) ?: return
+        items.update(item.copy(archived = true, updatedAt = System.currentTimeMillis()))
+        audit.insert(AuditLogEntity(action = "ARCHIVE", entity = "item", entityId = id, detail = item.name))
+    }
+
+    suspend fun postInvoice(
+        shopId: Long,
+        type: DocType,
+        lines: List<InvoiceLineInput>,
+        occurredAt: Long,
+        partyId: Long? = null,
+        paymentMethod: String = "CASH",
+        notes: String = "",
+        documentNumber: String = "",
+        dueAt: Long? = null,
+        actorEmployeeId: Long? = null
+    ): Long = db.withTransaction {
+        if (type != DocType.SALE && type != DocType.PURCHASE) throw LedgerException("الفاتورة للبيع أو الشراء فقط")
+        requireActor(actorEmployeeId, if (type == DocType.SALE) StaffPermission.RECORD_SALE else StaffPermission.MANAGE_ACCOUNTS)
+        val prepared = prepareInvoiceLines(shopId, lines)
+        val amount = prepared.sumOf { it.lineTotalMinor }
+        val docId = postDocument(
+            shopId = shopId,
+            type = type,
+            amountMinor = amount,
+            occurredAt = occurredAt,
+            partyId = partyId,
+            docNumber = documentNumber,
+            notes = notes,
+            paymentMethod = paymentMethod,
+            dueAt = dueAt,
+            employeeId = actorEmployeeId.takeIf { type == DocType.SALE },
+            actorEmployeeId = actorEmployeeId
+        )
+        attachInvoiceLines(docId, type.name, prepared)
+        docId
+    }
+
+    private suspend fun prepareInvoiceLines(shopId: Long, lines: List<InvoiceLineInput>): List<DocumentLineEntity> {
+        if (lines.isEmpty()) throw LedgerException("أضف صنفًا واحدًا على الأقل")
+        return lines.map { line ->
+            val item = items.get(line.itemId) ?: throw LedgerException("الصنف غير موجود")
+            if (item.shopId != shopId || item.archived) throw LedgerException("الصنف غير متاح في هذا المحل")
+            val total = runCatching { com.daftari.ledger.domain.InventoryMath.lineTotal(line.qtyMilli, line.unitPriceMinor) }
+                .getOrElse { throw LedgerException(it.message ?: "كمية أو سعر غير صالح") }
+            DocumentLineEntity(
+                documentId = 0,
+                itemId = item.id,
+                itemName = item.name,
+                qtyMilli = line.qtyMilli,
+                unitPriceMinor = line.unitPriceMinor,
+                lineTotalMinor = total,
+                trackStock = item.trackStock
+            )
+        }
+    }
+
+    private suspend fun attachInvoiceLines(documentId: Long, type: String, lines: List<DocumentLineEntity>) {
+        documentLines.insertAll(lines.map { it.copy(documentId = documentId) })
+        applyStockDeltas(type, lines, reverse = false)
+    }
+
+    private suspend fun applyStockForDocument(documentId: Long, type: String, reverse: Boolean) {
+        val lines = documentLines.forDocument(documentId)
+        if (lines.isNotEmpty()) applyStockDeltas(type, lines, reverse)
+    }
+
+    private suspend fun applyStockDeltas(type: String, lines: List<DocumentLineEntity>, reverse: Boolean) {
+        lines.forEach { line ->
+            val delta = com.daftari.ledger.domain.InventoryMath.stockDelta(type, line.qtyMilli, line.trackStock)
+            if (delta == 0L) return@forEach
+            val item = items.get(line.itemId) ?: return@forEach
+            val change = if (reverse) -delta else delta
+            items.update(item.copy(qtyMilli = item.qtyMilli + change, updatedAt = System.currentTimeMillis()))
+        }
     }
 }

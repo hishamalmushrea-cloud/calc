@@ -2,7 +2,9 @@ package com.daftari.ledger
 
 import com.daftari.ledger.domain.Money
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MoneyTest {
@@ -33,5 +35,28 @@ class MoneyTest {
         val x = Money.fromMajor("0.1")!!
         val y = Money.fromMajor("0.2")!!
         assertEquals(Money.fromMajor("0.3")!!.minor, (x + y).minor)
+    }
+
+    @Test
+    fun sarNeverShowsDollarSignEvenWithUsLocale() {
+        // عند تفعيل الأرقام اللاتينية يُستخدم Locale.US؛ يجب ألا يظهر رمز الدولار لعملة الريال.
+        val formatted = Money(1_234_56).format(java.util.Locale.US, "SAR", includeCurrency = true)
+        assertFalse("SAR مع Locale.US يجب ألا يعرض «$»: $formatted", formatted.contains('$'))
+    }
+
+    @Test
+    fun usdKeepsItsOwnSymbol() {
+        val formatted = Money(12_34).format(java.util.Locale.US, "USD", includeCurrency = true)
+        assertTrue(formatted.contains('$'))
+    }
+
+    @Test
+    fun nonUsdCurrenciesNeverShowDollarSign() {
+        // عند تفعيل الأرقام اللاتينية يُستخدم Locale.US؛ أي عملة غير الدولار يجب ألا تعرض «$»
+        // حتى لو كان رمزها المحلي غير متاح في JDK (سيُعرض الرمز المحلي أو رمز ISO، وليس دولارًا).
+        val sar = Money(1000).format(java.util.Locale.US, "SAR", includeCurrency = true)
+        val yer = Money(1000).format(java.util.Locale.US, "YER", includeCurrency = true)
+        assertFalse("SAR مع Locale.US يجب ألا يعرض «$»: $sar", sar.contains('$'))
+        assertFalse("YER مع Locale.US يجب ألا يعرض «$»: $yer", yer.contains('$'))
     }
 }

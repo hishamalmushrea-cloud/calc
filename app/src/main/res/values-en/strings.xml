@@ -24,6 +24,27 @@
     <string name="nav_documents">Transactions</string>
     <string name="nav_reports">Reports</string>
     <string name="nav_more">More</string>
+    <string name="more_intro">Settings, security, and backups are grouped so each task is easy to find.</string>
+    <string name="section_shops_hint">Switch shops or create a new one.</string>
+    <string name="section_backup_hub">Cloud backup and restore</string>
+    <string name="section_backup_hub_hint">Protect your data first with Google. Local and optional cloud copies are in the next sections.</string>
+    <string name="section_local_backup_hint">Copies on this device or for sharing. Restore replaces current data after a safety copy.</string>
+    <string name="section_optional_cloud_hint">Optional files folder or WebDAV for advanced use.</string>
+    <string name="restore_cloud_file_confirm_body">You will pick a backup file, then app data will be replaced. Daftari creates a safety copy first.</string>
+    <string name="restore_webdav_confirm_body">The latest WebDAV backup will replace this device after a safety copy is created.</string>
+    <string name="restore_confirm_phrase">RESTORE</string>
+    <string name="restore_type_confirm_hint">To confirm, type “%1$s” exactly.</string>
+    <string name="restore_confirm_field">Confirmation word</string>
+    <string name="credit_toggle_hint">Turn this on if the customer is not paying now.</string>
+    <string name="credit_sale_helper">A credit sale is added to the customer account until they pay later.</string>
+    <string name="collect_customer_label">Customer paying now</string>
+    <string name="pay_supplier_label">Supplier you are paying</string>
+    <string name="dashboard_empty">Start by adding a shop, then a transaction.</string>
+    <string name="dashboard_empty_hint">Use Quick sale or Collection to record the first movement.</string>
+    <string name="dashboard_balances_hint">These are account balances, not profit. Receivables are what customers owe you; payables are what you owe suppliers.</string>
+    <string name="reports_period_hint">Figures follow the period selected on the dashboard.</string>
+    <string name="export_pdf">Export PDF</string>
+    <string name="export_excel">Export Excel</string>
     <string name="period_today">Today</string>
     <string name="period_yesterday">Yesterday</string>
     <string name="period_week">Week</string>
@@ -101,12 +122,12 @@
     <string name="late_customers">Overdue customers</string>
     <string name="no_late_customers">No overdue balances.</string>
     <string name="age_0_30">0–30</string><string name="age_31_60">31–60</string><string name="age_61_90">61–90</string><string name="age_over_90">90+</string>
-    <string name="last_activity">Last activity: %1$s</string>
+    <string name="last_activity">Oldest due: %1$s</string>
     <plurals name="late_days"><item quantity="one">One day</item><item quantity="other">%d days</item></plurals>
     <string name="section_shops">Shops</string>
     <string name="new_shop_name">New shop name</string>
     <string name="create_shop">Create shop</string>
-    <string name="section_day_close">Day close</string>
+    <string name="section_day_close">Day close &amp; cash reconciliation</string>
     <string name="expected_cash">Expected cash: %1$s</string>
     <string name="actual_cash">Actual cash</string>
     <string name="notes">Notes</string>
@@ -135,7 +156,7 @@
     <string name="database_health_ok">No database issues detected.</string>
     <string name="database_health_issue_row">%1$s — count: %2$d</string>
     <string name="party_required_for_document">Select an account or type a new name before saving.</string>
-    <string name="credit_sale_customer_required">Credit sales require a customer. Open details and select a customer or type a new customer name.</string>
+    <string name="credit_sale_customer_required">Credit sales require a customer. Select a customer or type a new customer name.</string>
     <string name="no_audit">No audit entries yet.</string>
     <string name="new_document">New transaction</string>
     <string name="edit_document">Edit transaction</string>
@@ -153,12 +174,12 @@
     <string name="doc_type_sale">Sale</string><string name="doc_type_purchase">Purchase</string><string name="doc_type_expense">Expense</string><string name="doc_type_income">Income</string><string name="doc_type_collect">Collection</string><string name="doc_type_pay">Payment</string><string name="doc_type_transfer">Transfer</string><string name="doc_type_opening">Opening</string><string name="doc_type_unknown">Transaction</string>
     <string name="chart_no_data">No data</string><string name="chart_no_activity">No activity</string><string name="chart_total">Total</string>
     <string name="statement_title">Account statement — %1$s</string><string name="statement_balance">Balance: %1$s</string><string name="statement_columns">Date | Type | Amount</string>
-    <string name="msg_updated">Updated</string><string name="msg_invalid_amount">Enter a valid amount</string><string name="msg_saved">Saved</string><string name="msg_edited">Changes saved</string><string name="msg_archived">Archived. You can review the audit log.</string>
+    <string name="msg_updated">Updated</string><string name="msg_invalid_amount">Enter an amount greater than zero using clear numbers</string><string name="msg_saved">Saved</string><string name="msg_edited">Changes saved</string><string name="msg_archived">Archived. You can review the audit log.</string>
     <string name="msg_unlocked">Unlocked</string><string name="msg_wrong_pin">Incorrect PIN</string><string name="msg_pin_too_short">Use at least four digits</string><string name="msg_pin_saved">Lock PIN saved</string><string name="msg_pin_removed">Lock removed</string>
-    <string name="msg_enter_actual_cash">Enter actual cash</string><string name="msg_day_closed">Day closed</string><string name="msg_account_closed">Account closed; history was preserved</string>
+    <string name="msg_enter_actual_cash">Enter actual cash</string><string name="msg_day_closed">Day closed &amp; cash reconciled</string><string name="msg_account_closed">Account closed; history was preserved</string>
     <string name="msg_import_result">Imported %1$d rows; skipped %2$d</string><string name="msg_import_failed">Import failed; no partial data was saved</string>
-    <string name="msg_pdf_ready">PDF created</string><string name="msg_pdf_failed">Could not create PDF: %1$s</string><string name="msg_excel_ready">Excel file created</string><string name="msg_excel_failed">Could not create Excel file: %1$s</string>
-    <string name="msg_backup_ready">Backup ready</string><string name="msg_restore_restarting">Restore complete. Restarting…</string><string name="msg_restore_failed">Restore failed: %1$s</string><string name="msg_enter_backup_password">Enter a password for the encrypted backup</string><string name="msg_encrypted_backup_ready">Encrypted backup ready</string><string name="msg_backup_failed">Could not create backup: %1$s</string><string name="msg_database_health_ok">Data health check passed</string><string name="msg_database_health_issues">Data health check found %1$d issue(s)</string><string name="msg_database_health_failed">Data health check failed: %1$s</string><string name="msg_csv_exported">Full CSV exported</string><string name="msg_export_failed">Export failed: %1$s</string>
+    <string name="msg_pdf_ready">PDF created</string><string name="msg_pdf_failed">Could not create the PDF. Try again. %1$s</string><string name="msg_excel_ready">Excel file created</string><string name="msg_excel_failed">Could not create the Excel file. Try again. %1$s</string>
+    <string name="msg_backup_ready">Backup ready</string><string name="msg_restore_restarting">Restore complete. Restarting…</string><string name="msg_restore_failed">Could not restore. Check the file or password and try again. %1$s</string><string name="msg_enter_backup_password">Enter a password for the encrypted backup</string><string name="msg_encrypted_backup_ready">Encrypted backup ready</string><string name="msg_backup_failed">Could not create the backup. Check device storage and try again. %1$s</string><string name="msg_database_health_ok">Data health check passed</string><string name="msg_database_health_issues">Data health check found %1$d issue(s)</string><string name="msg_database_health_failed">Data health check failed: %1$s</string><string name="msg_csv_exported">Full CSV exported</string><string name="msg_export_failed">Export failed: %1$s</string>
     <string name="report_financial_title">Daftari — Financial report</string><string name="report_item">Item</string><string name="report_value">Amount</string><string name="other_income">Other income</string><string name="date">Date</string><string name="type">Type</string><string name="party">Party</string><string name="document_number">Document number</string><string name="customer">Customer</string><string name="supplier">Supplier</string><string name="sheet_summary">Summary</string><string name="sheet_documents">Transactions</string><string name="sheet_accounts">Accounts</string><string name="report_line">%1$s: %2$s</string><string name="report_receivables_payables">Receivables: %1$s  Payables: %2$s</string>
     <string name="action_undo">Undo</string><string name="action_remove">Remove</string><string name="action_call">Call</string><string name="action_whatsapp">WhatsApp</string><string name="search_name_phone">Search by name or phone</string>
     <string name="due_date_value">Due date: %1$s</string><string name="due_notification_channel">Account due dates</string><string name="due_notification_title">Accounts due today</string><string name="due_notification_body">%1$d customers have overdue credit sales</string>
@@ -171,10 +192,10 @@
     <string name="sales_search_hint">Search amount, customer, category, or note</string><string name="this_week">This week</string><string name="last_week">Last week</string><string name="this_month">This month</string><string name="last_month">Last month</string>
     <string name="day_sat">Sa</string><string name="day_sun">Su</string><string name="day_mon">Mo</string><string name="day_tue">Tu</string><string name="day_wed">We</string><string name="day_thu">Th</string><string name="day_fri">Fr</string>
     <string name="payment_cash">Cash</string><string name="payment_bank">Bank transfer</string><string name="payment_card">Card</string><string name="payment_wallet">Wallet</string><string name="payment_credit">Credit</string><string name="payment_other">Other</string><string name="payment_method">Payment method</string>
-    <string name="action_back">Back</string><string name="sales_day_closed_read_only">Day closed — read only</string><string name="sales_day_open">Day open for entries</string><string name="record_sale">Record sale</string><string name="record_outflow">Record outflow</string><string name="edit_closed_day">Edit day (reopen)</string><string name="daily_transactions">Daily transactions</string><string name="day_notes">Day notes</string><string name="save_notes">Save notes</string><string name="close_sales_day">Close day</string><string name="action_duplicate">Duplicate</string><string name="duplicate_confirm_title">Duplicate transaction?</string><string name="duplicate_confirm_body">A new transaction with the same details and current time will be created after confirmation.</string>
+    <string name="action_back">Back</string><string name="sales_day_closed_read_only">Day closed — read only</string><string name="sales_day_open">Day open for entries</string><string name="record_sale">Record sale</string><string name="record_outflow">Record outflow</string><string name="edit_closed_day">Edit day (reopen)</string><string name="daily_transactions">Daily transactions</string><string name="day_notes">Day notes</string><string name="save_notes">Save notes</string><string name="close_sales_day">Close sales day</string><string name="action_duplicate">Duplicate</string><string name="duplicate_confirm_title">Duplicate transaction?</string><string name="duplicate_confirm_body">A new transaction with the same details and current time will be created after confirmation.</string>
     <string name="close_day_review">Review day closing</string><string name="close_day_question">Close this day?</string><string name="sales_count_value">Sales transactions: %1$d</string><string name="outflows_count_value">Outflow transactions: %1$d</string><string name="sales_total_value">Total sales: %1$s</string><string name="outflows_total_value">Total outflows: %1$s</string><string name="cash_movement_value">Net movement: %1$s</string><string name="transactions_count_value">Transactions: %1$d</string><string name="sales_book_share_title">Daily sales book</string>
     <string name="notes_optional">Optional note</string><string name="more_details">More details</string><string name="fewer_details">Fewer details</string><string name="entry_time_value">Time: %1$s</string><string name="select_time">Select time</string><string name="save_sale">Save sale</string><string name="save_outflow">Save outflow</string>
-    <string name="msg_sales_entry_saved">Book entry saved</string><string name="msg_sales_entry_duplicated">Transaction duplicated after confirmation</string><string name="msg_day_notes_saved">Day notes saved</string><string name="msg_sales_day_closed">Day closed</string><string name="msg_sales_day_reopened">Day reopened; changes will appear in the audit log</string><string name="msg_export_ready">Export file ready to share</string>
+    <string name="msg_sales_entry_saved">Book entry saved</string><string name="msg_sales_entry_duplicated">Transaction duplicated after confirmation</string><string name="msg_day_notes_saved">Day notes saved</string><string name="msg_sales_day_closed">Sales day closed</string><string name="msg_sales_day_reopened">Day reopened; changes will appear in the audit log</string><string name="msg_export_ready">Export file ready to share</string>
     <!-- Employees, roles and shifts -->
     <string name="section_employees">Employees and users</string>
     <string name="employees_title">Employees</string>
@@ -240,6 +261,7 @@
     <string name="permission_shifts">Manage shifts and day closing</string>
     <string name="permission_audit">View audit log</string>
     <string name="permission_assign_salesperson">Assign another salesperson</string>
+    <string name="permission_manage_accounts">Manage accounts (record and edit non-sales transactions)</string>
     <string name="access_denied">You do not have permission to view this section.</string>
 
     <string name="open_shift">Open shift</string>
@@ -313,4 +335,40 @@
     <string name="msg_google_backup_failed">Backup or restore could not be completed: %1$s</string>
     <string name="backup_failure_channel">Backup alerts</string>
     <string name="backup_failure_notification">Backup failed several times. Open Daftari to retry or reconnect the account.</string>
+
+    <string name="section_inventory">Inventory and invoices</string>
+    <string name="inventory_title">Inventory and invoices</string>
+    <string name="inventory_hint">Add items, then issue a sale or purchase invoice. The total posts as a normal ledger transaction.</string>
+    <string name="open_inventory">Open inventory and invoices</string>
+    <string name="add_item">Add item</string>
+    <string name="edit_item">Edit item</string>
+    <string name="no_items">No items yet. Add the first item to start invoicing.</string>
+    <string name="item_name">Item name</string>
+    <string name="item_sku_optional">SKU/barcode (optional)</string>
+    <string name="item_sku_value">SKU: %1$s</string>
+    <string name="item_unit">Unit</string>
+    <string name="item_sell_price">Selling price</string>
+    <string name="item_cost_price">Cost price (optional)</string>
+    <string name="item_qty">Quantity</string>
+    <string name="item_reorder_qty">Reorder level</string>
+    <string name="item_track_stock">Track quantity</string>
+    <string name="item_price_value">Price: %1$s</string>
+    <string name="item_qty_value">On hand: %1$s %2$s</string>
+    <string name="item_service">Service — no quantity</string>
+    <string name="low_stock_alert">Low stock alert: %1$d items</string>
+    <string name="new_sale_invoice">Sale invoice</string>
+    <string name="new_purchase_invoice">Purchase invoice</string>
+    <string name="invoice_hint">Pick items and quantities. The total is posted as a sale or purchase.</string>
+    <string name="invoice_lines_title">Invoice items</string>
+    <string name="invoice_line_row">%1$s × %2$s — %3$s = %4$s</string>
+    <string name="invoice_total_value">Total: %1$s</string>
+    <string name="invoice_amount_locked">This amount is calculated from invoice items and cannot be edited here.</string>
+    <string name="add_invoice_line">Add line</string>
+    <string name="add_line">Add line</string>
+    <string name="invoice_total">Total: %1$s</string>
+    <string name="save_invoice">Save invoice</string>
+    <string name="msg_item_saved">Item saved</string>
+    <string name="msg_item_archived">Item archived</string>
+    <string name="msg_invoice_saved">Invoice saved and stock updated</string>
+    <string name="msg_invalid_qty">Enter a quantity greater than zero</string>
 </resources>

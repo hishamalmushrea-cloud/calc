@@ -38,6 +38,7 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
             db.runInTransaction {
                 dbFile().copyTo(snapshot, overwrite = true)
                 File(dbFile().path + "-wal").takeIf { it.isFile && it.length() > 0 }?.copyTo(File(snapshot.path + "-wal"), true)
+                File(dbFile().path + "-shm").takeIf { it.isFile && it.length() > 0 }?.copyTo(File(snapshot.path + "-shm"), true)
             }
         }
         // Opening the copied DB replays its WAL. A checkpoint then makes the snapshot a single portable file.

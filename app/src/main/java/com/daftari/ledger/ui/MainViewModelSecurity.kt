@@ -68,7 +68,7 @@ internal fun MainViewModel.toggleLatinDigits(enabled: Boolean) = viewModelScope.
 internal fun MainViewModel.updateCurrency(code: String) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
     try {
-        repo.updateShopCurrency(shop.id, code)
+        repo.updateShopCurrency(shop.id, code, actorEmployeeId = currentActorId())
         val updated = repo.shops.get(shop.id)
         mutableState.update { it.copy(shop = updated ?: shop, message = text(R.string.msg_currency_saved)) }
     } catch (error: LedgerException) {
@@ -79,7 +79,7 @@ internal fun MainViewModel.updateCurrency(code: String) = viewModelScope.launch 
 internal fun MainViewModel.addCategory(kind: String, name: String) = viewModelScope.launch {
     val shop = state.value.shop ?: return@launch
     try {
-        repo.addCategory(shop.id, kind, name)
+        repo.addCategory(shop.id, kind, name, actorEmployeeId = currentActorId())
         message(R.string.msg_category_added)
     } catch (error: Exception) {
         dynamicError(error)

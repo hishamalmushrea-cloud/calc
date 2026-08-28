@@ -2,11 +2,10 @@ package com.daftari.ledger.export
 
 import android.content.Context
 import com.daftari.ledger.R
-import com.daftari.ledger.domain.Money
 import com.daftari.ledger.ui.UiState
-import com.daftari.ledger.ui.displayMoney
 import java.io.File
 import java.io.FileOutputStream
+import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -17,57 +16,58 @@ import java.util.zip.ZipOutputStream
  * مولّد Excel (.xlsx) بدون مكتبات خارجية.
  *
  * ملف XLSX هو أرشيف ZIP يحتوي على ملفات XML وفق معيار Office Open XML.
- * هذا التنفيذ يولّد الحد الأدنى اللازم لفتح الملف في Excel / Google Sheets
- * مع دعم تبويبات متعددة وخلايا عريضة Bold في الترويسات.
+ * الأعمدة النقدية تُكتب كخلايا رقمية حقيقية (t="n") حتى تكون قابلة للجمع
+ * والفرز في Excel / Google Sheets، وليس نصوصًا تشبه الأرقام.
  */
 object ExcelReports {
 
     fun writePeriodExcel(ctx: Context, s: UiState): File {
         val f = File(ctx.cacheDir, "daftari-report.xlsx")
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+        val digits = s.shop?.fractionDigits ?: 2
 
         val byId = (s.customers + s.suppliers).associateBy { it.id }
 
-        val summaryRows = mutableListOf<List<String>>()
-        summaryRows += listOf(ctx.getString(R.string.report_item), ctx.getString(R.string.report_value))
-        summaryRows += listOf(ctx.getString(R.string.sales), s.displayMoney(s.totals.sales, Locale.getDefault()))
-        summaryRows += listOf(ctx.getString(R.string.purchases), s.displayMoney(s.totals.purchases, Locale.getDefault()))
-        summaryRows += listOf(ctx.getString(R.string.expenses), s.displayMoney(s.totals.expenses, Locale.getDefault()))
-        summaryRows += listOf(ctx.getString(R.string.other_income), s.displayMoney(s.totals.income, Locale.getDefault()))
-        summaryRows += listOf(ctx.getString(R.string.collections), s.displayMoney(s.totals.collections, Locale.getDefault()))
-        summaryRows += listOf(ctx.getString(R.string.payments), s.displayMoney(s.totals.payments, Locale.getDefault()))
-        summaryRows += listOf(ctx.getString(R.string.cash_net), s.displayMoney(s.totals.cashNet, Locale.getDefault()))
-        summaryRows += listOf(ctx.getString(R.string.estimated_profit), s.displayMoney(s.totals.estimatedProfit, Locale.getDefault()))
+        val summaryRows = mutableListOf<List<XlsxCell>>()
+        summaryRows += listOf(text(ctx.getString(R.string.report_item)), text(ctx.getString(R.string.report_value)))
+        summaryRows += listOf(text(ctx.getString(R.string.sales)), number(s.totals.sales, digits))
+        summaryRows += listOf(text(ctx.getString(R.string.purchases)), number(s.totals.purchases, digits))
+        summaryRows += listOf(text(ctx.getString(R.string.expenses)), number(s.totals.expenses, digits))
+        summaryRows += listOf(text(ctx.getString(R.string.other_income)), number(s.totals.income, digits))
+        summaryRows += listOf(text(ctx.getString(R.string.collections)), number(s.totals.collections, digits))
+        summaryRows += listOf(text(ctx.getString(R.string.payments)), number(s.totals.payments, digits))
+        summaryRows += listOf(text(ctx.getString(R.string.cash_net)), number(s.totals.cashNet, digits))
+        summaryRows += listOf(text(ctx.getString(R.string.estimated_profit)), number(s.totals.estimatedProfit, digits))
 
-        val docsRows = mutableListOf<List<String>>()
+        val docsRows = mutableListOf<List<XlsxCell>>()
         docsRows += listOf(
-            ctx.getString(R.string.date), ctx.getString(R.string.type), ctx.getString(R.string.report_value),
-            ctx.getString(R.string.party), ctx.getString(R.string.notes), ctx.getString(R.string.document_number)
+            text(ctx.getString(R.string.date)), text(ctx.getString(R.string.type)), text(ctx.getString(R.string.report_value)),
+            text(ctx.getString(R.string.party)), text(ctx.getString(R.string.notes)), text(ctx.getString(R.string.document_number))
         )
         s.docs.sortedByDescending { it.occurredAt }.forEach { document ->
             val party = document.partyId?.let { byId[it] }
             docsRows += listOf(
-                fmt.format(Date(document.occurredAt)),
-                ctx.getString(documentTypeString(document.type)),
-                s.displayMoney(document.amountMinor, Locale.getDefault()),
-                party?.name.orEmpty(),
-                document.notes,
-                document.docNumber
+                text(fmt.format(Date(document.occurredAt))),
+                text(ctx.getString(documentTypeString(document.type))),
+                number(document.amountMinor, digits),
+                text(party?.name.orEmpty()),
+                text(document.notes),
+                text(document.docNumber)
             )
         }
 
-        val partiesRows = mutableListOf<List<String>>()
+        val partiesRows = mutableListOf<List<XlsxCell>>()
         partiesRows += listOf(
-            ctx.getString(R.string.name), ctx.getString(R.string.type), ctx.getString(R.string.category),
-            ctx.getString(R.string.balance), ctx.getString(R.string.phone_optional)
+            text(ctx.getString(R.string.name)), text(ctx.getString(R.string.type)), text(ctx.getString(R.string.category)),
+            text(ctx.getString(R.string.balance)), text(ctx.getString(R.string.phone_optional))
         )
         (s.customers + s.suppliers).sortedBy { it.name }.forEach { party ->
             partiesRows += listOf(
-                party.name,
-                ctx.getString(if (party.kind == "CUSTOMER") R.string.customer else R.string.supplier),
-                party.category,
-                s.displayMoney(party.cachedBalanceMinor, Locale.getDefault()),
-                party.phone
+                text(party.name),
+                text(ctx.getString(if (party.kind == "CUSTOMER") R.string.customer else R.string.supplier)),
+                text(party.category),
+                number(party.cachedBalanceMinor, digits),
+                text(party.phone)
             )
         }
 
@@ -81,9 +81,21 @@ object ExcelReports {
         return f
     }
 
+    // ──────── نموذج الخلية ────────
+
+    private data class XlsxCell(val text: String, val number: String? = null)
+
+    private fun text(value: String) = XlsxCell(value)
+
+    /** خلية رقمية حقيقية: النص العشري الدقيق (بدون رمز عملة) ليكون قابلاً للحساب. */
+    private fun number(minor: Long, digits: Int): XlsxCell {
+        val decimal = BigDecimal.valueOf(minor).movePointLeft(digits).toPlainString()
+        return XlsxCell(decimal, decimal)
+    }
+
     // ──────── XLSX Writer (zero dependencies) ────────
 
-    private fun writeXlsx(file: File, sheets: List<Pair<String, List<List<String>>>>, rightToLeft: Boolean) {
+    private fun writeXlsx(file: File, sheets: List<Pair<String, List<List<XlsxCell>>>>, rightToLeft: Boolean) {
         ZipOutputStream(FileOutputStream(file)).use { zip ->
 
             // [Content_Types].xml
@@ -139,15 +151,15 @@ $sheetRels
 </cellXfs>
 </styleSheet>""")
 
-            // Collect shared strings
+            // Collect shared strings (text cells only)
             val allStrings = mutableListOf<String>()
             val stringIndex = mutableMapOf<String, Int>()
             for ((_, rows) in sheets) {
                 for (row in rows) {
                     for (cell in row) {
-                        if (cell !in stringIndex) {
-                            stringIndex[cell] = allStrings.size
-                            allStrings += cell
+                        if (cell.number == null && cell.text !in stringIndex) {
+                            stringIndex[cell.text] = allStrings.size
+                            allStrings += cell.text
                         }
                     }
                 }
@@ -181,9 +193,15 @@ $ssEntries
                     sb.append("""<row r="${r + 1}">""")
                     row.forEachIndexed { c, cell ->
                         val ref = colLetter(c) + (r + 1)
-                        val idx = stringIndex[cell] ?: 0
                         val style = if (r == 0) " s=\"1\"" else ""
-                        sb.append("""<c r="$ref" t="s"$style><v>$idx</v></c>""")
+                        val number = cell.number
+                        if (number != null) {
+                            // خلية رقمية حقيقية قابلة للحساب والفرز.
+                            sb.append("""<c r="$ref"$style><v>$number</v></c>""")
+                        } else {
+                            val idx = stringIndex[cell.text] ?: 0
+                            sb.append("""<c r="$ref" t="s"$style><v>$idx</v></c>""")
+                        }
                     }
                     sb.append("</row>")
                 }

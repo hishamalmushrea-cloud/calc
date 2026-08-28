@@ -5,7 +5,7 @@ enum class StaffPermission(val bit: Int) {
     DELETE_OWN_SALE(4), DELETE_ANY_SALE(5), VIEW_OWN_SALES(6), VIEW_ALL_SALES(7),
     VIEW_ACCOUNTS(8), VIEW_REPORTS(9), VIEW_PROFIT(10), MANAGE_EMPLOYEES(11),
     VIEW_PAYROLL(12), MANAGE_SETTINGS(13), MANAGE_SHIFTS(14), VIEW_AUDIT(15),
-    ASSIGN_SALESPERSON(16);
+    ASSIGN_SALESPERSON(16), MANAGE_ACCOUNTS(17);
 
     val mask: Long get() = 1L shl bit
 }
@@ -28,7 +28,8 @@ object StaffRoles {
         StaffPermission.VIEW_ALL_SALES,
         StaffPermission.VIEW_ACCOUNTS,
         StaffPermission.VIEW_REPORTS,
-        StaffPermission.VIEW_PROFIT
+        StaffPermission.VIEW_PROFIT,
+        StaffPermission.MANAGE_ACCOUNTS
     )
 
     fun defaultPermissions(role: String): Long = when (role) {
