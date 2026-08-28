@@ -205,8 +205,78 @@ object Migrations {
         }
     }
 
+    /** v8 → v9: دفتر الحسابات — عملات قابلة للتخصيص، أشخاص، وعمليات له/عليه/تسديد. */
+    val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(CurrencySeeds.CREATE_TABLE_SQL)
+            db.execSQL(CurrencySeeds.CREATE_INDEX_SQL)
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_persons` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `shopId` INTEGER NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `phone` TEXT NOT NULL,
+                    `notes` TEXT NOT NULL,
+                    `archived` INTEGER NOT NULL,
+                    `createdAt` INTEGER NOT NULL,
+                    `updatedAt` INTEGER NOT NULL,
+                    FOREIGN KEY(`shopId`) REFERENCES `shops`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_persons_shopId` ON `book_persons` (`shopId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_persons_name` ON `book_persons` (`name`)")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_entries` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `personId` INTEGER NOT NULL,
+                    `currencyId` INTEGER NOT NULL,
+                    `kind` TEXT NOT NULL,
+                    `side` TEXT NOT NULL,
+                    `amountMinor` INTEGER NOT NULL,
+                    `occurredAt` INTEGER NOT NULL,
+                    `details` TEXT NOT NULL,
+                    `opening` INTEGER NOT NULL,
+                    `createdByEmployeeId` INTEGER,
+                    `deletedAt` INTEGER,
+                    `createdAt` INTEGER NOT NULL,
+                    `updatedAt` INTEGER NOT NULL,
+                    FOREIGN KEY(`personId`) REFERENCES `book_persons`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(`currencyId`) REFERENCES `currencies`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_entries_personId` ON `book_entries` (`personId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_entries_currencyId` ON `book_entries` (`currencyId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_entries_occurredAt` ON `book_entries` (`occurredAt`)")
+
+            db.execSQL("ALTER TABLE app_settings ADD COLUMN defaultCurrencyId INTEGER")
+
+            CurrencySeeds.ensure(db)
+
+            // العملة الافتراضية: عملة المحل إن وُجدت بين البذور، وإلا العملة المحلية.
+            db.execSQL(
+                """
+                UPDATE app_settings
+                SET defaultCurrencyId = COALESCE(
+                    (SELECT id FROM currencies WHERE code = (
+                        SELECT currencyCode FROM shops ORDER BY id LIMIT 1
+                    )),
+                    (SELECT id FROM currencies WHERE code = '${CurrencySeeds.LOCAL_CODE}'),
+                    (SELECT id FROM currencies ORDER BY id LIMIT 1)
+                )
+                WHERE id = 1
+                """.trimIndent()
+            )
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-        MIGRATION_6_7, MIGRATION_7_8
+        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9
     )
 }

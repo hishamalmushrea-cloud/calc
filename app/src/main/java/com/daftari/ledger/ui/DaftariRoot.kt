@@ -153,7 +153,7 @@ fun DaftariRoot(
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (tab <= REPORTS_TAB && tab != SALES_TAB) {
+            if (tab <= REPORTS_TAB && tab != SALES_TAB && !state.book.screenOpen) {
                 FloatingActionButton(
                     onClick = { addType = DocType.SALE },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -209,7 +209,9 @@ fun DaftariRoot(
                 }
             }
             Box(Modifier.weight(1f)) {
-                if (state.inventory.screenOpen) {
+                if (state.book.screenOpen) {
+                    AccountsBookScreen(state, onEvent, padding)
+                } else if (state.inventory.screenOpen) {
                     InventoryScreen(state, onEvent, padding)
                 } else if (state.googleBackup.screenOpen) {
                     GoogleBackupScreen(state, onEvent, padding)

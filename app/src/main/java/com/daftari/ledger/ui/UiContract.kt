@@ -76,6 +76,7 @@ data class UiState(
     val employees: EmployeeUiState = EmployeeUiState(),
     val googleBackup: GoogleBackupUiState = GoogleBackupUiState(),
     val inventory: InventoryUiState = InventoryUiState(),
+    val book: AccountsBookUiState = AccountsBookUiState(),
     val healthIssues: List<DatabaseHealthCheck.Issue> = emptyList(),
     val healthCheckedAt: Long = 0,
     val restartRequested: Boolean = false,
@@ -218,6 +219,29 @@ sealed interface UiEvent {
     ) : UiEvent
     data class ShareSalesDay(val dayStart: Long, val detailed: Boolean) : UiEvent
     data class ExportSalesPeriod(val from: Long, val to: Long, val format: String) : UiEvent
+
+    data object OpenAccountsBook : UiEvent
+    data object CloseAccountsBook : UiEvent
+    data class SearchAccountsBook(val query: String) : UiEvent
+    data class SelectBookPerson(val id: Long) : UiEvent
+    data object CloseBookPerson : UiEvent
+    data class SetBookPersonEditor(val editor: BookPersonEditor?) : UiEvent
+    data class SaveBookPerson(val draft: BookPersonDraft) : UiEvent
+    data class ArchiveBookPerson(val id: Long) : UiEvent
+    data class OpenBookEntrySheet(
+        val personId: Long,
+        val presetKind: com.daftari.ledger.domain.BookEntryKind? = null,
+        val editEntryId: Long? = null
+    ) : UiEvent
+    data object CloseBookEntrySheet : UiEvent
+    data class SaveBookEntry(val draft: BookEntryDraft) : UiEvent
+    data class DeleteBookEntry(val id: Long) : UiEvent
+    data object ShareBookStatement : UiEvent
+    data class SetBookCurrencyManager(val open: Boolean) : UiEvent
+    data class SetBookCurrencyEditor(val draft: BookCurrencyDraft?) : UiEvent
+    data class SaveBookCurrency(val draft: BookCurrencyDraft) : UiEvent
+    data class ArchiveBookCurrency(val id: Long) : UiEvent
+    data class SetDefaultBookCurrency(val id: Long) : UiEvent
 
     data object OpenInventory : UiEvent
     data object CloseInventory : UiEvent

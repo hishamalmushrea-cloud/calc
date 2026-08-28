@@ -85,6 +85,24 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
             }
         }
 
+        if (state.can(StaffPermission.VIEW_ACCOUNTS)) {
+            Section(stringResource(R.string.section_accounts_book), initiallyExpanded = true) {
+                Text(stringResource(R.string.accounts_book_hint), style = MaterialTheme.typography.bodySmall)
+                if (state.book.persons.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.book_persons_count, state.book.persons.size),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Button(onClick = { onEvent(UiEvent.OpenAccountsBook) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.open_accounts_book))
+                }
+                OutlinedButton(onClick = { onEvent(UiEvent.OpenAccountsBook); onEvent(UiEvent.SetBookCurrencyManager(true)) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.book_currencies_title))
+                }
+            }
+        }
+
         if (state.can(StaffPermission.VIEW_ACCOUNTS) || state.can(StaffPermission.RECORD_SALE)) {
             Section(stringResource(R.string.section_inventory), initiallyExpanded = true) {
                 Text(stringResource(R.string.inventory_hint), style = MaterialTheme.typography.bodySmall)

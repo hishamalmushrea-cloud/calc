@@ -12,7 +12,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DocumentEntity::class, JournalLineEntity::class, CategoryEntity::class,
         AuditLogEntity::class, SettingsEntity::class, DailyClosingEntity::class,
         DailyBookEntity::class, EmployeeEntity::class, EmployeeShopEntity::class,
-        EmployeeShiftEntity::class, ItemEntity::class, DocumentLineEntity::class
+        EmployeeShiftEntity::class, ItemEntity::class, DocumentLineEntity::class,
+        CurrencyEntity::class, BookPersonEntity::class, BookEntryEntity::class
     ],
     version = AppDb.VERSION,
     exportSchema = true
@@ -33,9 +34,12 @@ abstract class AppDb : RoomDatabase() {
     abstract fun employeeShifts(): EmployeeShiftDao
     abstract fun items(): ItemDao
     abstract fun documentLines(): DocumentLineDao
+    abstract fun currencies(): CurrencyDao
+    abstract fun bookPersons(): BookPersonDao
+    abstract fun bookEntries(): BookEntryDao
 
     companion object {
-        const val VERSION = 8
+        const val VERSION = 9
         @Volatile private var I: AppDb? = null
 
         fun get(ctx: Context): AppDb = I ?: synchronized(this) {
@@ -46,12 +50,15 @@ abstract class AppDb : RoomDatabase() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
                 PartySearchIndex.ensure(db)
+                CurrencySeeds.ensure(db)
             }
 
             override fun onOpen(db: SupportSQLiteDatabase) {
                 super.onOpen(db)
                 // يصلح تلقائيًا أي تثبيت قديم فُقد منه جدول FTS دون لمس البيانات.
                 PartySearchIndex.ensure(db)
+                // يضمن وجود عملات دفتر الحسابات حتى بعد استعادة نسخة بلا بذور.
+                CurrencySeeds.ensure(db)
             }
         }
 

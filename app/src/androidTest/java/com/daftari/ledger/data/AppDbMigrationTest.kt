@@ -8,6 +8,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -114,6 +116,46 @@ class AppDbMigrationTest {
             migrated.query("SELECT creditLimitMinor FROM parties WHERE id = 7").use { cursor ->
                 cursor.moveToFirst()
                 assertEquals(0L, cursor.getLong(0))
+            }
+        }
+    }
+
+    @Test
+    fun migrate8To9AddsAccountsBookTablesAndCurrencies() {
+        val db = helper.createDatabase(TEST_DB, 8)
+        db.execSQL(
+            "INSERT INTO shops (id,name,phone,address,currencyCode,fractionDigits,archived,createdAt,nextDocumentNumber) " +
+                "VALUES (1,'متجر','','','SAR',2,0,1,1)"
+        )
+        db.execSQL(
+            "INSERT INTO app_settings " +
+                "(id,fiscalEnabled,hideBalances,uniqueDocPerParty,autoBackupEnabled,autoBackupKeep," +
+                "biometricUnlock,latinDigits,failedPinAttempts,pinLockedUntil,employeesEnabled) " +
+                "VALUES (1,0,0,1,0,7,0,1,0,0,0)"
+        )
+        db.close()
+
+        // هذا المسار لا ينشئ FTS؛ نستخدم تحقق المخطط الآمن من Room مقابل 9.json.
+        helper.runMigrationsAndValidate(TEST_DB, 9, true, Migrations.MIGRATION_8_9).use { migrated ->
+            migrated.query("SELECT COUNT(*) FROM currencies").use { cursor ->
+                cursor.moveToFirst()
+                assertTrue(cursor.getInt(0) >= 4)
+            }
+            migrated.query("SELECT COUNT(*) FROM currencies WHERE code = 'LOCAL' AND symbol = ''").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(1, cursor.getInt(0))
+            }
+            migrated.query("SELECT defaultCurrencyId FROM app_settings WHERE id = 1").use { cursor ->
+                cursor.moveToFirst()
+                assertFalse(cursor.isNull(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM book_persons").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(0, cursor.getInt(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM book_entries").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(0, cursor.getInt(0))
             }
         }
     }

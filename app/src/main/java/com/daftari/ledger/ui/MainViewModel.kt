@@ -38,6 +38,10 @@ import kotlinx.coroutines.withContext
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val repo = (app as DaftariApp).repo
     internal val staff = (app as DaftariApp).staff
+    internal val book = (app as DaftariApp).book
+
+    /** جمع سجل الشخص المفتوح في دفتر الحسابات؛ يُلغى عند إغلاق الصفحة. */
+    internal var bookEntriesJob: Job? = null
     internal val services = MainUiServices(app, repo)
     internal val mutableState = MutableStateFlow(
         UiState(
@@ -187,6 +191,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.SearchSalesBook -> searchSalesBook(event)
             is UiEvent.ShareSalesDay -> shareSalesDay(event.dayStart, event.detailed)
             is UiEvent.ExportSalesPeriod -> exportSalesPeriod(event.from, event.to, event.format)
+            UiEvent.OpenAccountsBook -> openAccountsBook()
+            UiEvent.CloseAccountsBook -> closeAccountsBook()
+            is UiEvent.SearchAccountsBook -> searchAccountsBook(event.query)
+            is UiEvent.SelectBookPerson -> selectBookPerson(event.id)
+            UiEvent.CloseBookPerson -> closeBookPerson()
+            is UiEvent.SetBookPersonEditor -> setBookPersonEditor(event.editor)
+            is UiEvent.SaveBookPerson -> saveBookPerson(event.draft)
+            is UiEvent.ArchiveBookPerson -> archiveBookPerson(event.id)
+            is UiEvent.OpenBookEntrySheet -> openBookEntrySheet(event.personId, event.presetKind, event.editEntryId)
+            UiEvent.CloseBookEntrySheet -> closeBookEntrySheet()
+            is UiEvent.SaveBookEntry -> saveBookEntry(event.draft)
+            is UiEvent.DeleteBookEntry -> deleteBookEntry(event.id)
+            UiEvent.ShareBookStatement -> shareBookStatement()
+            is UiEvent.SetBookCurrencyManager -> setBookCurrencyManager(event.open)
+            is UiEvent.SetBookCurrencyEditor -> setBookCurrencyEditor(event.draft)
+            is UiEvent.SaveBookCurrency -> saveBookCurrency(event.draft)
+            is UiEvent.ArchiveBookCurrency -> archiveBookCurrency(event.id)
+            is UiEvent.SetDefaultBookCurrency -> setDefaultBookCurrency(event.id)
             UiEvent.OpenInventory -> openInventory()
             UiEvent.CloseInventory -> closeInventory()
             is UiEvent.SaveItem -> saveItem(event.draft)
@@ -237,6 +259,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             launch {
                 staff.observeForShop(id).collectLatest { employees ->
                     mutableState.update { it.copy(employees = it.employees.copy(employees = employees)) }
+                }
+            }
+            launch {
+                book.observePersons(id).collectLatest { persons ->
+                    mutableState.update { it.copy(book = it.book.copy(persons = persons)) }
+                }
+            }
+            launch {
+                book.observeBalances(id).collectLatest { balances ->
+                    mutableState.update { it.copy(book = it.book.copy(balances = balances)) }
+                }
+            }
+            launch {
+                book.observeLastActivity().collectLatest { rows ->
+                    val activity = rows.filter { it.lastAt != null }.associate { it.personId to it.lastAt!! }
+                    mutableState.update { it.copy(book = it.book.copy(lastActivity = activity)) }
+                }
+            }
+            launch {
+                book.observeCurrencies().collectLatest { currencies ->
+                    mutableState.update { it.copy(book = it.book.copy(currencies = currencies)) }
                 }
             }
             launch {
