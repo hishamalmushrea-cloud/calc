@@ -214,7 +214,9 @@ private fun BookPersonsList(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                     currencies = currencies,
                     lastActivity = book.lastActivity[person.id],
                     dateFormat = dateFormat,
-                    onClick = { onEvent(UiEvent.SelectBookPerson(person.id)) }
+                    canManage = canManage,
+                    onClick = { onEvent(UiEvent.SelectBookPerson(person.id)) },
+                    onQuickAdd = { kind -> onEvent(UiEvent.OpenBookEntrySheet(person.id, kind, null)) }
                 )
             }
         }
@@ -285,61 +287,85 @@ private fun BookPersonCard(
     currencies: Map<Long, CurrencyEntity>,
     lastActivity: Long?,
     dateFormat: SimpleDateFormat,
-    onClick: () -> Unit
+    canManage: Boolean,
+    onClick: () -> Unit,
+    onQuickAdd: (BookEntryKind) -> Unit
 ) {
     AnimatedCard(
         index = index,
         modifier = Modifier.fillMaxWidth().pulseOnClick().clickable(onClick = onClick)
     ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    person.name.take(1),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(person.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                if (person.phone.isNotBlank()) {
-                    Text(person.phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(
-                    if (lastActivity == null) {
-                        stringResource(R.string.book_no_activity)
-                    } else {
-                        stringResource(R.string.book_last_activity, dateFormat.format(Date(lastActivity)))
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (balances.isEmpty()) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        displayBookMoney(0L, currencies.values.firstOrNull()),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        person.name.take(1),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-                balances.forEach { balance ->
-                    val currency = currencies[balance.currencyId]
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(person.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                    if (person.phone.isNotBlank()) {
+                        Text(person.phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Text(
-                        stringResource(
-                            R.string.book_row_balances,
-                            displayBookMoney(balance.creditMinor, currency),
-                            displayBookMoney(balance.debtMinor, currency)
-                        ),
+                        if (lastActivity == null) {
+                            stringResource(R.string.book_no_activity)
+                        } else {
+                            stringResource(R.string.book_last_activity, dateFormat.format(Date(lastActivity)))
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    BookNetText(balance.netMinor, currency)
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (balances.isEmpty()) {
+                        Text(
+                            displayBookMoney(0L, currencies.values.firstOrNull()),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    balances.forEach { balance ->
+                        val currency = currencies[balance.currencyId]
+                        Text(
+                            stringResource(
+                                R.string.book_row_balances,
+                                displayBookMoney(balance.creditMinor, currency),
+                                displayBookMoney(balance.debtMinor, currency)
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        BookNetText(balance.netMinor, currency)
+                    }
+                }
+            }
+
+            if (canManage) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    BookEntryKind.entries.forEach { kind ->
+                        TextButton(
+                            onClick = { onQuickAdd(kind) },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = bookKindColor(kind))
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(2.dp))
+                            Text(stringResource(kind.labelRes()), style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
             }
         }
