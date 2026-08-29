@@ -610,6 +610,11 @@
     <string name="book_statement_pdf">كشف حساب PDF</string>
     <string name="book_person_currency">العملة المعتادة</string>
     <string name="book_currency_follow_default">الافتراضية</string>
+    <string name="book_alerts_title">تنبيهات الديون</string>
+    <string name="book_alerts_count">%1$d دين بلا حركة منذ %2$d يومًا أو أكثر</string>
+    <string name="book_alert_idle_days">بلا حركة منذ %1$d يومًا</string>
+    <string name="book_alerts_hide">إخفاء</string>
+    <string name="book_alerts_show">إظهار</string>
     <string name="book_statement_text">كشف حساب نصي</string>
     <string name="book_currencies_title">العملات</string>
     <string name="book_currencies_hint">أضف أي عملة تريدها: اسم، ورمز اختياري (يمكن تركه فارغًا)، وعدد خانات عشرية.</string>

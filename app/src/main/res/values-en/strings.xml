@@ -418,6 +418,11 @@
     <string name="book_statement_pdf">Statement as PDF</string>
     <string name="book_person_currency">Usual currency</string>
     <string name="book_currency_follow_default">Default</string>
+    <string name="book_alerts_title">Debt alerts</string>
+    <string name="book_alerts_count">%1$d debt(s) idle for %2$d days or more</string>
+    <string name="book_alert_idle_days">No activity for %1$d days</string>
+    <string name="book_alerts_hide">Hide</string>
+    <string name="book_alerts_show">Show</string>
     <string name="book_statement_text">Statement as text</string>
     <string name="book_currencies_title">Currencies</string>
     <string name="book_currencies_hint">Add any currency you need: a name, an optional symbol (can stay empty) and fraction digits.</string>

@@ -28,7 +28,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -68,6 +71,9 @@ import com.daftari.ledger.data.BookBalanceRow
 import com.daftari.ledger.data.BookEntryEntity
 import com.daftari.ledger.data.BookPersonEntity
 import com.daftari.ledger.data.CurrencyEntity
+import com.daftari.ledger.domain.BookAlerts
+import com.daftari.ledger.domain.BookDebtAlert
+import com.daftari.ledger.domain.BookDebtor
 import com.daftari.ledger.domain.BookEntryKind
 import com.daftari.ledger.domain.BookSide
 import com.daftari.ledger.domain.BookTotals
@@ -155,6 +161,14 @@ private fun BookPersonsList(state: UiState, onEvent: (UiEvent) -> Unit, padding:
         }
     }
     val canManage = state.can(StaffPermission.MANAGE_ACCOUNTS) || state.can(StaffPermission.RECORD_SALE)
+    val personsById = remember(book.persons) { book.persons.associateBy { it.id } }
+    val now = remember { System.currentTimeMillis() }
+    var alertsExpanded by remember { mutableStateOf(true) }
+    // التنبيهات تتّبع البحث الحالي: لا نُنبِّه عن شخص خارج القائمة المعروضة.
+    val alerts = remember(book.balances, book.lastActivity, visiblePersons, now) {
+        val visibleIds = visiblePersons.map { it.id }.toSet()
+        bookDebtAlerts(book.balances, book.lastActivity, now).filter { it.personId in visibleIds }
+    }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -186,6 +200,19 @@ private fun BookPersonsList(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.book_currencies_title))
                     }
+                }
+            }
+
+            if (alerts.isNotEmpty()) {
+                item(key = "book-alerts") {
+                    BookAlertsSection(
+                        alerts = alerts,
+                        persons = personsById,
+                        currencies = currencies,
+                        expanded = alertsExpanded,
+                        onToggle = { alertsExpanded = !alertsExpanded },
+                        onOpenPerson = { id -> onEvent(UiEvent.SelectBookPerson(id)) }
+                    )
                 }
             }
 
@@ -1130,3 +1157,103 @@ private fun entrySideOf(entry: BookEntryEntity): BookSide =
     runCatching { BookSide.valueOf(entry.side) }.getOrDefault(BookSide.DEBT)
 
 private val FRACTION_DIGIT_OPTIONS = listOf(0, 2, 3)
+
+// ------------------------------------------------------------- تنبيهات الديون
+
+/** كل الديون المتوقفة (عليه + بلا حركة منذ [BookAlerts.STALE_AFTER_DAYS] يومًا). */
+private fun bookDebtAlerts(
+    balances: List<BookBalanceRow>,
+    lastActivity: Map<Long, Long>,
+    now: Long
+): List<BookDebtAlert> = BookAlerts.staleDebts(
+    balances.map { balance ->
+        BookDebtor(
+            personId = balance.personId,
+            currencyId = balance.currencyId,
+            netMinor = balance.netMinor,
+            lastActivityAt = lastActivity[balance.personId]
+        )
+    },
+    now
+)
+
+/**
+ * قسم تنبيهات الديون: يظهر فقط عندما يوجد ما يستحق المتابعة، ويمكن طيُّه.
+ * الضغط على أي سطر يفتح حساب ذلك الشخص.
+ */
+@Composable
+private fun BookAlertsSection(
+    alerts: List<BookDebtAlert>,
+    persons: Map<Long, BookPersonEntity>,
+    currencies: Map<Long, CurrencyEntity>,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onOpenPerson: (Long) -> Unit
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f))
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.book_alerts_title), fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(
+                            R.string.book_alerts_count,
+                            alerts.size,
+                            BookAlerts.STALE_AFTER_DAYS
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onToggle) {
+                    Text(stringResource(if (expanded) R.string.book_alerts_hide else R.string.book_alerts_show))
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null
+                    )
+                }
+            }
+            if (expanded) {
+                alerts.forEach { alert ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenPerson(alert.personId) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                persons[alert.personId]?.name.orEmpty(),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                stringResource(R.string.book_alert_idle_days, alert.idleDays),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(
+                                R.string.book_net_owed_by_him,
+                                displayBookMoney(alert.netMinor, currencies[alert.currencyId])
+                            ),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
