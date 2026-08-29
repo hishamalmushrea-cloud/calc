@@ -621,6 +621,11 @@
     <string name="book_pdf_net_credit">الرصيد الإجمالي - له</string>
     <string name="book_pdf_net_settled">الرصيد الإجمالي - مسدّد</string>
     <string name="book_pdf_currency">العملة: %1$s</string>
+    <string name="pdf_footer_app">بواسطة دفتري</string>
+    <string name="pdf_col_description">البيان</string>
+    <string name="pdf_col_value">القيمة</string>
+    <string name="pdf_label_doc_number">رقم السند</string>
+    <string name="pdf_label_party">الحساب</string>
     <string name="book_statement_pdf">كشف حساب PDF</string>
     <string name="book_person_currency">العملة المعتادة</string>
     <string name="book_currency_follow_default">الافتراضية</string>
