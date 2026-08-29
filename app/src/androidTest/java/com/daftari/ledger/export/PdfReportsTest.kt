@@ -31,7 +31,7 @@ class PdfReportsTest {
 
         assertTrue("file was not created", file.exists())
         assertTrue("file is empty", file.length() > 200L)
-        val header = file.inputStream().use { it.readBytes(5) }.toString(Charsets.US_ASCII)
+        val header = file.readBytes().take(5).toByteArray().toString(Charsets.US_ASCII)
         assertEquals("%PDF-", header)
     }
 }
