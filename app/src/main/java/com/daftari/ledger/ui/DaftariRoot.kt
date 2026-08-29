@@ -77,7 +77,8 @@ fun DaftariRoot(
     viewModel: MainViewModel,
     activity: FragmentActivity? = null,
     initialTab: Int = 0,
-    initialQuickSale: Boolean = false
+    initialQuickSale: Boolean = false,
+    initialOpenBook: Boolean = false
 ) {
     var tab by remember { mutableIntStateOf(initialTab) }
     var addType by remember { mutableStateOf<DocType?>(null) }
@@ -90,6 +91,10 @@ fun DaftariRoot(
     val useNavigationRail = LocalConfiguration.current.screenWidthDp >= 600
     LaunchedEffect(initialQuickSale) {
         if (initialQuickSale) addType = DocType.SALE
+    }
+    // ودجت «دفتر الحسابات» يفتح الدفتر مباشرة دون المرور بالتبويبات.
+    LaunchedEffect(initialOpenBook) {
+        if (initialOpenBook) onEvent(UiEvent.OpenAccountsBook)
     }
     val secondaryOpen = state.book.screenOpen || state.inventory.screenOpen ||
         state.googleBackup.screenOpen || state.employees.screenOpen

@@ -30,6 +30,20 @@ data class BookDebtAlert(
     val idleDays: Long
 )
 
+/**
+ * ملخّص أعداد للودجت: أشخاص عليهم دين، ومنهم من له دين متوقف.
+ *
+ * **أعداد لا مبالغ** — فلا تُجمع عملات مختلفة ولا يُكشف أي رصيد.
+ */
+data class BookWidgetSummary(
+    val debtors: Int = 0,
+    val staleDebtors: Int = 0,
+    val staleBalances: Int = 0
+) {
+    val hasDebts: Boolean get() = debtors > 0
+    val hasStaleDebts: Boolean get() = staleDebtors > 0
+}
+
 object BookAlerts {
 
     /** عدد الأيام التي بعدها يُعتبر الدين متوقفًا ويستحق المتابعة. */
@@ -82,4 +96,27 @@ object BookAlerts {
     }.sortedWith(
         compareByDescending<BookDebtAlert> { it.idleDays }.thenByDescending { it.netMinor }
     )
+
+    /**
+     * ملخّص الودجت.
+     *
+     * - [BookWidgetSummary.debtors]: عدد الأشخاص الذين عليهم دين في عملة واحدة على الأقل.
+     * - [BookWidgetSummary.staleBalances]: عدد أرصدة (شخص، عملة) المتوقفة.
+     * - [BookWidgetSummary.staleDebtors]: عدد الأشخاص الذين لديهم رصيد متوقف واحد على الأقل.
+     *
+     * الشخص الذي عليه دين في عملتين يُحسب **مرة واحدة** في عددي الأشخاص، ومرتين في
+     * عدد الأرصدة المتوقفة.
+     */
+    fun summary(
+        debtors: List<BookDebtor>,
+        nowMillis: Long,
+        staleAfterDays: Int = STALE_AFTER_DAYS
+    ): BookWidgetSummary {
+        val stale = staleDebts(debtors, nowMillis, staleAfterDays)
+        return BookWidgetSummary(
+            debtors = debtors.asSequence().filter { it.netMinor > 0L }.map { it.personId }.distinct().count(),
+            staleDebtors = stale.asSequence().map { it.personId }.distinct().count(),
+            staleBalances = stale.size
+        )
+    }
 }

@@ -108,6 +108,44 @@ class BookAlertsTest {
     }
 
     @Test
+    fun summaryCountsPeopleNotBalances() {
+        val debtors = listOf(
+            BookDebtor(1L, 3L, 5_000L, NOW - 45 * DAY),
+            BookDebtor(1L, 4L, 20_000L, NOW - 45 * DAY)
+        )
+        val summary = BookAlerts.summary(debtors, NOW)
+        assertEquals(1, summary.debtors)
+        assertEquals(1, summary.staleDebtors)
+        assertEquals(2, summary.staleBalances)
+        assertTrue(summary.hasDebts)
+        assertTrue(summary.hasStaleDebts)
+    }
+
+    @Test
+    fun summarySeparatesDebtorsFromStaleOnes() {
+        val debtors = listOf(
+            BookDebtor(1L, 3L, 5_000L, NOW - 2 * DAY),
+            BookDebtor(2L, 3L, 7_000L, NOW - 80 * DAY),
+            BookDebtor(3L, 3L, 0L, NOW - 80 * DAY)
+        )
+        val summary = BookAlerts.summary(debtors, NOW)
+        assertEquals(2, summary.debtors)
+        assertEquals(1, summary.staleDebtors)
+        assertEquals(1, summary.staleBalances)
+    }
+
+    @Test
+    fun summaryIsEmptyWhenEveryoneIsSettled() {
+        val summary = BookAlerts.summary(
+            listOf(BookDebtor(1L, 3L, 0L, NOW - 400 * DAY), BookDebtor(2L, 3L, -900L, NOW - 400 * DAY)),
+            NOW
+        )
+        assertEquals(BookWidgetSummary(), summary)
+        assertFalse(summary.hasDebts)
+        assertFalse(summary.hasStaleDebts)
+    }
+
+    @Test
     fun theSamePersonCanAlertPerCurrency() {
         val debtors = listOf(
             BookDebtor(1L, 3L, 5_000L, NOW - 45 * DAY),

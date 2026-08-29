@@ -16,6 +16,7 @@ import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.PartyKind
 import com.daftari.ledger.domain.StaffPermission
+import com.daftari.ledger.widget.AccountsBookWidget
 import com.daftari.ledger.widget.DaftariWidget
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -672,6 +673,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshInsights()
         loadSalesLedger()
         DaftariWidget.updateAll(getApplication())
+        AccountsBookWidget.updateAll(getApplication())
     }
 
     internal fun dynamicError(error: Exception) {

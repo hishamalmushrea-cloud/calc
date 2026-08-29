@@ -36,6 +36,7 @@ import com.daftari.ledger.ui.MainViewModel
 import com.daftari.ledger.ui.UiEffect
 import com.daftari.ledger.ui.UiEvent
 import com.daftari.ledger.ui.theme.DaftariTheme
+import com.daftari.ledger.widget.AccountsBookWidget
 import kotlinx.coroutines.flow.collect
 
 class MainActivity : FragmentActivity() {
@@ -65,6 +66,15 @@ class MainActivity : FragmentActivity() {
         uri?.let { vm.onEvent(UiEvent.RestoreCloudFile(it.toString())) }
     }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    /**
+     * يحدّث ودجت دفتر الحسابات عند مغادرة التطبيق، فيرى المستخدم على شاشته الرئيسية
+     * آخر الأعداد بعد أي عملية سجّلها في الدفتر.
+     */
+    override fun onStop() {
+        super.onStop()
+        AccountsBookWidget.updateAll(this)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -146,7 +156,8 @@ class MainActivity : FragmentActivity() {
                     vm,
                     this@MainActivity,
                     initialTab = if (intent.getBooleanExtra(EXTRA_OPEN_REPORTS, false)) 4 else 0,
-                    initialQuickSale = intent.getBooleanExtra(EXTRA_QUICK_SALE, false)
+                    initialQuickSale = intent.getBooleanExtra(EXTRA_QUICK_SALE, false),
+                    initialOpenBook = intent.getBooleanExtra(EXTRA_OPEN_BOOK, false)
                 )
             }
         }
@@ -269,5 +280,6 @@ class MainActivity : FragmentActivity() {
     companion object {
         const val EXTRA_OPEN_REPORTS = "open_reports"
         const val EXTRA_QUICK_SALE = "quick_sale"
+        const val EXTRA_OPEN_BOOK = "open_book"
     }
 }

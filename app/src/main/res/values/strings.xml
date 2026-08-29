@@ -307,6 +307,13 @@
     <string name="msg_pin_locked">تم قفل المحاولة لمدة %1$d ثانية</string>
     <string name="widget_title">دفتري اليوم</string>
     <string name="widget_description">ملخص نقد اليوم وزر بيع سريع</string>
+    <string name="widget_book_title">دفتر الحسابات</string>
+    <string name="widget_book_description">عدد من عليهم ديون والمتوقف منها، وزر يفتح الدفتر</string>
+    <string name="widget_book_none">لا ديون على أحد</string>
+    <string name="widget_book_debtors">%1$d شخصًا عليهم ديون</string>
+    <string name="widget_book_stale_none">لا ديون متوقفة</string>
+    <string name="widget_book_stale">%1$d منهم بلا حركة منذ %2$d يومًا</string>
+    <string name="widget_book_open">فتح الدفتر</string>
     <string name="quick_party_suggestions">حسابات مقترحة للوصول السريع</string>
 
     <string name="nav_sales">بيع</string>
