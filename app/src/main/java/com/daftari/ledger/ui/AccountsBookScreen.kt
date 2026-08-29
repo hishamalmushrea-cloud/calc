@@ -127,6 +127,7 @@ internal fun AccountsBookScreen(state: UiState, onEvent: (UiEvent) -> Unit, padd
 
 // --------------------------------------------------------------------- القائمة
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BookPersonsList(state: UiState, onEvent: (UiEvent) -> Unit, padding: PaddingValues) {
     val book = state.book
@@ -134,10 +135,24 @@ private fun BookPersonsList(state: UiState, onEvent: (UiEvent) -> Unit, padding:
     val balancesByPerson = book.balances.groupBy { it.personId }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val query = book.query.trim()
-    val visiblePersons = if (query.isEmpty()) {
-        book.persons
-    } else {
-        book.persons.filter { it.name.contains(query, true) || it.phone.contains(query, true) }
+    var sort by remember { mutableStateOf(BookPersonSort.NAME) }
+    val visiblePersons = remember(book.persons, query, sort, balancesByPerson, book.lastActivity) {
+        val filtered = if (query.isEmpty()) {
+            book.persons
+        } else {
+            book.persons.filter { it.name.contains(query, true) || it.phone.contains(query, true) }
+        }
+        when (sort) {
+            BookPersonSort.NAME -> filtered.sortedBy { it.name }
+            BookPersonSort.NET -> filtered.sortedWith(
+                compareByDescending<BookPersonEntity> { person ->
+                    balancesByPerson[person.id]?.maxOfOrNull { it.netMinor } ?: 0L
+                }.thenBy { it.name }
+            )
+            BookPersonSort.ACTIVITY -> filtered.sortedWith(
+                compareByDescending<BookPersonEntity> { book.lastActivity[it.id] ?: 0L }.thenBy { it.name }
+            )
+        }
     }
     val canManage = state.can(StaffPermission.MANAGE_ACCOUNTS) || state.can(StaffPermission.RECORD_SALE)
 
@@ -193,6 +208,19 @@ private fun BookPersonsList(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            item {
+                Text(stringResource(R.string.book_sort_title), style = MaterialTheme.typography.labelMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BookPersonSort.entries.forEach { option ->
+                        FilterChip(
+                            selected = sort == option,
+                            onClick = { sort = option },
+                            label = { Text(stringResource(option.labelRes())) }
+                        )
+                    }
+                }
             }
 
             if (visiblePersons.isEmpty()) {
@@ -382,6 +410,7 @@ private fun BookPersonCard(
 
 // ------------------------------------------------------------------ صفحة الشخص
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: PaddingValues) {
     val book = state.book
@@ -395,9 +424,15 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
             BookLedgerBridge.statement(rows).map { line -> line.entry.sequence to line.runningNetMinor }
         }.toMap()
     }
-    val orderedEntries = remember(book.selectedEntries) {
-        book.selectedEntries.sortedWith(compareByDescending<BookEntryEntity> { it.occurredAt }.thenByDescending { it.id })
+    var kindFilter by remember(personId) { mutableStateOf<BookEntryKind?>(null) }
+    var currencyFilter by remember(personId) { mutableStateOf<Long?>(null) }
+    val orderedEntries = remember(book.selectedEntries, kindFilter, currencyFilter) {
+        book.selectedEntries
+            .filter { kindFilter == null || entryKindOf(it) == kindFilter }
+            .filter { currencyFilter == null || it.currencyId == currencyFilter }
+            .sortedWith(compareByDescending<BookEntryEntity> { it.occurredAt }.thenByDescending { it.id })
     }
+    val filtering = kindFilter != null || currencyFilter != null
     var confirmArchive by remember { mutableStateOf(false) }
     val canManage = state.can(StaffPermission.MANAGE_ACCOUNTS) || state.can(StaffPermission.RECORD_SALE)
 
@@ -446,6 +481,38 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
 
             item {
                 Text(stringResource(R.string.book_operations_title), fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(
+                        selected = kindFilter == null,
+                        onClick = { kindFilter = null },
+                        label = { Text(stringResource(R.string.book_filter_all)) }
+                    )
+                    BookEntryKind.entries.forEach { kind ->
+                        FilterChip(
+                            selected = kindFilter == kind,
+                            onClick = { kindFilter = if (kindFilter == kind) null else kind },
+                            label = { Text(stringResource(kind.labelRes())) }
+                        )
+                    }
+                }
+                if (entriesByCurrency.size > 1) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        entriesByCurrency.keys.forEach { id ->
+                            FilterChip(
+                                selected = currencyFilter == id,
+                                onClick = { currencyFilter = if (currencyFilter == id) null else id },
+                                label = { Text(currencyLabel(currencies[id])) }
+                            )
+                        }
+                    }
+                }
+                if (filtering) {
+                    Text(
+                        stringResource(R.string.book_filtered_count, orderedEntries.size, book.selectedEntries.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (canManage) {
                     Text(
                         stringResource(R.string.book_quick_add_hint),
@@ -466,7 +533,14 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
             }
 
             if (orderedEntries.isEmpty()) {
-                item { Text(stringResource(R.string.no_operations_yet), style = MaterialTheme.typography.bodySmall) }
+                item {
+                    Text(
+                        stringResource(
+                            if (filtering) R.string.book_no_matching_operations else R.string.no_operations_yet
+                        ),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
 
             items(orderedEntries, key = { it.id }) { entry ->
@@ -986,6 +1060,15 @@ private fun bookTotalsByCurrency(balances: List<BookBalanceRow>): List<Pair<Long
             settledMinor = rows.sumOf { it.settledMinor }
         )
     }.sortedBy { it.first }
+
+/** ترتيب قائمة الأشخاص في الواجهة فقط؛ لا يغيّر التخزين ولا الحساب. */
+private enum class BookPersonSort { NAME, NET, ACTIVITY }
+
+private fun BookPersonSort.labelRes(): Int = when (this) {
+    BookPersonSort.NAME -> R.string.book_sort_name
+    BookPersonSort.NET -> R.string.book_sort_net
+    BookPersonSort.ACTIVITY -> R.string.book_sort_activity
+}
 
 private fun currencyLabel(currency: CurrencyEntity?): String =
     currency?.symbol?.trim()?.ifEmpty { currency.name } ?: currency?.name.orEmpty()

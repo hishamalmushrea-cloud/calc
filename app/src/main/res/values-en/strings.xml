@@ -405,6 +405,13 @@
     <string name="book_currency">Currency</string>
     <string name="book_save_kind">Save (%1$s)</string>
     <string name="book_quick_add_hint">Add an operation: credit, debt, or settlement</string>
+    <string name="book_filter_all">All</string>
+    <string name="book_filtered_count">Showing %1$d of %2$d operations</string>
+    <string name="book_no_matching_operations">No operations match the filters</string>
+    <string name="book_sort_title">Sort</string>
+    <string name="book_sort_name">Name</string>
+    <string name="book_sort_net">Largest balance</string>
+    <string name="book_sort_activity">Last activity</string>
     <string name="book_delete_entry_question">Delete this operation from the log?</string>
     <string name="book_archive_person_question">The person will be hidden from the list and all operations stay saved.</string>
     <string name="book_statement_title">Statement: %1$s</string>

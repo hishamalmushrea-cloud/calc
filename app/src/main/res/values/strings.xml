@@ -597,6 +597,13 @@
     <string name="book_currency">العملة</string>
     <string name="book_save_kind">حفظ (%1$s)</string>
     <string name="book_quick_add_hint">أضف عملية جديدة: له أو عليه أو تسديد</string>
+    <string name="book_filter_all">الكل</string>
+    <string name="book_filtered_count">المعروض %1$d من %2$d عملية</string>
+    <string name="book_no_matching_operations">لا عمليات مطابقة للتصفية</string>
+    <string name="book_sort_title">الترتيب</string>
+    <string name="book_sort_name">الاسم</string>
+    <string name="book_sort_net">الأكبر دينًا</string>
+    <string name="book_sort_activity">آخر حركة</string>
     <string name="book_delete_entry_question">حذف هذه العملية من السجل؟</string>
     <string name="book_archive_person_question">سيُخفى الشخص من القائمة وتبقى كل عملياته محفوظة.</string>
     <string name="book_statement_title">كشف حساب: %1$s</string>
