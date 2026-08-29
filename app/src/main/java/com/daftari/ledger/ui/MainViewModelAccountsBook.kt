@@ -93,11 +93,19 @@ internal fun MainViewModel.saveBookPerson(draft: BookPersonDraft) = viewModelSco
                 name = draft.name,
                 phone = draft.phone,
                 notes = draft.notes,
+                currencyId = draft.currencyId,
                 opening = opening,
                 actorEmployeeId = actorId
             )
         } else {
-            book.updatePerson(draft.id, draft.name, draft.phone, draft.notes, actorEmployeeId = actorId)
+            book.updatePerson(
+                draft.id,
+                draft.name,
+                draft.phone,
+                draft.notes,
+                currencyId = draft.currencyId,
+                actorEmployeeId = actorId
+            )
         }
         mutableState.update {
             it.copy(book = it.book.copy(personEditor = null), message = text(R.string.msg_book_person_saved))

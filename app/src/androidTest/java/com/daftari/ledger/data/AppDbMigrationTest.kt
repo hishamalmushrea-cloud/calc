@@ -15,7 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * اختبار مسار الترحيل الكامل 1→8.
+ * اختبار مسار الترحيل الكامل 1→10.
  *
  * ملاحظة: لا نستخدم runMigrationsAndValidate للمسارات التي تنشئ جدول FTS خارجي
  * (`parties_fts`) لأن أداة التحقق تعتبره جدولًا «غير متوقع». لذلك نُشغّل كائنات
@@ -156,6 +156,29 @@ class AppDbMigrationTest {
             migrated.query("SELECT COUNT(*) FROM book_entries").use { cursor ->
                 cursor.moveToFirst()
                 assertEquals(0, cursor.getInt(0))
+            }
+        }
+    }
+
+    @Test
+    fun migrate9To10AddsPersonCurrencyColumn() {
+        val db = helper.createDatabase(TEST_DB, 9)
+        db.execSQL(
+            "INSERT INTO shops (id,name,phone,address,currencyCode,fractionDigits,archived,createdAt,nextDocumentNumber) " +
+                "VALUES (1,'متجر','','','SAR',2,0,1,1)"
+        )
+        db.execSQL(
+            "INSERT INTO book_persons (shopId,name,phone,notes,archived,createdAt,updatedAt) " +
+                "VALUES (1,'محمد','','',0,1,1)"
+        )
+        db.close()
+
+        helper.runMigrationsAndValidate(TEST_DB, 10, true, Migrations.MIGRATION_9_10).use { migrated ->
+            migrated.query("SELECT name, currencyId FROM book_persons WHERE id = 1").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("محمد", cursor.getString(0))
+                // العمود الجديد قابل للفراغ: الشخص القديم يتّبع العملة الافتراضية.
+                assertTrue(cursor.isNull(1))
             }
         }
     }

@@ -145,6 +145,7 @@ class AccountsBookRepository(private val db: AppDb) {
         name: String,
         phone: String = "",
         notes: String = "",
+        currencyId: Long? = null,
         opening: BookOpeningBalance? = null,
         actorEmployeeId: Long? = null
     ): Long = db.withTransaction {
@@ -152,7 +153,13 @@ class AccountsBookRepository(private val db: AppDb) {
         val cleanName = name.trim()
         if (cleanName.isEmpty()) throw LedgerException("أدخل اسم الشخص")
         val id = persons.insert(
-            BookPersonEntity(shopId = shopId, name = cleanName, phone = phone.trim(), notes = notes.trim())
+            BookPersonEntity(
+                shopId = shopId,
+                name = cleanName,
+                phone = phone.trim(),
+                notes = notes.trim(),
+                currencyId = requireUsableCurrency(currencyId)
+            )
         )
         if (opening != null && opening.amountMinor > 0) {
             insertEntry(
@@ -177,6 +184,7 @@ class AccountsBookRepository(private val db: AppDb) {
         name: String,
         phone: String,
         notes: String,
+        currencyId: Long? = null,
         actorEmployeeId: Long? = null
     ) {
         requireAny(actorEmployeeId, StaffPermission.RECORD_SALE, StaffPermission.MANAGE_ACCOUNTS)
@@ -188,6 +196,7 @@ class AccountsBookRepository(private val db: AppDb) {
                 name = cleanName,
                 phone = phone.trim(),
                 notes = notes.trim(),
+                currencyId = requireUsableCurrency(currencyId),
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -287,6 +296,25 @@ class AccountsBookRepository(private val db: AppDb) {
                 )
             )
         }
+    }
+
+    /**
+     * العملة التي تُقترح عند تسجيل عملية لهذا الشخص: عملته المعتادة إن كانت ما تزال
+     * صالحة، وإلا العملة الافتراضية العامة (عملة الإعدادات ← عملة المحل ← «محلي»).
+     */
+    suspend fun currencyFor(person: BookPersonEntity, shopCurrencyCode: String?): CurrencyEntity? {
+        person.currencyId?.let { id ->
+            currencies.get(id)?.takeIf { !it.archived }?.let { return it }
+        }
+        return defaultCurrency(shopCurrencyCode)
+    }
+
+    /** يتحقق أن العملة المختارة موجودة وغير مؤرشفة؛ `null` مسموح ويعني «الافتراضية». */
+    private suspend fun requireUsableCurrency(currencyId: Long?): Long? {
+        if (currencyId == null) return null
+        val currency = currencies.get(currencyId) ?: throw LedgerException("العملة غير موجودة")
+        if (currency.archived) throw LedgerException("العملة مؤرشفة")
+        return currency.id
     }
 
     /** سجل شخص كاملًا مرتبًا تصاعديًا (أساس الرصيد الجاري في الواجهة). */

@@ -261,6 +261,8 @@ data class BookPersonEntity(
     val name: String,
     val phone: String = "",
     val notes: String = "",
+    /** العملة المعتادة لهذا الشخص؛ `null` يعني اتّباع عملة المحل/العملة الافتراضية. */
+    val currencyId: Long? = null,
     val archived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()

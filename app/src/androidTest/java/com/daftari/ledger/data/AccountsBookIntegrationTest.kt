@@ -196,6 +196,40 @@ class AccountsBookIntegrationTest {
     }
 
     @Test
+    fun personUsualCurrencyIsStoredAndSuggested() = runBlocking {
+        val usd = book.listCurrencies().first { it.code == "USD" }
+        val personId = book.addPerson(shopId, "سميرة", currencyId = usd.id)
+        val person = book.getPerson(personId)!!
+
+        assertEquals(usd.id, person.currencyId)
+        // عملة المحل SAR، لكن العملة المعتادة للشخص هي التي تُقترح.
+        assertEquals(usd.id, book.currencyFor(person, "SAR")?.id)
+    }
+
+    @Test
+    fun archivedUsualCurrencyFallsBackToTheDefault() = runBlocking {
+        val custom = book.addCurrency("عملة شخص", "ع", 2, "PER1")
+        val personId = book.addPerson(shopId, "خالد", currencyId = custom)
+        book.archiveCurrency(custom)
+
+        val suggested = book.currencyFor(book.getPerson(personId)!!, "SAR")
+
+        assertNotNull(suggested)
+        assertTrue(suggested!!.id != custom)
+        assertEquals("SAR", suggested.code)
+    }
+
+    @Test
+    fun archivedCurrencyCannotBeAssignedToAPerson() = runBlocking {
+        val custom = book.addCurrency("عملة مغلقة", "", 2, "CLS1")
+        book.archiveCurrency(custom)
+
+        val result = runCatching { book.addPerson(shopId, "نورة", currencyId = custom) }
+
+        assertTrue(result.exceptionOrNull() is LedgerException)
+    }
+
+    @Test
     fun restoringADeletedEntryBringsBackItsBalance() = runBlocking {
         val local = book.defaultCurrency("LOCAL")!!
         val person = book.addPerson(shopId, "مريم")

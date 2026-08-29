@@ -694,7 +694,13 @@ private fun BookEntryDialog(
     var details by remember { mutableStateOf(existing?.details.orEmpty()) }
     var occurredAt by remember { mutableStateOf(existing?.occurredAt ?: System.currentTimeMillis()) }
     var currencyId by remember {
-        mutableStateOf(existing?.currencyId ?: book.defaultCurrencyId ?: currencies.firstOrNull()?.id)
+        // عملة العملية المحرَّرة ← العملة المعتادة للشخص ← العملة الافتراضية العامة.
+        mutableStateOf(
+            existing?.currencyId
+                ?: currencies.firstOrNull { it.id == person?.currencyId }?.id
+                ?: book.defaultCurrencyId
+                ?: currencies.firstOrNull()?.id
+        )
     }
     // النوع اختيار قابل للتغيير دائمًا؛ الزر السريع يحدّد الاختيار المبدئي فقط.
     var kind by remember {
@@ -894,6 +900,7 @@ private fun BookPersonDialog(
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
     var phone by remember { mutableStateOf(existing?.phone.orEmpty()) }
     var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }
+    var currencyId by remember { mutableStateOf(existing?.currencyId) }
     var opening by remember { mutableStateOf("") }
     var openingKind by remember { mutableStateOf(BookEntryKind.DEBT) }
     var openingCurrencyId by remember { mutableStateOf(book.defaultCurrencyId ?: book.currencies.firstOrNull()?.id) }
@@ -907,6 +914,21 @@ private fun BookPersonDialog(
                 OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(phone, { phone = it }, label = { Text(stringResource(R.string.phone_optional)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(notes, { notes = it }, label = { Text(stringResource(R.string.notes_optional)) }, modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.book_person_currency), style = MaterialTheme.typography.labelMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(
+                        selected = currencyId == null,
+                        onClick = { currencyId = null },
+                        label = { Text(stringResource(R.string.book_currency_follow_default)) }
+                    )
+                    book.currencies.forEach { currency ->
+                        FilterChip(
+                            selected = currencyId == currency.id,
+                            onClick = { currencyId = currency.id },
+                            label = { Text(currencyChipLabel(currency)) }
+                        )
+                    }
+                }
                 if (!isEdit) {
                     Text(stringResource(R.string.book_opening_balance), style = MaterialTheme.typography.labelMedium)
                     OutlinedTextField(
@@ -943,6 +965,7 @@ private fun BookPersonDialog(
                             name = name,
                             phone = phone,
                             notes = notes,
+                            currencyId = currencyId,
                             openingAmount = opening,
                             openingKind = openingKind,
                             openingCurrencyId = openingCurrencyId

@@ -45,6 +45,8 @@ data class BookPersonDraft(
     val name: String,
     val phone: String = "",
     val notes: String = "",
+    /** العملة المعتادة للشخص؛ `null` = اتّباع العملة الافتراضية العامة. */
+    val currencyId: Long? = null,
     val openingAmount: String = "",
     val openingKind: BookEntryKind = BookEntryKind.DEBT,
     val openingCurrencyId: Long? = null

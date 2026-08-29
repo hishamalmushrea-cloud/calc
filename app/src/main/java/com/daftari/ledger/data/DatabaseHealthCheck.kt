@@ -139,6 +139,7 @@ object DatabaseHealthCheck {
             add(SqlCheck("book_entry_bad_amount", "عمليات دفتر بمبلغ غير موجب", "SELECT COUNT(*) FROM book_entries WHERE deletedAt IS NULL AND amountMinor <= 0", minVersion = 9))
             add(SqlCheck("book_entry_bad_side", "عمليات دفتر بجانب أو نوع غير معروف", "SELECT COUNT(*) FROM book_entries WHERE deletedAt IS NULL AND (side NOT IN ('LE','DEBT') OR kind NOT IN ('LE','DEBT','SETTLEMENT'))", minVersion = 9))
             add(SqlCheck("no_currencies", "لا توجد عملات لدفتر الحسابات", "SELECT CASE WHEN (SELECT COUNT(*) FROM currencies) = 0 THEN 1 ELSE 0 END", minVersion = 9))
+            add(SqlCheck("orphan_book_person_currency", "أشخاص في دفتر الحسابات بعملات غير موجودة", "SELECT COUNT(*) FROM book_persons bp WHERE bp.currencyId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM currencies c WHERE c.id = bp.currencyId)", minVersion = 10))
         }
     }.filter { it.minVersion <= version }
 

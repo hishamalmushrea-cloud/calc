@@ -39,7 +39,7 @@ abstract class AppDb : RoomDatabase() {
     abstract fun bookEntries(): BookEntryDao
 
     companion object {
-        const val VERSION = 9
+        const val VERSION = 10
         @Volatile private var I: AppDb? = null
 
         fun get(ctx: Context): AppDb = I ?: synchronized(this) {

@@ -608,6 +608,8 @@
     <string name="book_archive_person_question">سيُخفى الشخص من القائمة وتبقى كل عملياته محفوظة.</string>
     <string name="book_statement_title">كشف حساب: %1$s</string>
     <string name="book_statement_pdf">كشف حساب PDF</string>
+    <string name="book_person_currency">العملة المعتادة</string>
+    <string name="book_currency_follow_default">الافتراضية</string>
     <string name="book_statement_text">كشف حساب نصي</string>
     <string name="book_currencies_title">العملات</string>
     <string name="book_currencies_hint">أضف أي عملة تريدها: اسم، ورمز اختياري (يمكن تركه فارغًا)، وعدد خانات عشرية.</string>
