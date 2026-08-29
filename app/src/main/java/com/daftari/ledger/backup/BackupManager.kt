@@ -68,54 +68,6 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
         destination
     }
 
-    fun inspectDatabase(file: File): DatabaseInspection {
-        requireSqliteDatabase(file)
-        return SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { sqlite ->
-            val version = sqlite.rawQuery("PRAGMA user_version", null).use { it.moveToFirst(); it.getInt(0) }
-            val integrity = sqlite.rawQuery("PRAGMA quick_check", null).use { it.moveToFirst() && it.getString(0).equals("ok", true) }
-            val foreignKeys = sqlite.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() }
-            val tables = sqlite.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { cursor ->
-                buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
-            }
-            val expectedTables = REQUIRED_TABLES.filter { table ->
-                when (table) {
-                    "categories" -> version >= 5
-                    "daily_books" -> version >= 6
-                    "employees", "employee_shops", "employee_shifts" -> version >= 7
-                    else -> true
-                }
-            }
-            check(expectedTables.all(tables::contains)) { "Backup is missing required data tables" }
-            val counts = expectedTables.associateWith { table ->
-                sqlite.rawQuery("SELECT COUNT(*) FROM `$table`", null).use { it.moveToFirst(); it.getLong(0) }
-            }
-            DatabaseHealthCheck.checks(version).forEach { check ->
-                val broken = sqlite.rawQuery(check.sql, null).use { it.moveToFirst(); it.getLong(0) }
-                kotlin.check(broken == 0L) { "Backup failed health check '${check.code}': ${check.message}" }
-            }
-            val latestQueries = buildList {
-                add("SELECT COALESCE(MAX(updatedAt),0) FROM documents")
-                add("SELECT COALESCE(MAX(at),0) FROM audit_logs")
-                add("SELECT COALESCE(MAX(createdAt),0) FROM shops")
-                if ("daily_books" in tables) add("SELECT COALESCE(MAX(updatedAt),0) FROM daily_books")
-                if ("employees" in tables) add("SELECT COALESCE(MAX(updatedAt),0) FROM employees")
-            }
-            val latest = latestQueries.maxOf { sql -> sqlite.rawQuery(sql, null).use { it.moveToFirst(); it.getLong(0) } }
-            check(version in 1..AppDb.VERSION) { if (version > AppDb.VERSION) "Backup requires a newer app version" else "Unsupported database version" }
-            check(integrity) { "Backup database is damaged" }
-            check(foreignKeys) { "Backup contains broken data relationships" }
-            DatabaseInspection(version, integrity, foreignKeys, counts, latest)
-        }
-    }
-
-    private fun requireSqliteDatabase(file: File) {
-        if (!file.isFile || file.length() < 100) error("Invalid backup file")
-        val header = ByteArray(SQLITE_HEADER.size)
-        file.inputStream().use { input ->
-            if (input.read(header) != header.size || !header.contentEquals(SQLITE_HEADER)) error("File is not a Daftari SQLite backup")
-        }
-    }
-
     /** Validates first, creates a rollback snapshot, then atomically swaps databases on the same filesystem. */
     private suspend fun replaceDb(file: File) {
         withContext(Dispatchers.IO) { inspectDatabase(file) }
@@ -144,6 +96,7 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
                 check(it.moveToFirst() && it.getString(0).equals("ok", true))
             }
             withContext(Dispatchers.IO) { rollback.delete() }
+            withContext(Dispatchers.IO) { pruneSafetyCopies() }
         } catch (error: Throwable) {
             withContext(Dispatchers.IO) {
                 incoming.delete()
@@ -188,13 +141,86 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
         file.isFile && file.name.startsWith("pre-restore-")
     }?.sortedByDescending { file -> file.lastModified() } ?: emptyList()
 
+    /**
+     * يحذف نسخ الأمان الأقدم ويبقي أحدث [MAX_SAFETY_COPIES] فقط.
+     *
+     * كل استعادة تضيف نسخة كاملة من القاعدة، فبلا سقف تلتهم مساحة التخزين بصمت.
+     */
+    fun pruneSafetyCopies(keep: Int = MAX_SAFETY_COPIES): List<File> = pruneSafetyCopiesIn(backupsDir(), keep)
+
     companion object {
         private const val DATABASE_NAME = "daftari.db"
+
+        /**
+         * يفحص ملف قاعدة (نسخة أو قاعدة مستوردة) دون لمس قاعدة التطبيق الحالية.
+         * في `companion` حتى يُختبر على جهاز حقيقي بلا حاجة لنسخة من `AppDb`.
+         */
+        fun inspectDatabase(file: File): DatabaseInspection {
+            requireSqliteDatabase(file)
+            return SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { sqlite ->
+                val version = sqlite.rawQuery("PRAGMA user_version", null).use { it.moveToFirst(); it.getInt(0) }
+                val integrity = sqlite.rawQuery("PRAGMA quick_check", null).use { it.moveToFirst() && it.getString(0).equals("ok", true) }
+                val foreignKeys = sqlite.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() }
+                val tables = sqlite.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { cursor ->
+                    buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
+                }
+                val expectedTables = REQUIRED_TABLES.filter { table ->
+                    when (table) {
+                        "categories" -> version >= 5
+                        "daily_books" -> version >= 6
+                        "employees", "employee_shops", "employee_shifts" -> version >= 7
+                        "items", "document_lines" -> version >= 8
+                        "currencies", "book_persons", "book_entries" -> version >= 9
+                        else -> true
+                    }
+                }
+                check(expectedTables.all(tables::contains)) { "Backup is missing required data tables" }
+                val counts = expectedTables.associateWith { table ->
+                    sqlite.rawQuery("SELECT COUNT(*) FROM `$table`", null).use { it.moveToFirst(); it.getLong(0) }
+                }
+                DatabaseHealthCheck.checks(version).forEach { check ->
+                    val broken = sqlite.rawQuery(check.sql, null).use { it.moveToFirst(); it.getLong(0) }
+                    kotlin.check(broken == 0L) { "Backup failed health check '${check.code}': ${check.message}" }
+                }
+                val latestQueries = buildList {
+                    add("SELECT COALESCE(MAX(updatedAt),0) FROM documents")
+                    add("SELECT COALESCE(MAX(at),0) FROM audit_logs")
+                    add("SELECT COALESCE(MAX(createdAt),0) FROM shops")
+                    if ("daily_books" in tables) add("SELECT COALESCE(MAX(updatedAt),0) FROM daily_books")
+                    if ("employees" in tables) add("SELECT COALESCE(MAX(updatedAt),0) FROM employees")
+                    if ("book_entries" in tables) add("SELECT COALESCE(MAX(occurredAt),0) FROM book_entries")
+                    if ("items" in tables) add("SELECT COALESCE(MAX(updatedAt),0) FROM items")
+                }
+                val latest = latestQueries.maxOf { sql -> sqlite.rawQuery(sql, null).use { it.moveToFirst(); it.getLong(0) } }
+                check(version in 1..AppDb.VERSION) { if (version > AppDb.VERSION) "Backup requires a newer app version" else "Unsupported database version" }
+                check(integrity) { "Backup database is damaged" }
+                check(foreignKeys) { "Backup contains broken data relationships" }
+                DatabaseInspection(version, integrity, foreignKeys, counts, latest)
+            }
+        }
+
+        private fun requireSqliteDatabase(file: File) {
+            if (!file.isFile || file.length() < 100) error("Invalid backup file")
+            val header = ByteArray(SQLITE_HEADER.size)
+            file.inputStream().use { input ->
+                if (input.read(header) != header.size || !header.contentEquals(SQLITE_HEADER)) error("File is not a Daftari SQLite backup")
+            }
+        }
+
+        /** يحذف نسخ الأمان الأقدم من [keep] داخل [directory] ويعيد ما حذفه. */
+        fun pruneSafetyCopiesIn(directory: File, keep: Int = MAX_SAFETY_COPIES): List<File> {
+            val stale = (directory.listFiles { file -> file.isFile && file.name.startsWith("pre-restore-") }
+                ?.sortedByDescending { it.lastModified() } ?: emptyList()).drop(keep.coerceAtLeast(1))
+            stale.forEach { runCatching { it.delete() } }
+            return stale
+        }
         private val SNAPSHOT_LOCK = Any()
         private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+        const val MAX_SAFETY_COPIES = 3
         val REQUIRED_TABLES = listOf(
             "shops", "parties", "accounts", "documents", "journal_lines", "categories", "audit_logs",
-            "app_settings", "daily_closings", "daily_books", "employees", "employee_shops", "employee_shifts"
+            "app_settings", "daily_closings", "daily_books", "employees", "employee_shops", "employee_shifts",
+            "items", "document_lines", "currencies", "book_persons", "book_entries"
         )
     }
 }
