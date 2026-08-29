@@ -777,7 +777,7 @@
       },
       {
         "tableName": "app_settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `fiscalEnabled` INTEGER NOT NULL, `fiscalStart` INTEGER, `fiscalEnd` INTEGER, `pinHash` TEXT, `hideBalances` INTEGER NOT NULL, `uniqueDocPerParty` INTEGER NOT NULL, `autoBackupEnabled` INTEGER NOT NULL, `autoBackupKeep` INTEGER NOT NULL, `biometricUnlock` INTEGER NOT NULL, `latinDigits` INTEGER NOT NULL, `failedPinAttempts` INTEGER NOT NULL, `pinLockedUntil` INTEGER NOT NULL, `employeesEnabled` INTEGER NOT NULL, `currentEmployeeId` INTEGER, PRIMARY KEY(`id`), `defaultCurrencyId` INTEGER)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `fiscalEnabled` INTEGER NOT NULL, `fiscalStart` INTEGER, `fiscalEnd` INTEGER, `pinHash` TEXT, `hideBalances` INTEGER NOT NULL, `uniqueDocPerParty` INTEGER NOT NULL, `autoBackupEnabled` INTEGER NOT NULL, `autoBackupKeep` INTEGER NOT NULL, `biometricUnlock` INTEGER NOT NULL, `latinDigits` INTEGER NOT NULL, `failedPinAttempts` INTEGER NOT NULL, `pinLockedUntil` INTEGER NOT NULL, `employeesEnabled` INTEGER NOT NULL, `currentEmployeeId` INTEGER, `defaultCurrencyId` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
