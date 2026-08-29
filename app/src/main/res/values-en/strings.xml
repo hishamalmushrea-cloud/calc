@@ -403,7 +403,8 @@
     <string name="book_operation_type">Operation type</string>
     <string name="book_details">Details or notes</string>
     <string name="book_currency">Currency</string>
-    <string name="book_quick_settlement">Settlement</string>
+    <string name="book_save_kind">Save (%1$s)</string>
+    <string name="book_quick_add_hint">Add an operation: credit, debt, or settlement</string>
     <string name="book_delete_entry_question">Delete this operation from the log?</string>
     <string name="book_archive_person_question">The person will be hidden from the list and all operations stay saved.</string>
     <string name="book_statement_title">Statement: %1$s</string>

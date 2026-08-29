@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -364,6 +365,7 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
         book.selectedEntries.sortedWith(compareByDescending<BookEntryEntity> { it.occurredAt }.thenByDescending { it.id })
     }
     var confirmArchive by remember { mutableStateOf(false) }
+    val canManage = state.can(StaffPermission.MANAGE_ACCOUNTS) || state.can(StaffPermission.RECORD_SALE)
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -410,11 +412,22 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
 
             item {
                 Text(stringResource(R.string.book_operations_title), fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { onEvent(UiEvent.OpenBookEntrySheet(person.id, BookEntryKind.SETTLEMENT, null)) },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(stringResource(R.string.book_quick_settlement)) }
+                if (canManage) {
+                    Text(
+                        stringResource(R.string.book_quick_add_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        BookEntryKind.entries.forEach { kind ->
+                            BookKindChoice(
+                                kind = kind,
+                                selected = false,
+                                modifier = Modifier.weight(1f),
+                                onSelect = { onEvent(UiEvent.OpenBookEntrySheet(person.id, kind, null)) }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -433,16 +446,18 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
             }
         }
 
-        FloatingActionButton(
-            onClick = { onEvent(UiEvent.OpenBookEntrySheet(person.id, null, null)) },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
-            containerColor = MaterialTheme.colorScheme.primary
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = stringResource(R.string.book_new_entry),
-                tint = MaterialTheme.colorScheme.onPrimary
-            )
+        if (canManage) {
+            FloatingActionButton(
+                onClick = { onEvent(UiEvent.OpenBookEntrySheet(person.id, null, null)) },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.book_new_entry),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     }
 
@@ -549,7 +564,10 @@ private fun BookEntryDialog(
     var currencyId by remember {
         mutableStateOf(existing?.currencyId ?: book.defaultCurrencyId ?: currencies.firstOrNull()?.id)
     }
-    var kind by remember { mutableStateOf(existing?.let { entryKindOf(it) } ?: sheet.presetKind) }
+    // النوع اختيار قابل للتغيير دائمًا؛ الزر السريع يحدّد الاختيار المبدئي فقط.
+    var kind by remember {
+        mutableStateOf(existing?.let { entryKindOf(it) } ?: sheet.presetKind ?: BookEntryKind.LE)
+    }
     var showDate by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
@@ -577,6 +595,17 @@ private fun BookEntryDialog(
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(stringResource(R.string.book_operation_type), style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    BookEntryKind.entries.forEach { option ->
+                        BookKindChoice(
+                            kind = option,
+                            selected = kind == option,
+                            modifier = Modifier.weight(1f),
+                            onSelect = { kind = option }
+                        )
+                    }
+                }
                 OutlinedTextField(
                     amount,
                     { amount = it },
@@ -607,47 +636,18 @@ private fun BookEntryDialog(
                 TextButton(onClick = { showDate = true }) {
                     Text(stringResource(R.string.book_entry_date, dateFormat.format(Date(occurredAt))))
                 }
-                if (existing != null) {
-                    Text(stringResource(R.string.book_operation_type), style = MaterialTheme.typography.labelMedium)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BookEntryKind.entries.forEach { option ->
-                            FilterChip(
-                                selected = kind == option,
-                                onClick = { kind = option },
-                                label = { Text(stringResource(option.labelRes())) }
-                            )
-                        }
-                    }
-                }
             }
         },
         confirmButton = {
-            if (existing == null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        enabled = canSave,
-                        onClick = { onSave(draft(BookEntryKind.LE)) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) { Text(stringResource(R.string.book_le)) }
-                    Button(
-                        enabled = canSave,
-                        onClick = { onSave(draft(BookEntryKind.DEBT)) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) { Text(stringResource(R.string.book_debt)) }
-                }
-            } else {
-                Button(enabled = canSave && kind != null, onClick = { kind?.let { onSave(draft(it)) } }) {
-                    Text(stringResource(R.string.action_save))
-                }
-            }
+            Button(
+                enabled = canSave,
+                onClick = { onSave(draft(kind)) },
+                colors = ButtonDefaults.buttonColors(containerColor = bookKindColor(kind))
+            ) { Text(stringResource(R.string.book_save_kind, stringResource(kind.labelRes()))) }
         },
         dismissButton = {
             Row {
-                if (existing == null) {
-                    OutlinedButton(enabled = canSave, onClick = { onSave(draft(BookEntryKind.SETTLEMENT)) }) {
-                        Text(stringResource(R.string.book_settlement))
-                    }
-                } else {
+                if (existing != null) {
                     TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.action_remove)) }
                 }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
@@ -683,6 +683,45 @@ private fun BookEntryDialog(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel)) } }
         )
+    }
+}
+
+@Composable
+private fun bookKindColor(kind: BookEntryKind): Color = when (kind) {
+    BookEntryKind.LE -> MaterialTheme.colorScheme.primary
+    BookEntryKind.DEBT -> MaterialTheme.colorScheme.error
+    BookEntryKind.SETTLEMENT -> MaterialTheme.colorScheme.tertiary
+}
+
+/**
+ * اختيار نوع العملية: له / عليه / تسديد.
+ * يُستخدم في نافذة العملية (اختيار قابل للتغيير) وفي صفحة الشخص (أزرار إضافة سريعة).
+ */
+@Composable
+private fun BookKindChoice(
+    kind: BookEntryKind,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onSelect: () -> Unit
+) {
+    val label = stringResource(kind.labelRes())
+    if (selected) {
+        Button(
+            onClick = onSelect,
+            modifier = modifier,
+            colors = ButtonDefaults.buttonColors(containerColor = bookKindColor(kind))
+        ) { Text(label) }
+    } else if (kind == BookEntryKind.SETTLEMENT) {
+        OutlinedButton(onClick = onSelect, modifier = modifier) { Text(label) }
+    } else {
+        Button(
+            onClick = onSelect,
+            modifier = modifier,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = bookKindColor(kind).copy(alpha = 0.16f),
+                contentColor = bookKindColor(kind)
+            )
+        ) { Text(label) }
     }
 }
 

@@ -595,7 +595,8 @@
     <string name="book_operation_type">نوع العملية</string>
     <string name="book_details">التفاصيل أو الملاحظات</string>
     <string name="book_currency">العملة</string>
-    <string name="book_quick_settlement">تسديد</string>
+    <string name="book_save_kind">حفظ (%1$s)</string>
+    <string name="book_quick_add_hint">أضف عملية جديدة: له أو عليه أو تسديد</string>
     <string name="book_delete_entry_question">حذف هذه العملية من السجل؟</string>
     <string name="book_archive_person_question">سيُخفى الشخص من القائمة وتبقى كل عملياته محفوظة.</string>
     <string name="book_statement_title">كشف حساب: %1$s</string>
