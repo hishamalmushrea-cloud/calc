@@ -191,6 +191,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.SearchSalesBook -> searchSalesBook(event)
             is UiEvent.ShareSalesDay -> shareSalesDay(event.dayStart, event.detailed)
             is UiEvent.ExportSalesPeriod -> exportSalesPeriod(event.from, event.to, event.format)
+            UiEvent.CloseSecondaryScreens -> closeSecondaryScreens()
             UiEvent.OpenAccountsBook -> openAccountsBook()
             UiEvent.CloseAccountsBook -> closeAccountsBook()
             is UiEvent.SearchAccountsBook -> searchAccountsBook(event.query)

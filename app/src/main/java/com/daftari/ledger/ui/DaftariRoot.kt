@@ -1,5 +1,6 @@
 package com.daftari.ledger.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -86,6 +87,44 @@ fun DaftariRoot(
     LaunchedEffect(initialQuickSale) {
         if (initialQuickSale) addType = DocType.SALE
     }
+    val secondaryOpen = state.book.screenOpen || state.inventory.screenOpen ||
+        state.googleBackup.screenOpen || state.employees.screenOpen
+    val overlayOpen = addType != null || quickParty != null || state.selectedParty != null ||
+        state.employees.switcherOpen || state.inventory.invoiceOpen || state.book.entrySheet != null ||
+        state.book.personEditor != null || state.book.currencyManagerOpen || state.book.currencyEditor != null
+
+    /** اختيار تبويب يُغلق أولًا أي شاشة ثانوية حتى يظهر التبويب المختار فعلًا. */
+    val goToTab: (Int) -> Unit = { index ->
+        tab = index
+        if (secondaryOpen) onEvent(UiEvent.CloseSecondaryScreens)
+    }
+
+    // زر الرجوع يرجع خطوة واحدة داخل التطبيق بدل الخروج منه، ولا يعمل مع قفل الشاشة.
+    BackHandler(enabled = state.locked || overlayOpen || secondaryOpen || tab != 0) {
+        if (!state.locked) {
+            when {
+                state.book.currencyEditor != null -> onEvent(UiEvent.SetBookCurrencyEditor(null))
+                state.book.currencyManagerOpen -> onEvent(UiEvent.SetBookCurrencyManager(false))
+                state.book.entrySheet != null -> onEvent(UiEvent.CloseBookEntrySheet)
+                state.book.personEditor != null -> onEvent(UiEvent.SetBookPersonEditor(null))
+                state.book.selectedPersonId != null -> onEvent(UiEvent.CloseBookPerson)
+                state.book.screenOpen -> onEvent(UiEvent.CloseAccountsBook)
+                state.inventory.invoiceOpen -> onEvent(UiEvent.SetInvoiceSheet(false))
+                state.inventory.screenOpen -> onEvent(UiEvent.CloseInventory)
+                state.googleBackup.screenOpen -> onEvent(UiEvent.CloseGoogleBackup)
+                state.employees.selectedEmployee != null -> onEvent(UiEvent.CloseEmployeeDetail)
+                state.employees.screenOpen -> onEvent(UiEvent.CloseEmployees)
+                quickParty != null -> {
+                    quickParty = null
+                    quickType = null
+                }
+                addType != null -> addType = null
+                state.selectedParty != null -> onEvent(UiEvent.ClosePartyDialog)
+                state.employees.switcherOpen -> onEvent(UiEvent.SetEmployeeSwitcher(false))
+                tab != 0 -> tab = 0
+            }
+        }
+    }
     val moneySettings = MoneyDisplaySettings(
         currencyCode = state.shop?.currencyCode ?: "SAR",
         fractionDigits = state.shop?.fractionDigits ?: 2,
@@ -142,7 +181,7 @@ fun DaftariRoot(
                     }
                     if (state.agingAlert > 0) {
                         BadgedBox(badge = { Badge { Text(state.agingAlert.toString()) } }) {
-                            IconButton(onClick = { tab = REPORTS_TAB }) {
+                            IconButton(onClick = { goToTab(REPORTS_TAB) }) {
                                 Icon(Icons.Default.Notifications, stringResource(R.string.notifications))
                             }
                         }
@@ -153,7 +192,7 @@ fun DaftariRoot(
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (tab <= REPORTS_TAB && tab != SALES_TAB && !state.book.screenOpen) {
+            if (tab <= REPORTS_TAB && tab != SALES_TAB && !secondaryOpen) {
                 FloatingActionButton(
                     onClick = { addType = DocType.SALE },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -179,7 +218,7 @@ fun DaftariRoot(
                 items.forEachIndexed { index, (label, icon) ->
                     NavigationBarItem(
                         selected = tab == index,
-                        onClick = { tab = index },
+                        onClick = { goToTab(index) },
                         icon = { Icon(icon, contentDescription = null) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                     )
@@ -201,7 +240,7 @@ fun DaftariRoot(
                     railItems.forEachIndexed { index, (label, icon) ->
                         NavigationRailItem(
                             selected = tab == index,
-                            onClick = { tab = index },
+                            onClick = { goToTab(index) },
                             icon = { Icon(icon, contentDescription = null) },
                             label = { Text(label) }
                         )

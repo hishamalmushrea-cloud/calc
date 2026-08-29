@@ -220,6 +220,12 @@ sealed interface UiEvent {
     data class ShareSalesDay(val dayStart: Long, val detailed: Boolean) : UiEvent
     data class ExportSalesPeriod(val from: Long, val to: Long, val format: String) : UiEvent
 
+    /**
+     * يُغلق أي شاشة ثانوية مفتوحة فوق التبويبات (دفتر الحسابات، المخزون، النسخ السحابي،
+     * الموظفون). يستعمله شريط التنقّل حتى يظهر التبويب المختار فعلًا، وزر الرجوع.
+     */
+    data object CloseSecondaryScreens : UiEvent
+
     data object OpenAccountsBook : UiEvent
     data object CloseAccountsBook : UiEvent
     data class SearchAccountsBook(val query: String) : UiEvent

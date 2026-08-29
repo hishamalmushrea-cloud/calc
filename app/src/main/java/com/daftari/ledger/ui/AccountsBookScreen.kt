@@ -202,6 +202,14 @@ private fun BookPersonsList(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                             stringResource(if (book.persons.isEmpty()) R.string.book_no_persons else R.string.no_matching_results),
                             fontWeight = FontWeight.Bold
                         )
+                        if (book.persons.isEmpty() && canManage) {
+                            Spacer(Modifier.height(10.dp))
+                            Button(onClick = { onEvent(UiEvent.SetBookPersonEditor(BookPersonEditor())) }) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(R.string.book_add_person))
+                            }
+                        }
                     }
                 }
             }

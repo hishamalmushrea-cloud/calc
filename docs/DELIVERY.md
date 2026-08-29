@@ -3,16 +3,17 @@
 ## الحالة
 - تطبيق Android أصلي باسم **دفتري** مبني بـ Kotlin وCompose وRoom.
 - الإصدار `1.3.0` (`versionCode=4`) و`targetSdk=35`، مع JDK 17.
-- قاعدة البيانات بالإصدار 8 وبمسار ترحيل كامل دون destructive fallback.
+- قاعدة البيانات بالإصدار 9 وبمسار ترحيل كامل دون destructive fallback.
 - الميزات المنفذة موثقة في `FEATURES.md`، والاختبارات في `TESTING.md`.
 
-## فحص CI دون APK
-GitHub Actions مخصص للتحقق فقط:
-1. ترجمة كود Debug واختبارات JVM وتشغيلها عبر `:app:testDebugUnitTest`.
-2. تشغيل فحص Android Lint عبر `:app:lintDebug`.
+## فحص CI
+GitHub Actions (`.github/workflows/android.yml`) يعمل على الدفع إلى `main` وعلى طلبات السحب:
+1. ترجمة كود Debug وتشغيل اختبارات JVM عبر `:app:testDebugUnitTest`.
+2. فحص Android Lint عبر `:app:lintDebug`.
+3. تجميع `:app:assembleDebug` ورفع ملف APK كـ artifact.
+4. وظيفة مستقلة تشغّل اختبارات الجهاز `connectedDebugAndroidTest` على محاكي.
 
-لا يشغّل CI مهام `assembleDebug` أو `assembleRelease` أو `package`، ولا ينشئ أو
-يرفع ملف APK. إنشاء APK/Bundle متروك للمطور داخل Android Studio.
+إصدار Release (APK/Bundle موقّع) ما زال متروكًا للمطور داخل Android Studio.
 
 ## متطلبات Android Studio
 - JDK 17.
