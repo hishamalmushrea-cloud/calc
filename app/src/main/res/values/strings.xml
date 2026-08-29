@@ -614,6 +614,13 @@
     <string name="book_delete_entry_question">حذف هذه العملية من السجل؟</string>
     <string name="book_archive_person_question">سيُخفى الشخص من القائمة وتبقى كل عملياته محفوظة.</string>
     <string name="book_statement_title">كشف حساب: %1$s</string>
+    <string name="book_pdf_details">التفاصيل</string>
+    <string name="book_pdf_footer">بواسطة دفتر الحسابات</string>
+    <string name="book_pdf_total_row">إجمالي العمليات</string>
+    <string name="book_pdf_net_owed">الرصيد الإجمالي - عليه</string>
+    <string name="book_pdf_net_credit">الرصيد الإجمالي - له</string>
+    <string name="book_pdf_net_settled">الرصيد الإجمالي - مسدّد</string>
+    <string name="book_pdf_currency">العملة: %1$s</string>
     <string name="book_statement_pdf">كشف حساب PDF</string>
     <string name="book_person_currency">العملة المعتادة</string>
     <string name="book_currency_follow_default">الافتراضية</string>

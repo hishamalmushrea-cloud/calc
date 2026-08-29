@@ -62,8 +62,8 @@ internal class MainUiServices(
     }
 
     /** كشف حساب دفتر الحسابات كملف PDF (نفس محرّك التقارير المستخدم لبقية الكشوف). */
-    suspend fun bookStatementPdf(title: String, lines: List<String>): File = withContext(Dispatchers.IO) {
-        PdfReports.writeStatement(app, title, lines)
+    suspend fun bookStatementPdf(fileName: String, data: PdfReports.PdfStatementData): File = withContext(Dispatchers.IO) {
+        PdfReports.writeStatement(app, data, fileName)
     }
 
     suspend fun receipt(document: DocumentEntity, party: PartyEntity?, shop: ShopEntity?, state: UiState): File =

@@ -13,6 +13,7 @@ import com.daftari.ledger.domain.BookEntryKind
 import com.daftari.ledger.domain.BookSide
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.StaffPermission
+import com.daftari.ledger.export.PdfReports
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -308,15 +309,66 @@ private fun MainViewModel.bookStatementParts(): Pair<String, List<String>>? {
     return title to lines
 }
 
+/** يبني بيانات جدول كشف الحساب PDF (جدول لكل عملة) من العمليات المحمّلة حاليًا. */
+private fun MainViewModel.bookStatementPdfData(): Pair<String, PdfReports.PdfStatementData>? {
+    val snapshot = state.value
+    val personId = snapshot.book.selectedPersonId ?: return null
+    val person = snapshot.book.persons.firstOrNull { it.id == personId } ?: return null
+    val strings = getApplication<Application>()
+    val currencies = snapshot.book.currencies.associateBy { it.id }
+    val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
+    val groups = snapshot.book.selectedEntries.groupBy { it.currencyId }
+    if (groups.isEmpty()) return null
+    val sections = groups.map { (currencyId, rows) ->
+        val currency = currencies[currencyId]
+        val totals = BookLedgerBridge.totals(rows)
+        val pdfRows = BookLedgerBridge.statement(rows).mapNotNull { line ->
+            val entry = rows.firstOrNull { it.id == line.entry.sequence } ?: return@mapNotNull null
+            PdfReports.PdfStatementRow(
+                dateText = dateFormat.format(Date(entry.occurredAt)),
+                details = entry.details,
+                debtMinor = if (line.entry.side == BookSide.DEBT) entry.amountMinor else 0L,
+                creditMinor = if (line.entry.side == BookSide.LE) entry.amountMinor else 0L,
+                runningMinor = line.runningNetMinor
+            )
+        }
+        PdfReports.PdfStatementSection(
+            currencyName = currency?.name.orEmpty(),
+            symbol = currency?.symbol.orEmpty(),
+            fractionDigits = currency?.fractionDigits ?: 2,
+            rows = pdfRows,
+            totalDebtMinor = totals.debtMinor,
+            totalCreditMinor = totals.creditMinor,
+            netMinor = totals.netMinor
+        )
+    }
+    val data = PdfReports.PdfStatementData(
+        title = strings.getString(R.string.book_statement_title, person.name),
+        subtitle = person.phone,
+        latinDigits = snapshot.latinDigits,
+        hideBalances = snapshot.hideBalances,
+        sections = sections
+    )
+    fun sanitize(value: String): String =
+        value.replace(Regex("[/\\\\:*?\"<>|]"), "-").trim().ifBlank { "-" }
+    val safeName = sanitize(person.name).let { if (it == "-") "statement" else it }
+    val fileName = if (sections.size == 1 && sections.first().currencyName.isNotBlank()) {
+        safeName + "-" + sanitize(sections.first().currencyName) + ".pdf"
+    } else {
+        "$safeName.pdf"
+    }
+    return fileName to data
+}
+
 internal fun MainViewModel.shareBookStatement() {
     val parts = bookStatementParts() ?: return
     mutableState.update { it.copy(shareText = (listOf(parts.first) + parts.second).joinToString("\n")) }
 }
 
 internal fun MainViewModel.shareBookStatementPdf() = viewModelScope.launch {
-    val parts = bookStatementParts() ?: return@launch
+    val data = bookStatementPdfData() ?: return@launch
     try {
-        val file = services.bookStatementPdf(parts.first, parts.second)
+        val file = services.bookStatementPdf(data.first, data.second)
         mutableState.update { it.copy(shareFile = file, message = text(R.string.msg_export_ready)) }
     } catch (error: Exception) {
         message(R.string.msg_export_failed, error.message.orEmpty())
