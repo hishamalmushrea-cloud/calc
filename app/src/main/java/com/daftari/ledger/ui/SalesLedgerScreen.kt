@@ -294,7 +294,7 @@ private fun SalesSearch(state: UiState, onEvent: (UiEvent) -> Unit) {
         ) { Text(stringResource(R.string.search)) }
         LazyColumn {
             items(ledger.entries, key = { it.id }) { entry ->
-                SalesBookEntryRow(entry, state, onEvent, readOnly = true)
+                SalesBookEntryRow(entry, state, readOnly = true)
             }
         }
     }

@@ -199,7 +199,7 @@ private fun EmployeeDetailScreen(
             }
             if (employee.monthlyTargetMinor > 0) {
                 Text(stringResource(R.string.employee_target_progress, displayMoney(monthSales), displayMoney(employee.monthlyTargetMinor)))
-                LinearProgressIndicator(progress = targetRatio, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { targetRatio }, modifier = Modifier.fillMaxWidth())
             }
             if (employee.commissionBasisPoints > 0 && state.can(StaffPermission.VIEW_PAYROLL)) {
                 Text(stringResource(R.string.employee_estimated_commission, displayMoney(commission)))
@@ -228,7 +228,7 @@ private fun EmployeeDetailScreen(
         }
         if (canViewSales) {
             items(details.selectedSales, key = { it.id }) { sale ->
-                SalesBookEntryRow(sale, state, onEvent, readOnly = true)
+                SalesBookEntryRow(sale, state, readOnly = true)
             }
         }
         item {

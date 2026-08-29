@@ -47,8 +47,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         UiState(
             cloudSettings = (app as DaftariApp).cloudBackup.settings(),
             googleBackup = GoogleBackupUiState(
-                settings = (app as DaftariApp).googleBackup.preferences.load(),
-                hasLocalData = (app as DaftariApp).googleBackup.hasLocalData()
+                settings = app.googleBackup.preferences.load(),
+                hasLocalData = app.googleBackup.hasLocalData()
             )
         )
     )
