@@ -604,8 +604,14 @@ private fun BookEntryDialog(
     }
     var showDate by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val canSave = amount.isNotBlank() && currencyId != null
+    // إغلاق نافذة عملية جديدة فيها بيانات مكتوبة يطلب تأكيدًا حتى لا تضيع بالخطأ.
+    val dirty = existing == null && (amount.isNotBlank() || details.isNotBlank())
+    fun requestDismiss() {
+        if (dirty) confirmDiscard = true else onDismiss()
+    }
 
     fun draft(selected: BookEntryKind) = BookEntryDraft(
         id = existing?.id,
@@ -618,7 +624,7 @@ private fun BookEntryDialog(
     )
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { requestDismiss() },
         title = {
             Column {
                 Text(stringResource(if (existing == null) R.string.book_new_entry else R.string.book_edit_entry))
@@ -684,10 +690,27 @@ private fun BookEntryDialog(
                 if (existing != null) {
                     TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.action_remove)) }
                 }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+                TextButton(onClick = { requestDismiss() }) { Text(stringResource(R.string.action_cancel)) }
             }
         }
     )
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text(stringResource(R.string.book_discard_title)) },
+            text = { Text(stringResource(R.string.book_discard_question)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    onDismiss()
+                }) { Text(stringResource(R.string.action_discard)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
 
     if (showDate) {
         val dateState = rememberDatePickerState(initialSelectedDateMillis = occurredAt)

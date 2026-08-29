@@ -22,7 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -72,7 +72,7 @@ internal fun SalesLedgerScreen(state: UiState, onEvent: (UiEvent) -> Unit, paddi
                 Text(stringResource(R.string.sales_book_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(stringResource(R.string.sales_book_cash_disclaimer), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -84,7 +84,7 @@ internal fun SalesLedgerScreen(state: UiState, onEvent: (UiEvent) -> Unit, paddi
                     leadingIcon = {
                         Icon(
                             when (view) {
-                                SalesBookView.WEEK -> Icons.Default.MenuBook
+                                SalesBookView.WEEK -> Icons.AutoMirrored.Filled.MenuBook
                                 SalesBookView.CALENDAR -> Icons.Default.CalendarMonth
                                 SalesBookView.ANALYTICS -> Icons.Default.Analytics
                                 SalesBookView.SEARCH -> Icons.Default.Search

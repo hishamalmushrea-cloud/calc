@@ -11,6 +11,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -192,6 +193,20 @@ class AccountsBookIntegrationTest {
         val stored = book.getEntry(first)!!
         assertNotNull(stored.deletedAt)
         assertEquals(2_000L, book.balancesFor(person).single().netMinor)
+    }
+
+    @Test
+    fun restoringADeletedEntryBringsBackItsBalance() = runBlocking {
+        val local = book.defaultCurrency("LOCAL")!!
+        val person = book.addPerson(shopId, "مريم")
+        val entryId = book.addEntry(person, local.id, BookEntryKind.DEBT, 900L)
+        book.deleteEntry(entryId)
+        assertEquals(0L, book.balancesFor(person).sumOf { it.netMinor })
+
+        book.restoreEntry(entryId)
+
+        assertNull(book.getEntry(entryId)!!.deletedAt)
+        assertEquals(900L, book.balancesFor(person).single().netMinor)
     }
 
     @Test

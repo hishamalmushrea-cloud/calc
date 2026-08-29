@@ -615,6 +615,11 @@
     <string name="msg_book_person_archived">تمت أرشفة الشخص</string>
     <string name="msg_book_entry_saved">تم تسجيل العملية وتحديث الرصيد</string>
     <string name="msg_book_entry_deleted">تم حذف العملية</string>
+    <string name="msg_book_entry_undone">تم التراجع عن حذف العملية</string>
+    <string name="press_back_again_to_exit">اضغط زر الرجوع مرة أخرى للخروج</string>
+    <string name="book_discard_title">تجاهل العملية؟</string>
+    <string name="book_discard_question">كتبت مبلغًا أو تفاصيل ولم تحفظها بعد.</string>
+    <string name="action_discard">تجاهل</string>
     <string name="msg_book_currency_saved">تم حفظ العملة</string>
     <string name="msg_book_currency_archived">تمت أرشفة العملة</string>
     <string name="msg_book_default_currency_saved">تم تعيين العملة الافتراضية</string>

@@ -423,6 +423,11 @@
     <string name="msg_book_person_archived">Person archived</string>
     <string name="msg_book_entry_saved">Operation saved and balance updated</string>
     <string name="msg_book_entry_deleted">Operation deleted</string>
+    <string name="msg_book_entry_undone">Operation restored</string>
+    <string name="press_back_again_to_exit">Press back again to exit</string>
+    <string name="book_discard_title">Discard this operation?</string>
+    <string name="book_discard_question">You entered an amount or details that are not saved yet.</string>
+    <string name="action_discard">Discard</string>
     <string name="msg_book_currency_saved">Currency saved</string>
     <string name="msg_book_currency_archived">Currency archived</string>
     <string name="msg_book_default_currency_saved">Default currency saved</string>

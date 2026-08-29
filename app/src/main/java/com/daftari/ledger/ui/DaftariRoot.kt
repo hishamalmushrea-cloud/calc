@@ -1,5 +1,6 @@
 package com.daftari.ledger.ui
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -19,7 +20,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PointOfSale
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -48,8 +49,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +68,7 @@ import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.StaffPermission
 import com.daftari.ledger.security.AppLock
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,18 +93,20 @@ fun DaftariRoot(
     }
     val secondaryOpen = state.book.screenOpen || state.inventory.screenOpen ||
         state.googleBackup.screenOpen || state.employees.screenOpen
-    val overlayOpen = addType != null || quickParty != null || state.selectedParty != null ||
-        state.employees.switcherOpen || state.inventory.invoiceOpen || state.book.entrySheet != null ||
-        state.book.personEditor != null || state.book.currencyManagerOpen || state.book.currencyEditor != null
-
     /** اختيار تبويب يُغلق أولًا أي شاشة ثانوية حتى يظهر التبويب المختار فعلًا. */
     val goToTab: (Int) -> Unit = { index ->
         tab = index
         if (secondaryOpen) onEvent(UiEvent.CloseSecondaryScreens)
     }
 
-    // زر الرجوع يرجع خطوة واحدة داخل التطبيق بدل الخروج منه، ولا يعمل مع قفل الشاشة.
-    BackHandler(enabled = state.locked || overlayOpen || secondaryOpen || tab != 0) {
+    val scope = rememberCoroutineScope()
+    val exitHint = stringResource(R.string.press_back_again_to_exit)
+    var lastBackAt by remember { mutableLongStateOf(0L) }
+
+    // زر الرجوع يرجع خطوة واحدة داخل التطبيق بدل الخروج منه: نافذة مفتوحة ← صفحة الشخص ←
+    // الشاشة الثانوية ← اللوحة الرئيسية، ثم ضغطة ثانية خلال ثانيتين للخروج فعلًا.
+    // ومع قفل الـ PIN لا يفعل شيئًا إطلاقًا.
+    BackHandler {
         if (!state.locked) {
             when {
                 state.book.currencyEditor != null -> onEvent(UiEvent.SetBookCurrencyEditor(null))
@@ -122,6 +128,15 @@ fun DaftariRoot(
                 state.selectedParty != null -> onEvent(UiEvent.ClosePartyDialog)
                 state.employees.switcherOpen -> onEvent(UiEvent.SetEmployeeSwitcher(false))
                 tab != 0 -> tab = 0
+                else -> {
+                    val now = SystemClock.uptimeMillis()
+                    if (now - lastBackAt < EXIT_WINDOW_MS) {
+                        activity?.finish()
+                    } else {
+                        lastBackAt = now
+                        scope.launch { snackbar.showSnackbar(exitHint) }
+                    }
+                }
             }
         }
     }
@@ -137,10 +152,16 @@ fun DaftariRoot(
         message?.let {
             val result = snackbar.showSnackbar(
                 message = it,
-                actionLabel = if (state.undoDocumentId != null) undoLabel else null,
+                actionLabel = if (state.undoDocumentId != null || state.book.undoEntryId != null) undoLabel else null,
                 withDismissAction = true
             )
-            if (result == SnackbarResult.ActionPerformed) onEvent(UiEvent.UndoDeleteDocument)
+            if (result == SnackbarResult.ActionPerformed) {
+                if (state.book.undoEntryId != null) {
+                    onEvent(UiEvent.UndoDeleteBookEntry)
+                } else {
+                    onEvent(UiEvent.UndoDeleteDocument)
+                }
+            }
             onEvent(UiEvent.ConsumeMessage)
         }
     }
@@ -210,7 +231,7 @@ fun DaftariRoot(
                 val items = listOf(
                     stringResource(R.string.nav_dashboard) to Icons.Default.Home,
                     stringResource(R.string.nav_accounts) to Icons.Default.People,
-                    stringResource(R.string.nav_documents) to Icons.Default.ReceiptLong,
+                    stringResource(R.string.nav_documents) to Icons.AutoMirrored.Filled.ReceiptLong,
                     stringResource(R.string.nav_sales) to Icons.Default.PointOfSale,
                     stringResource(R.string.nav_reports) to Icons.Default.Assessment,
                     stringResource(R.string.nav_more) to Icons.Default.MoreHoriz
@@ -232,7 +253,7 @@ fun DaftariRoot(
                     val railItems = listOf(
                         stringResource(R.string.nav_dashboard) to Icons.Default.Home,
                         stringResource(R.string.nav_accounts) to Icons.Default.People,
-                        stringResource(R.string.nav_documents) to Icons.Default.ReceiptLong,
+                        stringResource(R.string.nav_documents) to Icons.AutoMirrored.Filled.ReceiptLong,
                         stringResource(R.string.nav_sales) to Icons.Default.PointOfSale,
                         stringResource(R.string.nav_reports) to Icons.Default.Assessment,
                         stringResource(R.string.nav_more) to Icons.Default.MoreHoriz
@@ -338,3 +359,5 @@ private fun LockDialog(state: UiState, onEvent: (UiEvent) -> Unit, activity: Fra
 
 private const val SALES_TAB = 3
 private const val REPORTS_TAB = 4
+
+private const val EXIT_WINDOW_MS = 2_000L

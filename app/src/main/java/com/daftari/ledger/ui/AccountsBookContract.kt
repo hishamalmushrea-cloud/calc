@@ -23,7 +23,9 @@ data class AccountsBookUiState(
     val entrySheet: BookEntrySheet? = null,
     val personEditor: BookPersonEditor? = null,
     val currencyManagerOpen: Boolean = false,
-    val currencyEditor: BookCurrencyDraft? = null
+    val currencyEditor: BookCurrencyDraft? = null,
+    /** آخر عملية حُذفت، لعرض «تراجع» في شريط الرسائل. */
+    val undoEntryId: Long? = null
 )
 
 /** نافذة تسجيل عملية: لشخص محدد، ونوع مُختار مسبقًا إن فُتحت من زر سريع. */

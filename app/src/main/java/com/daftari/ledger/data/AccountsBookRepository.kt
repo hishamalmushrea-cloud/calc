@@ -267,6 +267,28 @@ class AccountsBookRepository(private val db: AppDb) {
         )
     }
 
+    /**
+     * استرجاع عملية محذوفة (زر «تراجع»). الحذف أرشفة ناعمة، فالاسترجاع يمسح
+     * `deletedAt` ويعيد العملية إلى الرصيد الجاري كما كانت.
+     */
+    suspend fun restoreEntry(id: Long, actorEmployeeId: Long? = null) {
+        requireAny(actorEmployeeId, StaffPermission.RECORD_SALE, StaffPermission.MANAGE_ACCOUNTS)
+        val entry = entries.get(id) ?: throw LedgerException("العملية غير موجودة")
+        if (entry.deletedAt == null) return
+        db.withTransaction {
+            entries.update(entry.copy(deletedAt = null, updatedAt = System.currentTimeMillis()))
+            audit.insert(
+                AuditLogEntity(
+                    action = "UNDELETE",
+                    entity = "book_entry",
+                    entityId = id,
+                    detail = "${entry.kind} ${entry.amountMinor}",
+                    actorEmployeeId = actorEmployeeId
+                )
+            )
+        }
+    }
+
     /** سجل شخص كاملًا مرتبًا تصاعديًا (أساس الرصيد الجاري في الواجهة). */
     suspend fun statement(personId: Long): List<BookEntryEntity> = entries.listForPerson(personId)
 

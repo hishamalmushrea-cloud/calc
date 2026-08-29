@@ -240,6 +240,7 @@ sealed interface UiEvent {
         val editEntryId: Long? = null
     ) : UiEvent
     data object CloseBookEntrySheet : UiEvent
+    data object UndoDeleteBookEntry : UiEvent
     data class SaveBookEntry(val draft: BookEntryDraft) : UiEvent
     data class DeleteBookEntry(val id: Long) : UiEvent
     data object ShareBookStatement : UiEvent

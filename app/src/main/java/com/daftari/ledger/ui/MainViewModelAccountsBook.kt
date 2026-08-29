@@ -45,7 +45,8 @@ internal fun MainViewModel.closeAccountsBook() {
                 entrySheet = null,
                 personEditor = null,
                 currencyManagerOpen = false,
-                currencyEditor = null
+                currencyEditor = null,
+                undoEntryId = null
             )
         )
     }
@@ -179,7 +180,25 @@ internal fun MainViewModel.saveBookEntry(draft: BookEntryDraft) = viewModelScope
 internal fun MainViewModel.deleteBookEntry(id: Long) = viewModelScope.launch {
     try {
         book.deleteEntry(id, actorEmployeeId = currentActorId())
-        message(R.string.msg_book_entry_deleted)
+        // الحذف أرشفة ناعمة، فنُبقي المعرّف لعرض «تراجع» في شريط الرسائل.
+        mutableState.update {
+            it.copy(
+                message = text(R.string.msg_book_entry_deleted),
+                book = it.book.copy(entrySheet = null, undoEntryId = id)
+            )
+        }
+    } catch (error: LedgerException) {
+        dynamicError(error)
+    }
+}
+
+internal fun MainViewModel.undoDeleteBookEntry() = viewModelScope.launch {
+    val id = state.value.book.undoEntryId ?: return@launch
+    try {
+        book.restoreEntry(id, actorEmployeeId = currentActorId())
+        mutableState.update {
+            it.copy(message = text(R.string.msg_book_entry_undone), book = it.book.copy(undoEntryId = null))
+        }
     } catch (error: LedgerException) {
         dynamicError(error)
     }

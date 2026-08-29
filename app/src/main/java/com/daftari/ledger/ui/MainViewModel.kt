@@ -204,6 +204,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.CloseBookEntrySheet -> closeBookEntrySheet()
             is UiEvent.SaveBookEntry -> saveBookEntry(event.draft)
             is UiEvent.DeleteBookEntry -> deleteBookEntry(event.id)
+            UiEvent.UndoDeleteBookEntry -> undoDeleteBookEntry()
             UiEvent.ShareBookStatement -> shareBookStatement()
             is UiEvent.SetBookCurrencyManager -> setBookCurrencyManager(event.open)
             is UiEvent.SetBookCurrencyEditor -> setBookCurrencyEditor(event.draft)
