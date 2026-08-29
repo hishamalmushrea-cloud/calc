@@ -244,6 +244,7 @@ sealed interface UiEvent {
     data class SaveBookEntry(val draft: BookEntryDraft) : UiEvent
     data class DeleteBookEntry(val id: Long) : UiEvent
     data object ShareBookStatement : UiEvent
+    data object ShareBookStatementPdf : UiEvent
     data class SetBookCurrencyManager(val open: Boolean) : UiEvent
     data class SetBookCurrencyEditor(val draft: BookCurrencyDraft?) : UiEvent
     data class SaveBookCurrency(val draft: BookCurrencyDraft) : UiEvent

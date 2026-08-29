@@ -206,6 +206,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.DeleteBookEntry -> deleteBookEntry(event.id)
             UiEvent.UndoDeleteBookEntry -> undoDeleteBookEntry()
             UiEvent.ShareBookStatement -> shareBookStatement()
+            UiEvent.ShareBookStatementPdf -> shareBookStatementPdf()
             is UiEvent.SetBookCurrencyManager -> setBookCurrencyManager(event.open)
             is UiEvent.SetBookCurrencyEditor -> setBookCurrencyEditor(event.draft)
             is UiEvent.SaveBookCurrency -> saveBookCurrency(event.draft)

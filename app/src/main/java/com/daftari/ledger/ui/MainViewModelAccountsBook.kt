@@ -262,48 +262,57 @@ internal fun MainViewModel.setDefaultBookCurrency(id: Long) = viewModelScope.lau
 }
 
 /** كشف حساب نصي لكل عمليات الشخص مع الرصيد الجاري لكل عملة. */
-internal fun MainViewModel.shareBookStatement() {
+/**
+ * عنوان الكشف وأسطره. مصدر واحد يستعمله الكشف النصي وكشف PDF حتى لا يختلفا،
+ * والأسطر نفسها تُرسم في الـ PDF عبر `PdfReports.writeStatement`.
+ */
+private fun MainViewModel.bookStatementParts(): Pair<String, List<String>>? {
     val snapshot = state.value
-    val personId = snapshot.book.selectedPersonId ?: return
-    val person = snapshot.book.persons.firstOrNull { it.id == personId } ?: return
+    val personId = snapshot.book.selectedPersonId ?: return null
+    val person = snapshot.book.persons.firstOrNull { it.id == personId } ?: return null
     val strings = getApplication<Application>()
     val currencies = snapshot.book.currencies.associateBy { it.id }
     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-    val text = buildString {
-        append(strings.getString(R.string.book_statement_title, person.name)).append('\n')
+    val title = strings.getString(R.string.book_statement_title, person.name)
+    val lines = buildList {
         snapshot.book.selectedEntries.groupBy { it.currencyId }.forEach { (currencyId, rows) ->
             val currency = currencies[currencyId]
             val totals = BookLedgerBridge.totals(rows)
-            append('\n')
-                .append(currency?.name.orEmpty())
-                .append(" — ")
-                .append(strings.getString(R.string.book_le))
-                .append(": ")
-                .append(plainAmount(totals.creditMinor, currency))
-                .append(" | ")
-                .append(strings.getString(R.string.book_debt))
-                .append(": ")
-                .append(plainAmount(totals.debtMinor, currency))
-                .append(" | ")
-                .append(strings.getString(R.string.book_net))
-                .append(": ")
-                .append(plainAmount(totals.netMinor, currency))
-                .append('\n')
+            add("")
+            add(
+                currency?.name.orEmpty() + " — " +
+                    strings.getString(R.string.book_le) + ": " + plainAmount(totals.creditMinor, currency) +
+                    " | " + strings.getString(R.string.book_debt) + ": " + plainAmount(totals.debtMinor, currency) +
+                    " | " + strings.getString(R.string.book_net) + ": " + plainAmount(totals.netMinor, currency)
+            )
             BookLedgerBridge.statement(rows).asReversed().forEach line@{ line ->
                 val entry = rows.firstOrNull { it.id == line.entry.sequence } ?: return@line
-                append(dateFormat.format(Date(entry.occurredAt)))
-                    .append(" | ")
-                    .append(strings.getString(line.entry.kind.labelRes()))
-                    .append(" | ")
-                    .append(plainAmount(entry.amountMinor, currency))
-                    .append(" | ")
-                    .append(plainAmount(line.runningNetMinor, currency))
-                if (entry.details.isNotBlank()) append(" | ").append(entry.details)
-                append('\n')
+                val details = if (entry.details.isNotBlank()) " | " + entry.details else ""
+                add(
+                    dateFormat.format(Date(entry.occurredAt)) + " | " +
+                        strings.getString(line.entry.kind.labelRes()) + " | " +
+                        plainAmount(entry.amountMinor, currency) + " | " +
+                        plainAmount(line.runningNetMinor, currency) + details
+                )
             }
         }
     }
-    mutableState.update { it.copy(shareText = text) }
+    return title to lines
+}
+
+internal fun MainViewModel.shareBookStatement() {
+    val parts = bookStatementParts() ?: return
+    mutableState.update { it.copy(shareText = (listOf(parts.first) + parts.second).joinToString("\n")) }
+}
+
+internal fun MainViewModel.shareBookStatementPdf() = viewModelScope.launch {
+    val parts = bookStatementParts() ?: return@launch
+    try {
+        val file = services.bookStatementPdf(parts.first, parts.second)
+        mutableState.update { it.copy(shareFile = file, message = text(R.string.msg_export_ready)) }
+    } catch (error: Exception) {
+        message(R.string.msg_export_failed, error.message.orEmpty())
+    }
 }
 
 /** مبلغ نصي للتصدير بلا اعتماد على الواجهة. */

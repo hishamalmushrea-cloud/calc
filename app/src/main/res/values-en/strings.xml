@@ -415,6 +415,8 @@
     <string name="book_delete_entry_question">Delete this operation from the log?</string>
     <string name="book_archive_person_question">The person will be hidden from the list and all operations stay saved.</string>
     <string name="book_statement_title">Statement: %1$s</string>
+    <string name="book_statement_pdf">Statement as PDF</string>
+    <string name="book_statement_text">Statement as text</string>
     <string name="book_currencies_title">Currencies</string>
     <string name="book_currencies_hint">Add any currency you need: a name, an optional symbol (can stay empty) and fraction digits.</string>
     <string name="book_add_currency">Add currency</string>

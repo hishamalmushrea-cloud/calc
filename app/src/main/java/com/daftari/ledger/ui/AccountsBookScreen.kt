@@ -434,6 +434,7 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
     }
     val filtering = kindFilter != null || currencyFilter != null
     var confirmArchive by remember { mutableStateOf(false) }
+    var showShareOptions by remember { mutableStateOf(false) }
     val canManage = state.can(StaffPermission.MANAGE_ACCOUNTS) || state.can(StaffPermission.RECORD_SALE)
 
     Box(Modifier.fillMaxSize()) {
@@ -456,7 +457,7 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
                     IconButton(onClick = { onEvent(UiEvent.SetBookPersonEditor(BookPersonEditor(person.id))) }) {
                         Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
                     }
-                    IconButton(onClick = { onEvent(UiEvent.ShareBookStatement) }) {
+                    IconButton(onClick = { showShareOptions = true }) {
                         Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share_statement))
                     }
                     IconButton(onClick = { confirmArchive = true }) {
@@ -567,6 +568,29 @@ private fun BookPersonPage(state: UiState, onEvent: (UiEvent) -> Unit, padding: 
                 )
             }
         }
+    }
+
+    if (showShareOptions) {
+        AlertDialog(
+            onDismissRequest = { showShareOptions = false },
+            title = { Text(stringResource(R.string.action_share_statement)) },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        showShareOptions = false
+                        onEvent(UiEvent.ShareBookStatementPdf)
+                    }) { Text(stringResource(R.string.book_statement_pdf)) }
+                    TextButton(onClick = {
+                        showShareOptions = false
+                        onEvent(UiEvent.ShareBookStatement)
+                    }) { Text(stringResource(R.string.book_statement_text)) }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showShareOptions = false }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
     }
 
     if (confirmArchive) {

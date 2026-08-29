@@ -607,6 +607,8 @@
     <string name="book_delete_entry_question">حذف هذه العملية من السجل؟</string>
     <string name="book_archive_person_question">سيُخفى الشخص من القائمة وتبقى كل عملياته محفوظة.</string>
     <string name="book_statement_title">كشف حساب: %1$s</string>
+    <string name="book_statement_pdf">كشف حساب PDF</string>
+    <string name="book_statement_text">كشف حساب نصي</string>
     <string name="book_currencies_title">العملات</string>
     <string name="book_currencies_hint">أضف أي عملة تريدها: اسم، ورمز اختياري (يمكن تركه فارغًا)، وعدد خانات عشرية.</string>
     <string name="book_add_currency">إضافة عملة</string>
