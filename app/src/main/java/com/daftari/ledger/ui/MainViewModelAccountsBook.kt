@@ -270,8 +270,8 @@ internal fun MainViewModel.shareBookStatement() {
                 .append(": ")
                 .append(plainAmount(totals.netMinor, currency))
                 .append('\n')
-            BookLedgerBridge.statement(rows).asReversed().forEach { line ->
-                val entry = rows.firstOrNull { it.id == line.entry.sequence } ?: return@forEach
+            BookLedgerBridge.statement(rows).asReversed().forEach line@{ line ->
+                val entry = rows.firstOrNull { it.id == line.entry.sequence } ?: return@line
                 append(dateFormat.format(Date(entry.occurredAt)))
                     .append(" | ")
                     .append(strings.getString(line.entry.kind.labelRes()))

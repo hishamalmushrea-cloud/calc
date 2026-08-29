@@ -553,7 +553,6 @@ private fun BookEntryDialog(
     var showDate by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
-    val selectedCurrency = currencies.firstOrNull { it.id == currencyId }
     val canSave = amount.isNotBlank() && currencyId != null
 
     fun draft(selected: BookEntryKind) = BookEntryDraft(
