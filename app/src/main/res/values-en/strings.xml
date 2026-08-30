@@ -313,7 +313,6 @@
     <string name="latest_backup_label">Latest backup</string>
     <string name="no_google_backups">No backup exists in this account yet.</string>
     <string name="last_backup_value">Last backup: %1$s</string>
-    <string name="backup_size_value">Size: %1$s</string>
     <string name="backup_device_value">Device: %1$s</string>
     <string name="database_version_value">Database version: %1$d</string>
     <string name="unknown_device">Unknown device</string>
