@@ -143,6 +143,17 @@
     <string name="encrypted_backup_share">Encrypted backup and share</string>
     <string name="export_csv_share">Export full CSV and share</string>
     <string name="no_backups">No backups yet.</string>
+    <string name="action_delete">Delete</string>
+    <string name="backup_retention">Keep backups</string>
+    <string name="retention_keep_7">Last 7</string>
+    <string name="retention_keep_14">Last 14</string>
+    <string name="retention_keep_30">Last 30</string>
+    <string name="retention_keep_all">All</string>
+    <string name="msg_retention_saved">Retention policy saved</string>
+    <string name="msg_backup_deleted">Backup deleted</string>
+    <string name="msg_backup_delete_failed">Could not delete backup</string>
+    <string name="backup_size_value">Size: %1$s</string>
+    <string name="restore_backup_meta">Backup date: %1$s — Size: %2$s</string>
     <string name="section_csv_import">Import CSV</string>
     <string name="csv_format_hint">name, kind, amount, transaction type</string>
     <string name="paste_csv">Paste CSV</string>

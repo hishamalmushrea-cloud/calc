@@ -53,6 +53,7 @@ data class UiState(
     val hasPin: Boolean = false,
     val biometric: Boolean = false,
     val autoBackup: Boolean = false,
+    val backupKeep: Int = 7,
     val hideBalances: Boolean = false,
     val latinDigits: Boolean = true,
     val pinLockedUntil: Long = 0,
@@ -161,6 +162,8 @@ sealed interface UiEvent {
     data object RefreshBackups : UiEvent
     data class RestoreBackup(val file: File, val password: String?) : UiEvent
     data class BackupEncrypted(val password: String) : UiEvent
+    data class SetBackupRetention(val keep: Int) : UiEvent
+    data class DeleteBackup(val file: File) : UiEvent
     data class OpenParty(val party: PartyEntity) : UiEvent
     data object ClosePartyDialog : UiEvent
     data class ShareStatement(val party: PartyEntity) : UiEvent

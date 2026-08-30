@@ -51,7 +51,7 @@ class AutoBackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         return try {
             val settings = runCatching { db.settings().get() }.getOrNull()
             if (settings?.autoBackupEnabled != true) return Result.success()
-            val keep = settings.autoBackupKeep.coerceAtLeast(1)
+            val keep = settings.autoBackupKeep
             val file = local.exportDatabase()
             CloudBackupManager(applicationContext, local).upload(file)
             rotate(local, keep)
@@ -62,7 +62,11 @@ class AutoBackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
     }
 
     private fun rotate(manager: BackupManager, keep: Int) {
-        manager.listBackups().filter { it.name.endsWith(".db") }.drop(keep).forEach { runCatching { it.delete() } }
+        val backups = manager.listBackups()
+        val infos = backups.map { BackupFile(it.name, it.lastModified(), it.length()) }
+        val doomed = BackupRetention.selectDeletions(infos, keep).mapTo(mutableSetOf()) { it.name }
+        if (doomed.isEmpty()) return
+        backups.filter { it.name in doomed }.forEach { runCatching { it.delete() } }
     }
 
     private fun notifyRepeatedFailure(settings: GoogleBackupSettings) {

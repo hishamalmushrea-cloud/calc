@@ -142,6 +142,18 @@ class BackupManager(private val ctx: Context, private val db: AppDb) {
     }?.sortedByDescending { file -> file.lastModified() } ?: emptyList()
 
     /**
+     * يحذف نسخة محددة يدويًا. مقيّد بمجلد النسخ الداخلي وببادئة معروفة فقط، فلا
+     * يمكن استخدامه لحذف ملف عشوائي؛ يعيد `true` عند نجاح الحذف.
+     */
+    fun deleteBackup(file: File): Boolean {
+        val directory = backupsDir().canonicalFile
+        val target = runCatching { file.canonicalFile }.getOrNull() ?: return false
+        if (target.parentFile?.canonicalFile != directory) return false
+        val known = target.name.startsWith("daftari-backup-") || target.name.startsWith("pre-restore-")
+        return known && target.isFile && target.delete()
+    }
+
+    /**
      * يحذف نسخ الأمان الأقدم ويبقي أحدث [MAX_SAFETY_COPIES] فقط.
      *
      * كل استعادة تضيف نسخة كاملة من القاعدة، فبلا سقف تلتهم مساحة التخزين بصمت.

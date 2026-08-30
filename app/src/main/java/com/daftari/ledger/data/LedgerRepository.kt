@@ -1055,6 +1055,12 @@ class LedgerRepository(private val db: AppDb) {
         settings.update(st.copy(autoBackupEnabled = on))
     }
 
+    /** يضبط سياسة الاحتفاظ بالنسخ الآلية؛ [keep] = 0 تعني الاحتفاظ بكل النسخ. */
+    suspend fun setAutoBackupKeep(keep: Int) {
+        val st = settings.get() ?: return
+        settings.update(st.copy(autoBackupKeep = keep.coerceAtLeast(0)))
+    }
+
     suspend fun setBiometric(on: Boolean) {
         val st = settings.get() ?: return
         settings.update(st.copy(biometricUnlock = on))

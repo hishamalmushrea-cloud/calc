@@ -1,5 +1,6 @@
 package com.daftari.ledger.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -35,6 +37,13 @@ import java.util.Date
 import java.util.Locale
 
 private enum class CloudRestoreKind { FILE, WEBDAV }
+
+/** تنسيق حجم النسخة بلا اعتماد على Context (ميغابايت/كيلوبايت/بايت). */
+private fun formatBackupSize(bytes: Long): String = when {
+    bytes >= 1_048_576L -> String.format(Locale.US, "%.1f MB", bytes / 1_048_576.0)
+    bytes >= 1_024L -> String.format(Locale.US, "%.0f KB", bytes / 1_024.0)
+    else -> "$bytes B"
+}
 
 @Composable
 internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: PaddingValues) {
@@ -230,6 +239,21 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                     Text(stringResource(R.string.daily_auto_backup), modifier = Modifier.weight(1f))
                     Switch(state.autoBackup, { onEvent(UiEvent.ToggleBackup(it)) })
                 }
+                Text(stringResource(R.string.backup_retention), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        7 to R.string.retention_keep_7,
+                        14 to R.string.retention_keep_14,
+                        30 to R.string.retention_keep_30,
+                        0 to R.string.retention_keep_all
+                    ).forEach { (value, label) ->
+                        FilterChip(
+                            selected = state.backupKeep == value,
+                            onClick = { onEvent(UiEvent.SetBackupRetention(value)) },
+                            label = { Text(stringResource(label)) }
+                        )
+                    }
+                }
                 Button(onClick = { onEvent(UiEvent.BackupNow) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.backup_now_share)) }
                 OutlinedTextField(
                     backupPassword,
@@ -249,12 +273,18 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 val backupFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
                 state.backups.forEach { file ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            backupFormat.format(Date(file.lastModified())) + if (file.name.endsWith(".enc")) " 🔒" else "",
-                            modifier = Modifier.weight(1f)
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(backupFormat.format(Date(file.lastModified())) + if (file.name.endsWith(".enc")) " 🔒" else "")
+                            Text(
+                                stringResource(R.string.backup_size_value, formatBackupSize(file.length())),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                         TextButton(onClick = { pendingRestore = file }) {
                             Text(stringResource(R.string.action_restore))
+                        }
+                        TextButton(onClick = { onEvent(UiEvent.DeleteBackup(file)) }) {
+                            Text(stringResource(R.string.action_delete))
                         }
                     }
                 }
@@ -371,6 +401,14 @@ internal fun MoreScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                 title = { Text(stringResource(R.string.restore_confirm_title)) },
                 text = {
                     Column {
+                        Text(
+                            stringResource(
+                                R.string.restore_backup_meta,
+                                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(file.lastModified())),
+                                formatBackupSize(file.length())
+                            ),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                         Text(stringResource(R.string.restore_confirm_body))
                         if (file.name.endsWith(".enc")) {
                             Text(stringResource(R.string.restore_encrypted_password_hint), style = MaterialTheme.typography.bodySmall)

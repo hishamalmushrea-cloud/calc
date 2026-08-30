@@ -159,6 +159,17 @@
     <string name="encrypted_backup_share">نسخة مشفرة ومشاركة</string>
     <string name="export_csv_share">تصدير CSV كامل ومشاركة</string>
     <string name="no_backups">لا نسخ بعد.</string>
+    <string name="action_delete">حذف</string>
+    <string name="backup_retention">الاحتفاظ بالنسخ</string>
+    <string name="retention_keep_7">آخر 7</string>
+    <string name="retention_keep_14">آخر 14</string>
+    <string name="retention_keep_30">آخر 30</string>
+    <string name="retention_keep_all">الكل</string>
+    <string name="msg_retention_saved">تم حفظ سياسة الاحتفاظ</string>
+    <string name="msg_backup_deleted">تم حذف النسخة</string>
+    <string name="msg_backup_delete_failed">تعذّر حذف النسخة</string>
+    <string name="backup_size_value">الحجم: %1$s</string>
+    <string name="restore_backup_meta">تاريخ النسخة: %1$s — الحجم: %2$s</string>
     <string name="section_csv_import">استيراد CSV</string>
     <string name="csv_format_hint">الاسم, النوع, المبلغ, نوع العملية</string>
     <string name="paste_csv">الصق CSV</string>

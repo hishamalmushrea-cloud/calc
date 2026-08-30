@@ -71,6 +71,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         locked = settings.pinHash != null,
                         biometric = settings.biometricUnlock,
                         autoBackup = settings.autoBackupEnabled,
+                        backupKeep = settings.autoBackupKeep,
                         hideBalances = settings.hideBalances,
                         latinDigits = settings.latinDigits,
                         pinLockedUntil = settings.pinLockedUntil,
@@ -145,6 +146,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.RefreshBackups -> mutableState.update { it.copy(backups = services.listBackups()) }
             is UiEvent.RestoreBackup -> restoreBackup(event.file, event.password)
             is UiEvent.BackupEncrypted -> backupEncrypted(event.password)
+            is UiEvent.SetBackupRetention -> setBackupRetention(event.keep)
+            is UiEvent.DeleteBackup -> deleteBackup(event.file)
             is UiEvent.OpenParty -> openParty(event.party)
             UiEvent.ClosePartyDialog -> mutableState.update { it.copy(selectedParty = null, partyStats = null) }
             is UiEvent.ShareStatement -> shareStatement(event.party)
