@@ -58,6 +58,18 @@ class CloudBackupManager(private val context: Context, private val backup: Backu
         prefs.edit().remove(KEY_TREE).apply()
     }
 
+    /**
+     * هل مجلد النسخ الاختياري ما زال قابلًا للوصول؟ عدم ضبط مجلد ليس مشكلة (يعيد
+     * `true`)، أما مجلد مضبوط لكنه محذوف/فاقِد الصلاحية فيعيد `false` لينبّه العامل.
+     */
+    fun isTreeAccessible(): Boolean {
+        val uri = settings().treeUri.takeIf { it.isNotBlank() } ?: return true
+        return runCatching {
+            val dir = DocumentFile.fromTreeUri(context, Uri.parse(uri))
+            dir != null && dir.exists()
+        }.getOrDefault(false)
+    }
+
     fun saveWebDav(url: String, user: String, password: String) {
         val edit = prefs.edit()
             .putString(KEY_URL, url.trim().trimEnd('/'))

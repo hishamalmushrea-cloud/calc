@@ -544,6 +544,10 @@
     <string name="msg_google_backup_failed">تعذر إكمال النسخ أو الاستعادة: %1$s</string>
     <string name="backup_failure_channel">تنبيهات النسخ الاحتياطي</string>
     <string name="backup_failure_notification">فشل النسخ الاحتياطي عدة مرات. افتح دفتري لإعادة المحاولة أو ربط الحساب.</string>
+    <string name="backup_space_low_title">مساحة التخزين غير كافية</string>
+    <string name="backup_space_low_text">تعذّر إنشاء نسخة احتياطية لعدم كفاية المساحة. حرّر مساحة وسنحاول تلقائيًا لاحقًا.</string>
+    <string name="backup_folder_lost_title">مجلد النسخ غير متاح</string>
+    <string name="backup_folder_lost_text">لم يعد التطبيق يستطيع الوصول إلى مجلد النسخ المختار. اختر مجلدًا جديدًا من الإعدادات.</string>
 
     <string name="section_inventory">المخزون والفواتير</string>
     <string name="inventory_title">المخزون والفواتير</string>

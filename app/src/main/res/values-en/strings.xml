@@ -345,6 +345,10 @@
     <string name="msg_google_backup_failed">Backup or restore could not be completed: %1$s</string>
     <string name="backup_failure_channel">Backup alerts</string>
     <string name="backup_failure_notification">Backup failed several times. Open Daftari to retry or reconnect the account.</string>
+    <string name="backup_space_low_title">Not enough storage space</string>
+    <string name="backup_space_low_text">Backup could not be created due to low storage. Free up space and it will retry automatically.</string>
+    <string name="backup_folder_lost_title">Backup folder unavailable</string>
+    <string name="backup_folder_lost_text">The app can no longer access the chosen backup folder. Pick a new folder in settings.</string>
 
     <string name="section_inventory">Inventory and invoices</string>
     <string name="inventory_title">Inventory and invoices</string>

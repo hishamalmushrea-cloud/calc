@@ -3,6 +3,7 @@ package com.daftari.ledger.backup
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.os.StatFs
 import androidx.core.app.NotificationCompat
 import com.daftari.ledger.R
 import androidx.work.BackoffPolicy
@@ -52,8 +53,20 @@ class AutoBackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
             val settings = runCatching { db.settings().get() }.getOrNull()
             if (settings?.autoBackupEnabled != true) return Result.success()
             val keep = settings.autoBackupKeep
+            val cloud = CloudBackupManager(applicationContext, local)
+            // نفاد المساحة: لا تبدأ النسخ إذا لم تتسع، ونبّه المستخدم ثم أعد المحاولة لاحقًا.
+            val dbBytes = runCatching { applicationContext.getDatabasePath("daftari.db").length() }.getOrDefault(0L)
+            val availableBytes = runCatching { StatFs(applicationContext.filesDir.path).availableBytes }.getOrDefault(Long.MAX_VALUE)
+            if (!BackupSpacePolicy.hasRoom(availableBytes, dbBytes)) {
+                notifyIssue(NOTIFY_SPACE, R.string.backup_space_low_title, R.string.backup_space_low_text)
+                return Result.retry()
+            }
             val file = local.exportDatabase()
-            CloudBackupManager(applicationContext, local).upload(file)
+            cloud.upload(file)
+            // فقدان مجلد النسخ الاختياري: النسخة المحلية تمت لكن الوجهة المختارة لم تعد متاحة.
+            if (!cloud.isTreeAccessible()) {
+                notifyIssue(NOTIFY_FOLDER, R.string.backup_folder_lost_title, R.string.backup_folder_lost_text)
+            }
             rotate(local, keep)
             Result.success()
         } catch (_: Exception) {
@@ -71,23 +84,31 @@ class AutoBackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
 
     private fun notifyRepeatedFailure(settings: GoogleBackupSettings) {
         if (settings.failureCount < 3) return
+        notifyIssue(NOTIFY_FAILURE, R.string.backup_status_failed, R.string.backup_failure_notification)
+    }
+
+    /** إشعار موحّد لمشاكل النسخ (فشل متكرر، نفاد مساحة، فقدان مجلد) على نفس القناة. */
+    private fun notifyIssue(notificationId: Int, titleRes: Int, textRes: Int) {
         val notifications = applicationContext.getSystemService(NotificationManager::class.java)
         notifications.createNotificationChannel(
             NotificationChannel(CHANNEL, applicationContext.getString(R.string.backup_failure_channel), NotificationManager.IMPORTANCE_DEFAULT)
         )
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
             .setSmallIcon(com.daftari.ledger.R.drawable.ic_launcher_foreground)
-            .setContentTitle(applicationContext.getString(R.string.backup_status_failed))
-            .setContentText(applicationContext.getString(R.string.backup_failure_notification))
+            .setContentTitle(applicationContext.getString(titleRes))
+            .setContentText(applicationContext.getString(textRes))
             .setAutoCancel(true)
             .build()
-        notifications.notify(3902, notification)
+        notifications.notify(notificationId, notification)
     }
 
     companion object {
         private const val UNIQUE = "daftari-auto-backup"
         private const val CHANNEL = "backup_failures"
         private const val KEY_GOOGLE_MANUAL = "google_manual"
+        private const val NOTIFY_FAILURE = 3902
+        private const val NOTIFY_SPACE = 3903
+        private const val NOTIFY_FOLDER = 3904
 
         fun schedule(context: Context, enabled: Boolean, wifiOnly: Boolean = GoogleBackupPreferences(context).load().wifiOnly) {
             val work = WorkManager.getInstance(context)
