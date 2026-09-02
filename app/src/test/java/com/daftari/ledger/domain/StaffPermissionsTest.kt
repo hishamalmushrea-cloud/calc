@@ -32,4 +32,28 @@ class StaffPermissionsTest {
         assertTrue(customized.hasPermission(StaffPermission.MANAGE_SHIFTS))
         assertFalse((customized and StaffPermission.MANAGE_SHIFTS.mask.inv()).hasPermission(StaffPermission.MANAGE_SHIFTS))
     }
+
+    @Test
+    fun writeAccessIsSeparatedFromReadAccess() {
+        // الفصل بين «عرض الحسابات» (قراءة) و«إدارة الحسابات» (كتابة العمليات غير البيعية).
+        val seller = StaffRoles.defaultPermissions(StaffRoles.SELLER)
+        val accountant = StaffRoles.defaultPermissions(StaffRoles.ACCOUNTANT)
+        val owner = StaffRoles.defaultPermissions(StaffRoles.OWNER)
+
+        assertTrue(seller.hasPermission(StaffPermission.RECORD_SALE))
+        assertFalse("البائع لا يملك إدارة العمليات غير البيعية", seller.hasPermission(StaffPermission.MANAGE_ACCOUNTS))
+
+        assertTrue(accountant.hasPermission(StaffPermission.VIEW_ACCOUNTS))
+        assertTrue("المحاسب يملك إدارة العمليات غير البيعية", accountant.hasPermission(StaffPermission.MANAGE_ACCOUNTS))
+
+        assertTrue(owner.hasPermission(StaffPermission.MANAGE_ACCOUNTS))
+        assertTrue(owner.hasPermission(StaffPermission.VIEW_ACCOUNTS))
+    }
+
+    @Test
+    fun permissionBitsDoNotOverlap() {
+        // كل صلاحية تملك bit مستقلًا حتى لا تتعارض أقنعة الصلاحيات.
+        val bits = StaffPermission.entries.map { it.bit }
+        assertTrue("صلاحيات مكررة في البتات", bits.size == bits.toSet().size)
+    }
 }

@@ -1,5 +1,7 @@
 package com.daftari.ledger.ui
 
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +20,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PointOfSale
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -47,8 +49,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +68,7 @@ import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.StaffPermission
 import com.daftari.ledger.security.AppLock
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +77,8 @@ fun DaftariRoot(
     viewModel: MainViewModel,
     activity: FragmentActivity? = null,
     initialTab: Int = 0,
-    initialQuickSale: Boolean = false
+    initialQuickSale: Boolean = false,
+    initialOpenBook: Boolean = false
 ) {
     var tab by remember { mutableIntStateOf(initialTab) }
     var addType by remember { mutableStateOf<DocType?>(null) }
@@ -86,6 +92,59 @@ fun DaftariRoot(
     LaunchedEffect(initialQuickSale) {
         if (initialQuickSale) addType = DocType.SALE
     }
+    // ودجت «دفتر الحسابات» يفتح الدفتر مباشرة دون المرور بالتبويبات.
+    LaunchedEffect(initialOpenBook) {
+        if (initialOpenBook) onEvent(UiEvent.OpenAccountsBook)
+    }
+    val secondaryOpen = state.book.screenOpen || state.inventory.screenOpen ||
+        state.googleBackup.screenOpen || state.employees.screenOpen
+    /** اختيار تبويب يُغلق أولًا أي شاشة ثانوية حتى يظهر التبويب المختار فعلًا. */
+    val goToTab: (Int) -> Unit = { index ->
+        tab = index
+        if (secondaryOpen) onEvent(UiEvent.CloseSecondaryScreens)
+    }
+
+    val scope = rememberCoroutineScope()
+    val exitHint = stringResource(R.string.press_back_again_to_exit)
+    var lastBackAt by remember { mutableLongStateOf(0L) }
+
+    // زر الرجوع يرجع خطوة واحدة داخل التطبيق بدل الخروج منه: نافذة مفتوحة ← صفحة الشخص ←
+    // الشاشة الثانوية ← اللوحة الرئيسية، ثم ضغطة ثانية خلال ثانيتين للخروج فعلًا.
+    // ومع قفل الـ PIN لا يفعل شيئًا إطلاقًا.
+    BackHandler {
+        if (!state.locked) {
+            when {
+                state.book.currencyEditor != null -> onEvent(UiEvent.SetBookCurrencyEditor(null))
+                state.book.currencyManagerOpen -> onEvent(UiEvent.SetBookCurrencyManager(false))
+                state.book.entrySheet != null -> onEvent(UiEvent.CloseBookEntrySheet)
+                state.book.personEditor != null -> onEvent(UiEvent.SetBookPersonEditor(null))
+                state.book.selectedPersonId != null -> onEvent(UiEvent.CloseBookPerson)
+                state.book.screenOpen -> onEvent(UiEvent.CloseAccountsBook)
+                state.inventory.invoiceOpen -> onEvent(UiEvent.SetInvoiceSheet(false))
+                state.inventory.screenOpen -> onEvent(UiEvent.CloseInventory)
+                state.googleBackup.screenOpen -> onEvent(UiEvent.CloseGoogleBackup)
+                state.employees.selectedEmployee != null -> onEvent(UiEvent.CloseEmployeeDetail)
+                state.employees.screenOpen -> onEvent(UiEvent.CloseEmployees)
+                quickParty != null -> {
+                    quickParty = null
+                    quickType = null
+                }
+                addType != null -> addType = null
+                state.selectedParty != null -> onEvent(UiEvent.ClosePartyDialog)
+                state.employees.switcherOpen -> onEvent(UiEvent.SetEmployeeSwitcher(false))
+                tab != 0 -> tab = 0
+                else -> {
+                    val now = SystemClock.uptimeMillis()
+                    if (now - lastBackAt < EXIT_WINDOW_MS) {
+                        activity?.finish()
+                    } else {
+                        lastBackAt = now
+                        scope.launch { snackbar.showSnackbar(exitHint) }
+                    }
+                }
+            }
+        }
+    }
     val moneySettings = MoneyDisplaySettings(
         currencyCode = state.shop?.currencyCode ?: "SAR",
         fractionDigits = state.shop?.fractionDigits ?: 2,
@@ -98,10 +157,16 @@ fun DaftariRoot(
         message?.let {
             val result = snackbar.showSnackbar(
                 message = it,
-                actionLabel = if (state.undoDocumentId != null) undoLabel else null,
+                actionLabel = if (state.undoDocumentId != null || state.book.undoEntryId != null) undoLabel else null,
                 withDismissAction = true
             )
-            if (result == SnackbarResult.ActionPerformed) onEvent(UiEvent.UndoDeleteDocument)
+            if (result == SnackbarResult.ActionPerformed) {
+                if (state.book.undoEntryId != null) {
+                    onEvent(UiEvent.UndoDeleteBookEntry)
+                } else {
+                    onEvent(UiEvent.UndoDeleteDocument)
+                }
+            }
             onEvent(UiEvent.ConsumeMessage)
         }
     }
@@ -142,7 +207,7 @@ fun DaftariRoot(
                     }
                     if (state.agingAlert > 0) {
                         BadgedBox(badge = { Badge { Text(state.agingAlert.toString()) } }) {
-                            IconButton(onClick = { tab = REPORTS_TAB }) {
+                            IconButton(onClick = { goToTab(REPORTS_TAB) }) {
                                 Icon(Icons.Default.Notifications, stringResource(R.string.notifications))
                             }
                         }
@@ -153,7 +218,7 @@ fun DaftariRoot(
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (tab <= REPORTS_TAB && tab != SALES_TAB) {
+            if (tab <= REPORTS_TAB && tab != SALES_TAB && !secondaryOpen) {
                 FloatingActionButton(
                     onClick = { addType = DocType.SALE },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -171,7 +236,7 @@ fun DaftariRoot(
                 val items = listOf(
                     stringResource(R.string.nav_dashboard) to Icons.Default.Home,
                     stringResource(R.string.nav_accounts) to Icons.Default.People,
-                    stringResource(R.string.nav_documents) to Icons.Default.ReceiptLong,
+                    stringResource(R.string.nav_documents) to Icons.AutoMirrored.Filled.ReceiptLong,
                     stringResource(R.string.nav_sales) to Icons.Default.PointOfSale,
                     stringResource(R.string.nav_reports) to Icons.Default.Assessment,
                     stringResource(R.string.nav_more) to Icons.Default.MoreHoriz
@@ -179,7 +244,7 @@ fun DaftariRoot(
                 items.forEachIndexed { index, (label, icon) ->
                     NavigationBarItem(
                         selected = tab == index,
-                        onClick = { tab = index },
+                        onClick = { goToTab(index) },
                         icon = { Icon(icon, contentDescription = null) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                     )
@@ -193,7 +258,7 @@ fun DaftariRoot(
                     val railItems = listOf(
                         stringResource(R.string.nav_dashboard) to Icons.Default.Home,
                         stringResource(R.string.nav_accounts) to Icons.Default.People,
-                        stringResource(R.string.nav_documents) to Icons.Default.ReceiptLong,
+                        stringResource(R.string.nav_documents) to Icons.AutoMirrored.Filled.ReceiptLong,
                         stringResource(R.string.nav_sales) to Icons.Default.PointOfSale,
                         stringResource(R.string.nav_reports) to Icons.Default.Assessment,
                         stringResource(R.string.nav_more) to Icons.Default.MoreHoriz
@@ -201,7 +266,7 @@ fun DaftariRoot(
                     railItems.forEachIndexed { index, (label, icon) ->
                         NavigationRailItem(
                             selected = tab == index,
-                            onClick = { tab = index },
+                            onClick = { goToTab(index) },
                             icon = { Icon(icon, contentDescription = null) },
                             label = { Text(label) }
                         )
@@ -209,7 +274,11 @@ fun DaftariRoot(
                 }
             }
             Box(Modifier.weight(1f)) {
-                if (state.googleBackup.screenOpen) {
+                if (state.book.screenOpen) {
+                    AccountsBookScreen(state, onEvent, padding)
+                } else if (state.inventory.screenOpen) {
+                    InventoryScreen(state, onEvent, padding)
+                } else if (state.googleBackup.screenOpen) {
                     GoogleBackupScreen(state, onEvent, padding)
                 } else if (state.employees.screenOpen && (
                         state.can(StaffPermission.MANAGE_EMPLOYEES) || state.can(StaffPermission.VIEW_REPORTS) ||
@@ -295,3 +364,5 @@ private fun LockDialog(state: UiState, onEvent: (UiEvent) -> Unit, activity: Fra
 
 private const val SALES_TAB = 3
 private const val REPORTS_TAB = 4
+
+private const val EXIT_WINDOW_MS = 2_000L

@@ -199,7 +199,7 @@ private fun EmployeeDetailScreen(
             }
             if (employee.monthlyTargetMinor > 0) {
                 Text(stringResource(R.string.employee_target_progress, displayMoney(monthSales), displayMoney(employee.monthlyTargetMinor)))
-                LinearProgressIndicator(progress = targetRatio, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { targetRatio }, modifier = Modifier.fillMaxWidth())
             }
             if (employee.commissionBasisPoints > 0 && state.can(StaffPermission.VIEW_PAYROLL)) {
                 Text(stringResource(R.string.employee_estimated_commission, displayMoney(commission)))
@@ -228,7 +228,7 @@ private fun EmployeeDetailScreen(
         }
         if (canViewSales) {
             items(details.selectedSales, key = { it.id }) { sale ->
-                SalesBookEntryRow(sale, state, onEvent, readOnly = true)
+                SalesBookEntryRow(sale, state, readOnly = true)
             }
         }
         item {
@@ -385,5 +385,5 @@ internal fun EmployeeSwitcherDialog(state: UiState, onEvent: (UiEvent) -> Unit) 
 @Composable private fun statusLabel(status: String): String = when (status) { "ACTIVE" -> stringResource(R.string.employee_active); "LEAVE" -> stringResource(R.string.employee_leave); "SUSPENDED" -> stringResource(R.string.employee_suspended); "LEFT" -> stringResource(R.string.employee_left); "OPEN" -> stringResource(R.string.shift_open); "CLOSED" -> stringResource(R.string.shift_closed); else -> status }
 @Composable private fun employeeRangeLabel(range: SalesBookRange): String = when (range) { SalesBookRange.TODAY -> stringResource(R.string.period_today); SalesBookRange.YESTERDAY -> stringResource(R.string.period_yesterday); SalesBookRange.THIS_WEEK -> stringResource(R.string.this_week); SalesBookRange.LAST_WEEK -> stringResource(R.string.last_week); SalesBookRange.THIS_MONTH -> stringResource(R.string.this_month); SalesBookRange.LAST_MONTH -> stringResource(R.string.last_month); SalesBookRange.CUSTOM -> stringResource(R.string.period_custom) }
 @Composable private fun permissionLabel(permission: StaffPermission): String = stringResource(when (permission) {
-    StaffPermission.RECORD_SALE -> R.string.permission_record_sale; StaffPermission.RECORD_OUTFLOW -> R.string.permission_record_outflow; StaffPermission.EDIT_OWN_SALE -> R.string.permission_edit_own; StaffPermission.EDIT_ANY_SALE -> R.string.permission_edit_any; StaffPermission.DELETE_OWN_SALE -> R.string.permission_delete_own; StaffPermission.DELETE_ANY_SALE -> R.string.permission_delete_any; StaffPermission.VIEW_OWN_SALES -> R.string.permission_view_own; StaffPermission.VIEW_ALL_SALES -> R.string.permission_view_all; StaffPermission.VIEW_ACCOUNTS -> R.string.permission_accounts; StaffPermission.VIEW_REPORTS -> R.string.permission_reports; StaffPermission.VIEW_PROFIT -> R.string.permission_profit; StaffPermission.MANAGE_EMPLOYEES -> R.string.permission_employees; StaffPermission.VIEW_PAYROLL -> R.string.permission_payroll; StaffPermission.MANAGE_SETTINGS -> R.string.permission_settings; StaffPermission.MANAGE_SHIFTS -> R.string.permission_shifts; StaffPermission.VIEW_AUDIT -> R.string.permission_audit; StaffPermission.ASSIGN_SALESPERSON -> R.string.permission_assign_salesperson
+    StaffPermission.RECORD_SALE -> R.string.permission_record_sale; StaffPermission.RECORD_OUTFLOW -> R.string.permission_record_outflow; StaffPermission.EDIT_OWN_SALE -> R.string.permission_edit_own; StaffPermission.EDIT_ANY_SALE -> R.string.permission_edit_any; StaffPermission.DELETE_OWN_SALE -> R.string.permission_delete_own; StaffPermission.DELETE_ANY_SALE -> R.string.permission_delete_any; StaffPermission.VIEW_OWN_SALES -> R.string.permission_view_own; StaffPermission.VIEW_ALL_SALES -> R.string.permission_view_all; StaffPermission.VIEW_ACCOUNTS -> R.string.permission_accounts; StaffPermission.VIEW_REPORTS -> R.string.permission_reports; StaffPermission.VIEW_PROFIT -> R.string.permission_profit; StaffPermission.MANAGE_EMPLOYEES -> R.string.permission_employees; StaffPermission.VIEW_PAYROLL -> R.string.permission_payroll; StaffPermission.MANAGE_SETTINGS -> R.string.permission_settings; StaffPermission.MANAGE_SHIFTS -> R.string.permission_shifts; StaffPermission.VIEW_AUDIT -> R.string.permission_audit; StaffPermission.ASSIGN_SALESPERSON -> R.string.permission_assign_salesperson; StaffPermission.MANAGE_ACCOUNTS -> R.string.permission_manage_accounts
 })

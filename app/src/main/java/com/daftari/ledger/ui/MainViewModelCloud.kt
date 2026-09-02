@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.daftari.ledger.DaftariApp
 import com.daftari.ledger.R
+import java.io.File
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -61,5 +62,23 @@ internal fun MainViewModel.restoreLatestWebDav() = viewModelScope.launch {
         mutableState.update { it.copy(restartRequested = true, message = text(R.string.msg_restore_restarting)) }
     } catch (error: Exception) {
         message(R.string.msg_restore_failed, error.message.orEmpty())
+    }
+}
+
+/** يضبط عدد النسخ الآلية المحتفظ بها؛ [keep] = 0 تعني الاحتفاظ بالكل. */
+internal fun MainViewModel.setBackupRetention(keep: Int) = viewModelScope.launch {
+    repo.setAutoBackupKeep(keep)
+    mutableState.update { it.copy(backupKeep = keep, message = text(R.string.msg_retention_saved)) }
+}
+
+/** يحذف نسخة محددة من القائمة ثم يعيد تحميلها. */
+internal fun MainViewModel.deleteBackup(file: File) = viewModelScope.launch {
+    val app = getApplication<DaftariApp>()
+    val deleted = app.backup.deleteBackup(file)
+    mutableState.update {
+        it.copy(
+            backups = app.backup.listBackups(),
+            message = text(if (deleted) R.string.msg_backup_deleted else R.string.msg_backup_delete_failed)
+        )
     }
 }

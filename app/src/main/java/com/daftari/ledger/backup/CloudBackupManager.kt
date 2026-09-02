@@ -58,6 +58,18 @@ class CloudBackupManager(private val context: Context, private val backup: Backu
         prefs.edit().remove(KEY_TREE).apply()
     }
 
+    /**
+     * هل مجلد النسخ الاختياري ما زال قابلًا للوصول؟ عدم ضبط مجلد ليس مشكلة (يعيد
+     * `true`)، أما مجلد مضبوط لكنه محذوف/فاقِد الصلاحية فيعيد `false` لينبّه العامل.
+     */
+    fun isTreeAccessible(): Boolean {
+        val uri = settings().treeUri.takeIf { it.isNotBlank() } ?: return true
+        return runCatching {
+            val dir = DocumentFile.fromTreeUri(context, Uri.parse(uri))
+            dir != null && dir.exists()
+        }.getOrDefault(false)
+    }
+
     fun saveWebDav(url: String, user: String, password: String) {
         val edit = prefs.edit()
             .putString(KEY_URL, url.trim().trimEnd('/'))
@@ -93,7 +105,7 @@ class CloudBackupManager(private val context: Context, private val backup: Backu
     suspend fun restoreLatestWebDav() = withContext(Dispatchers.IO) {
         val settings = settings()
         check(settings.webDavUrl.isNotBlank()) { "WebDAV is not configured" }
-        val latest = listWebDav(settings).maxOrNull() ?: error("No WebDAV backups")
+        val latest = latestRestorableWebDavBackup(listWebDav(settings)) ?: error("No WebDAV backups")
         val request = requestBuilder(settings, settings.webDavUrl + "/" + encode(latest)).get().build()
         val temporary = File.createTempFile("webdav-restore-", ".db", context.cacheDir)
         try {
@@ -167,3 +179,16 @@ class CloudBackupManager(private val context: Context, private val backup: Backu
         val HREF = Regex("<(?:[^:>]+:)?href[^>]*>(.*?)</(?:[^:>]+:)?href>", RegexOption.IGNORE_CASE)
     }
 }
+
+/**
+ * يختار أحدث نسخة WebDAV قابلة للاستعادة.
+ *
+ * يُستبعد المشفّر (`.enc`) لأنه يحتاج كلمة مرور ولا يمرّ بهذا المسار، والترتيب بالطابع
+ * الزمني في الاسم لا بالترتيب الأبجدي (الذي يقدّم `999999999` على `1700000000000`).
+ * عامة حتى تختبرها `CloudBackupManagerTest` بلا شبكة.
+ */
+fun latestRestorableWebDavBackup(names: List<String>): String? = names
+    .filter { it.startsWith("daftari-backup-") && it.endsWith(".db") }
+    .maxByOrNull { name ->
+        name.substringAfter("daftari-backup-").substringBefore(".").toLongOrNull() ?: 0L
+    }

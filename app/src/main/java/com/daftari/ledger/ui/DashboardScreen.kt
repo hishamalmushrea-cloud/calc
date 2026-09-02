@@ -19,6 +19,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.daftari.ledger.R
 import com.daftari.ledger.domain.DocType
+import com.daftari.ledger.domain.StaffPermission
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -91,6 +93,11 @@ internal fun DashboardScreen(
                 }
             )
         }
+        if (state.docs.isEmpty() && state.customers.isEmpty() && state.suppliers.isEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.dashboard_empty), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.dashboard_empty_hint), style = MaterialTheme.typography.bodySmall)
+        }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(onClick = { onQuick(DocType.SALE) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.quick_sale)) }
@@ -109,14 +116,26 @@ internal fun DashboardScreen(
             SplitMetric(stringResource(R.string.owed_to_you), state.owedToYou, true, Modifier.weight(1f))
             SplitMetric(stringResource(R.string.you_owe), state.youOwe, false, Modifier.weight(1f))
         }
-        if (state.customerAdvances > 0 || state.supplierCredits > 0) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SplitMetric(stringResource(R.string.customer_advances), state.customerAdvances, false, Modifier.weight(1f))
-                SplitMetric(stringResource(R.string.supplier_credits), state.supplierCredits, true, Modifier.weight(1f))
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SplitMetric(stringResource(R.string.customer_advances), state.customerAdvances, false, Modifier.weight(1f))
+            SplitMetric(stringResource(R.string.supplier_credits), state.supplierCredits, true, Modifier.weight(1f))
         }
+        Text(stringResource(R.string.dashboard_balances_hint), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
+        if (state.can(StaffPermission.VIEW_ACCOUNTS)) {
+            OutlinedButton(onClick = { onEvent(UiEvent.OpenAccountsBook) }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.open_accounts_book))
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         ComparisonCard(state.totals.sales, state.prevTotals.sales)
+        if (state.inventory.lowStockCount > 0) {
+            Text(
+                stringResource(R.string.low_stock_alert, state.inventory.lowStockCount),
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold
+            )
+        }
         if (state.agingAlert > 0) {
             Text(
                 pluralStringResource(R.plurals.aging_alert, state.agingAlert, state.agingAlert),

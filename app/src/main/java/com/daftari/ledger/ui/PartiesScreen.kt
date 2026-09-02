@@ -136,7 +136,7 @@ private fun PartyCard(
                     Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LinearProgressIndicator(
-                            progress = ratio.coerceAtMost(1f),
+                            progress = { ratio.coerceAtMost(1f) },
                             modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
                             color = limitColor,
                             trackColor = limitColor.copy(alpha = 0.15f),

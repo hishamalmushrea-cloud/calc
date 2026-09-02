@@ -106,6 +106,28 @@ internal fun SalesEntryDialog(
                     label = { Text(stringResource(R.string.notes_optional)) },
                     minLines = 2
                 )
+                if (sale && payment == "CREDIT") {
+                    Text(stringResource(R.string.credit_sale_helper), style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = partyQuery,
+                        onValueChange = { partyQuery = it; partyId = null },
+                        label = { Text(stringResource(R.string.customer)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    state.customers.filter {
+                        partyQuery.isBlank() || it.name.contains(partyQuery, true) || it.phone.contains(partyQuery, true)
+                    }.take(5).forEach { customer ->
+                        TextButton(onClick = { partyId = customer.id; partyQuery = customer.name }) { Text(customer.name) }
+                    }
+                    TextButton(onClick = { showDueDate = true }) {
+                        Text(
+                            stringResource(
+                                R.string.due_date_value,
+                                java.text.DateFormat.getDateInstance().format(java.util.Date(dueAt ?: occurredAt + 30L * 86_400_000L))
+                            )
+                        )
+                    }
+                }
                 if (creditSaleMissingCustomer) {
                     Text(
                         stringResource(R.string.credit_sale_customer_required),
@@ -146,27 +168,6 @@ internal fun SalesEntryDialog(
                                 selected = categoryId == category.id,
                                 onClick = { categoryId = if (categoryId == category.id) null else category.id },
                                 label = { Text(category.name) }
-                            )
-                        }
-                    }
-                    if (sale && payment == "CREDIT") {
-                        OutlinedTextField(
-                            value = partyQuery,
-                            onValueChange = { partyQuery = it; partyId = null },
-                            label = { Text(stringResource(R.string.customer)) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        state.customers.filter {
-                            partyQuery.isBlank() || it.name.contains(partyQuery, true) || it.phone.contains(partyQuery, true)
-                        }.take(5).forEach { customer ->
-                            TextButton(onClick = { partyId = customer.id; partyQuery = customer.name }) { Text(customer.name) }
-                        }
-                        TextButton(onClick = { showDueDate = true }) {
-                            Text(
-                                stringResource(
-                                    R.string.due_date_value,
-                                    java.text.DateFormat.getDateInstance().format(java.util.Date(dueAt ?: occurredAt + 30L * 86_400_000L))
-                                )
                             )
                         }
                     }

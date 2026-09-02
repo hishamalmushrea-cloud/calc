@@ -146,7 +146,6 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
                 SalesBookEntryRow(
                     entry = entry,
                     state = state,
-                    onEvent = onEvent,
                     readOnly = closed,
                     onEdit = if (canEdit) ({ editing = entry }) else null,
                     onArchive = if (canArchive) ({ pendingArchive = entry }) else null,
@@ -227,7 +226,6 @@ internal fun SalesDayScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding:
 internal fun SalesBookEntryRow(
     entry: DocumentEntity,
     state: UiState,
-    onEvent: (UiEvent) -> Unit,
     readOnly: Boolean,
     onEdit: (() -> Unit)? = null,
     onArchive: (() -> Unit)? = null,

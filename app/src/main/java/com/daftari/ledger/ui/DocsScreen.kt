@@ -120,7 +120,7 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                             Box(
                                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
-                            ) { Text(documentIcon(document.type), fontSize = 18.sp) }
+                            ) { Icon(documentIcon(document.type), contentDescription = null, tint = color, modifier = Modifier.size(22.dp)) }
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(documentTypeLabel(document.type), fontWeight = FontWeight.SemiBold)
@@ -139,7 +139,10 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                                         contentPadding = PaddingValues(horizontal = 4.dp)
                                     ) { Text(stringResource(R.string.receipt_pdf), style = MaterialTheme.typography.labelSmall) }
                                     TextButton(
-                                        onClick = { editing = document },
+                                        onClick = {
+                                            onEvent(UiEvent.LoadInvoiceLines(document.id))
+                                            editing = document
+                                        },
                                         contentPadding = PaddingValues(horizontal = 6.dp)
                                     ) { Text(stringResource(R.string.action_edit), style = MaterialTheme.typography.labelSmall) }
                                     TextButton(
@@ -161,7 +164,10 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
         }
     }
     editing?.let { document ->
-        DocumentSheet(state, onEvent, DocType.SALE, document) { editing = null }
+        DocumentSheet(state, onEvent, DocType.SALE, document, onDismiss = {
+            editing = null
+            onEvent(UiEvent.ClearInvoiceLines)
+        })
     }
     pendingArchive?.let { document ->
         AlertDialog(

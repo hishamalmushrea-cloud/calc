@@ -61,32 +61,46 @@ internal class MainUiServices(
         }
     }
 
+    /** كشف حساب دفتر الحسابات كملف PDF (نفس محرّك التقارير المستخدم لبقية الكشوف). */
+    suspend fun bookStatementPdf(fileName: String, data: PdfReports.PdfStatementData): File = withContext(Dispatchers.IO) {
+        PdfReports.writeStatement(app, data, fileName)
+    }
+
     suspend fun receipt(document: DocumentEntity, party: PartyEntity?, shop: ShopEntity?, state: UiState): File =
         withContext(Dispatchers.IO) {
             PdfReports.writeDocumentReceipt(app, document, party, shop, state)
         }
 
     suspend fun exportCsv(shopId: Long): File = withContext(Dispatchers.IO) {
-        val docs = repo.documents.listPeriod(shopId, 0L, Long.MAX_VALUE)
         val byId = repo.parties.listAll(shopId).associateBy { it.id }
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-        val csv = buildString {
-            append("name,kind,amount,type,date,notes\n")
-            docs.sortedByDescending { it.occurredAt }.forEach { document ->
-                val party = document.partyId?.let(byId::get)
-                append(
-                    listOf(
-                        party?.name.orEmpty(),
-                        party?.kind.orEmpty(),
-                        Money(document.amountMinor).toBigDecimal().toPlainString(),
-                        document.type,
-                        dateFormat.format(Date(document.occurredAt)),
-                        document.notes
-                    ).joinToString(",", transform = ::csvCell)
-                ).append('\n')
+        val file = File(app.cacheDir, "daftari-export.csv")
+        // كتابة متدفقة صفحية: لا نحتفظ بكامل الجدول في الذاكرة.
+        file.bufferedWriter(Charsets.UTF_8).use { writer ->
+            writer.append("name,kind,amount,type,date,notes\n")
+            var offset = 0
+            val pageSize = 500
+            while (true) {
+                val docs = repo.documents.page(shopId, pageSize, offset)
+                if (docs.isEmpty()) break
+                docs.forEach { document ->
+                    val party = document.partyId?.let(byId::get)
+                    writer.append(
+                        listOf(
+                            party?.name.orEmpty(),
+                            party?.kind.orEmpty(),
+                            Money(document.amountMinor).toBigDecimal().toPlainString(),
+                            document.type,
+                            dateFormat.format(Date(document.occurredAt)),
+                            document.notes
+                        ).joinToString(",", transform = ::csvCell)
+                    ).append('\n')
+                }
+                if (docs.size < pageSize) break
+                offset += pageSize
             }
         }
-        File(app.cacheDir, "daftari-export.csv").apply { writeText(csv) }
+        file
     }
 
     private fun csvCell(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""

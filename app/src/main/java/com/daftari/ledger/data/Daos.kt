@@ -365,6 +365,36 @@ interface ClosingDao {
 }
 
 @Dao
+interface ItemDao {
+    @Query("SELECT * FROM items WHERE shopId = :shopId AND archived = 0 ORDER BY name")
+    fun observe(shopId: Long): Flow<List<ItemEntity>>
+
+    @Query("SELECT * FROM items WHERE shopId = :shopId AND archived = 0 ORDER BY name")
+    suspend fun list(shopId: Long): List<ItemEntity>
+
+    @Query("SELECT * FROM items WHERE id = :id")
+    suspend fun get(id: Long): ItemEntity?
+
+    @Query("SELECT COUNT(*) FROM items WHERE shopId = :shopId AND sku = :sku AND sku != '' AND id != :exceptId")
+    suspend fun countSku(shopId: Long, sku: String, exceptId: Long = -1): Int
+
+    @Query("SELECT COUNT(*) FROM items WHERE shopId = :shopId AND archived = 0 AND trackStock = 1 AND qtyMilli <= reorderQtyMilli")
+    suspend fun lowStockCount(shopId: Long): Int
+
+    @Insert suspend fun insert(item: ItemEntity): Long
+    @Update suspend fun update(item: ItemEntity)
+}
+
+@Dao
+interface DocumentLineDao {
+    @Insert suspend fun insertAll(lines: List<DocumentLineEntity>)
+    @Query("DELETE FROM document_lines WHERE documentId = :documentId")
+    suspend fun deleteForDocument(documentId: Long)
+    @Query("SELECT * FROM document_lines WHERE documentId = :documentId ORDER BY id")
+    suspend fun forDocument(documentId: Long): List<DocumentLineEntity>
+}
+
+@Dao
 interface DailyBookDao {
     @Query("SELECT * FROM daily_books WHERE shopId = :shopId AND dayStart = :dayStart LIMIT 1")
     suspend fun get(shopId: Long, dayStart: Long): DailyBookEntity?
@@ -374,6 +404,108 @@ interface DailyBookDao {
 
     @Upsert
     suspend fun upsert(book: DailyBookEntity): Long
+}
+
+/** عملات دفتر الحسابات — رسمية أو من إنشاء المستخدم. */
+@Dao
+interface CurrencyDao {
+    @Query("SELECT * FROM currencies WHERE archived = 0 ORDER BY id")
+    fun observeActive(): Flow<List<CurrencyEntity>>
+
+    @Query("SELECT * FROM currencies ORDER BY id")
+    suspend fun list(): List<CurrencyEntity>
+
+    @Query("SELECT * FROM currencies WHERE id = :id")
+    suspend fun get(id: Long): CurrencyEntity?
+
+    @Query("SELECT * FROM currencies WHERE code = :code LIMIT 1")
+    suspend fun byCode(code: String): CurrencyEntity?
+
+    @Query("SELECT COUNT(*) FROM currencies WHERE code = :code AND id != :exceptId")
+    suspend fun countCode(code: String, exceptId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM currencies")
+    suspend fun count(): Int
+
+    /** هل استُخدمت العملة في عمليات فعلية؟ يمنع الأرشفة المفاجئة لعملة مستعملة. */
+    @Query("SELECT COUNT(*) FROM book_entries WHERE currencyId = :id AND deletedAt IS NULL")
+    suspend fun usageCount(id: Long): Int
+
+    @Insert suspend fun insert(currency: CurrencyEntity): Long
+    @Update suspend fun update(currency: CurrencyEntity)
+}
+
+@Dao
+interface BookPersonDao {
+    @Query("SELECT * FROM book_persons WHERE shopId = :shopId AND archived = 0 ORDER BY name")
+    fun observe(shopId: Long): Flow<List<BookPersonEntity>>
+
+    @Query("SELECT * FROM book_persons WHERE shopId = :shopId AND archived = 0 ORDER BY name")
+    suspend fun list(shopId: Long): List<BookPersonEntity>
+
+    @Query("SELECT * FROM book_persons WHERE id = :id")
+    suspend fun get(id: Long): BookPersonEntity?
+
+    @Insert suspend fun insert(person: BookPersonEntity): Long
+    @Update suspend fun update(person: BookPersonEntity)
+}
+
+/**
+ * عمليات دفتر الحسابات. الأرصدة تُجمع في SQL لكل (شخص، عملة) ولا تُخزَّن مطلقًا،
+ * فلا يمكن أن ينحرف رصيد مخزّن عن عملياته.
+ */
+@Dao
+interface BookEntryDao {
+    @Query(
+        """
+        SELECT e.personId AS personId,
+               e.currencyId AS currencyId,
+               COALESCE(SUM(CASE WHEN e.side = 'LE' THEN e.amountMinor ELSE 0 END), 0) AS creditMinor,
+               COALESCE(SUM(CASE WHEN e.side = 'DEBT' THEN e.amountMinor ELSE 0 END), 0) AS debtMinor,
+               COALESCE(SUM(CASE WHEN e.kind = 'SETTLEMENT' THEN e.amountMinor ELSE 0 END), 0) AS settledMinor
+        FROM book_entries e
+        JOIN book_persons p ON p.id = e.personId
+        WHERE e.deletedAt IS NULL AND p.shopId = :shopId
+        GROUP BY e.personId, e.currencyId
+        """
+    )
+    fun observeBalances(shopId: Long): Flow<List<BookBalanceRow>>
+
+    /** صافي شخص في عملة: موجب = عليه، سالب = له. */
+    @Query(
+        """
+        SELECT COALESCE(SUM(CASE WHEN side = 'DEBT' THEN amountMinor ELSE 0 - amountMinor END), 0)
+        FROM book_entries
+        WHERE personId = :personId AND currencyId = :currencyId AND deletedAt IS NULL
+        """
+    )
+    suspend fun netOf(personId: Long, currencyId: Long): Long
+
+    /** الصافي دون عملية محددة؛ يُستخدم عند تحرير عملية قديمة. */
+    @Query(
+        """
+        SELECT COALESCE(SUM(CASE WHEN side = 'DEBT' THEN amountMinor ELSE 0 - amountMinor END), 0)
+        FROM book_entries
+        WHERE personId = :personId AND currencyId = :currencyId AND deletedAt IS NULL AND id != :exceptId
+        """
+    )
+    suspend fun netOfExcluding(personId: Long, currencyId: Long, exceptId: Long): Long
+
+    /** سجل شخص كاملًا بالترتيب الزمني التصاعدي (أساس الرصيد الجاري). */
+    @Query("SELECT * FROM book_entries WHERE personId = :personId AND deletedAt IS NULL ORDER BY occurredAt ASC, id ASC")
+    fun observeForPerson(personId: Long): Flow<List<BookEntryEntity>>
+
+    @Query("SELECT * FROM book_entries WHERE personId = :personId AND deletedAt IS NULL ORDER BY occurredAt ASC, id ASC")
+    suspend fun listForPerson(personId: Long): List<BookEntryEntity>
+
+    @Query("SELECT * FROM book_entries WHERE id = :id")
+    suspend fun get(id: Long): BookEntryEntity?
+
+    @Query("SELECT personId AS personId, MAX(occurredAt) AS lastAt FROM book_entries WHERE deletedAt IS NULL GROUP BY personId")
+    fun observeLastActivity(): Flow<List<BookActivityRow>>
+
+    @Insert suspend fun insert(entry: BookEntryEntity): Long
+    @Update suspend fun update(entry: BookEntryEntity)
 }
 
 

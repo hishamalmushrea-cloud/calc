@@ -132,6 +132,15 @@ object DatabaseHealthCheck {
             add(SqlCheck("orphan_document_shift", "مستندات تشير إلى وردية غير موجودة", "SELECT COUNT(*) FROM documents d WHERE d.shiftId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM employee_shifts sh WHERE sh.id = d.shiftId)", minVersion = 7))
             add(SqlCheck("orphan_audit_actor", "سجلات تدقيق تشير إلى موظف منفذ غير موجود", "SELECT COUNT(*) FROM audit_logs a WHERE a.actorEmployeeId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = a.actorEmployeeId)", minVersion = 7))
         }
+        if (version >= 9) {
+            add(SqlCheck("orphan_book_person_shop", "أشخاص في دفتر الحسابات مرتبطون بمحل غير موجود", "SELECT COUNT(*) FROM book_persons bp WHERE NOT EXISTS (SELECT 1 FROM shops s WHERE s.id = bp.shopId)", minVersion = 9))
+            add(SqlCheck("orphan_book_entry_person", "عمليات دفتر تشير إلى شخص غير موجود", "SELECT COUNT(*) FROM book_entries e WHERE NOT EXISTS (SELECT 1 FROM book_persons p WHERE p.id = e.personId)", minVersion = 9))
+            add(SqlCheck("orphan_book_entry_currency", "عمليات دفتر تشير إلى عملة غير موجودة", "SELECT COUNT(*) FROM book_entries e WHERE NOT EXISTS (SELECT 1 FROM currencies c WHERE c.id = e.currencyId)", minVersion = 9))
+            add(SqlCheck("book_entry_bad_amount", "عمليات دفتر بمبلغ غير موجب", "SELECT COUNT(*) FROM book_entries WHERE deletedAt IS NULL AND amountMinor <= 0", minVersion = 9))
+            add(SqlCheck("book_entry_bad_side", "عمليات دفتر بجانب أو نوع غير معروف", "SELECT COUNT(*) FROM book_entries WHERE deletedAt IS NULL AND (side NOT IN ('LE','DEBT') OR kind NOT IN ('LE','DEBT','SETTLEMENT'))", minVersion = 9))
+            add(SqlCheck("no_currencies", "لا توجد عملات لدفتر الحسابات", "SELECT CASE WHEN (SELECT COUNT(*) FROM currencies) = 0 THEN 1 ELSE 0 END", minVersion = 9))
+            add(SqlCheck("orphan_book_person_currency", "أشخاص في دفتر الحسابات بعملات غير موجودة", "SELECT COUNT(*) FROM book_persons bp WHERE bp.currencyId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM currencies c WHERE c.id = bp.currencyId)", minVersion = 10))
+        }
     }.filter { it.minVersion <= version }
 
     private fun SupportSQLiteDatabase.queryLong(sql: String): Long =

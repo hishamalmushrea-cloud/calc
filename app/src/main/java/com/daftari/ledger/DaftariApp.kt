@@ -8,6 +8,7 @@ import com.daftari.ledger.backup.BackupManager
 import com.daftari.ledger.backup.CloudBackupManager
 import com.daftari.ledger.backup.GoogleBackupManager
 import com.daftari.ledger.backup.GoogleBackupPreferences
+import com.daftari.ledger.data.AccountsBookRepository
 import com.daftari.ledger.data.AppDb
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.StaffRepository
@@ -26,12 +27,15 @@ class DaftariApp : Application() {
         private set
     lateinit var staff: StaffRepository
         private set
+    lateinit var book: AccountsBookRepository
+        private set
 
     override fun onCreate() {
         super.onCreate()
         val db = AppDb.get(this)
         repo = LedgerRepository(db)
         staff = StaffRepository(db)
+        book = AccountsBookRepository(db)
         backup = BackupManager(this, db)
         cloudBackup = CloudBackupManager(this, backup)
         googleBackup = GoogleBackupManager(this, backup)

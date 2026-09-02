@@ -11,6 +11,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.LocalMall
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -24,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -209,14 +219,14 @@ internal fun documentColor(type: String): Color = when (type) {
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
-internal fun documentIcon(type: String): String = when (type) {
-    "SALE" -> "🛒"
-    "COLLECT" -> "💰"
-    "PURCHASE" -> "📦"
-    "EXPENSE" -> "💸"
-    "PAY" -> "🏦"
-    "INCOME" -> "📈"
-    "TRANSFER" -> "🔄"
-    "OPENING" -> "📋"
-    else -> "📄"
+internal fun documentIcon(type: String): ImageVector = when (type) {
+    "SALE" -> Icons.Filled.ShoppingCart
+    "COLLECT" -> Icons.Filled.AttachMoney
+    "PURCHASE" -> Icons.Filled.LocalMall
+    "EXPENSE" -> Icons.Filled.TrendingDown
+    "PAY" -> Icons.Filled.AccountBalance
+    "INCOME" -> Icons.Filled.TrendingUp
+    "TRANSFER" -> Icons.Filled.SwapHoriz
+    "OPENING" -> Icons.Filled.Description
+    else -> Icons.Filled.Article
 }

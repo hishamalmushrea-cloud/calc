@@ -16,6 +16,7 @@ import com.daftari.ledger.domain.DocType
 import com.daftari.ledger.domain.Money
 import com.daftari.ledger.domain.PartyKind
 import com.daftari.ledger.domain.StaffPermission
+import com.daftari.ledger.widget.AccountsBookWidget
 import com.daftari.ledger.widget.DaftariWidget
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -38,13 +39,17 @@ import kotlinx.coroutines.withContext
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val repo = (app as DaftariApp).repo
     internal val staff = (app as DaftariApp).staff
+    internal val book = (app as DaftariApp).book
+
+    /** جمع سجل الشخص المفتوح في دفتر الحسابات؛ يُلغى عند إغلاق الصفحة. */
+    internal var bookEntriesJob: Job? = null
     internal val services = MainUiServices(app, repo)
     internal val mutableState = MutableStateFlow(
         UiState(
             cloudSettings = (app as DaftariApp).cloudBackup.settings(),
             googleBackup = GoogleBackupUiState(
-                settings = (app as DaftariApp).googleBackup.preferences.load(),
-                hasLocalData = (app as DaftariApp).googleBackup.hasLocalData()
+                settings = app.googleBackup.preferences.load(),
+                hasLocalData = app.googleBackup.hasLocalData()
             )
         )
     )
@@ -66,6 +71,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         locked = settings.pinHash != null,
                         biometric = settings.biometricUnlock,
                         autoBackup = settings.autoBackupEnabled,
+                        backupKeep = settings.autoBackupKeep,
                         hideBalances = settings.hideBalances,
                         latinDigits = settings.latinDigits,
                         pinLockedUntil = settings.pinLockedUntil,
@@ -86,7 +92,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 mutableState.update {
                     it.copy(shops = shops.ifEmpty { listOfNotNull(selected) }, shop = selected, loading = false)
                 }
-                selected?.let { bindShop(it.id) }
+                selected?.let {
+                    DaftariWidget.saveActiveShop(getApplication(), it.id)
+                    bindShop(it.id)
+                }
             }
         }
         viewModelScope.launch {
@@ -113,6 +122,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.UpdateDocument -> updateDocument(event)
             is UiEvent.DeleteDocument -> deleteDocument(event.id)
             UiEvent.UndoDeleteDocument -> undoDeleteDocument()
+            is UiEvent.LoadInvoiceLines -> loadInvoiceLines(event.documentId)
+            UiEvent.ClearInvoiceLines -> clearInvoiceLines()
             is UiEvent.ShareReceipt -> shareReceipt(event.document)
             is UiEvent.Unlock -> unlock(event.pin)
             UiEvent.BiometricUnlocked -> mutableState.update { it.copy(locked = false) }
@@ -135,6 +146,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiEvent.RefreshBackups -> mutableState.update { it.copy(backups = services.listBackups()) }
             is UiEvent.RestoreBackup -> restoreBackup(event.file, event.password)
             is UiEvent.BackupEncrypted -> backupEncrypted(event.password)
+            is UiEvent.SetBackupRetention -> setBackupRetention(event.keep)
+            is UiEvent.DeleteBackup -> deleteBackup(event.file)
             is UiEvent.OpenParty -> openParty(event.party)
             UiEvent.ClosePartyDialog -> mutableState.update { it.copy(selectedParty = null, partyStats = null) }
             is UiEvent.ShareStatement -> shareStatement(event.party)
@@ -182,6 +195,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is UiEvent.SearchSalesBook -> searchSalesBook(event)
             is UiEvent.ShareSalesDay -> shareSalesDay(event.dayStart, event.detailed)
             is UiEvent.ExportSalesPeriod -> exportSalesPeriod(event.from, event.to, event.format)
+            UiEvent.CloseSecondaryScreens -> closeSecondaryScreens()
+            UiEvent.OpenAccountsBook -> openAccountsBook()
+            UiEvent.CloseAccountsBook -> closeAccountsBook()
+            is UiEvent.SearchAccountsBook -> searchAccountsBook(event.query)
+            is UiEvent.SelectBookPerson -> selectBookPerson(event.id)
+            UiEvent.CloseBookPerson -> closeBookPerson()
+            is UiEvent.SetBookPersonEditor -> setBookPersonEditor(event.editor)
+            is UiEvent.SaveBookPerson -> saveBookPerson(event.draft)
+            is UiEvent.ArchiveBookPerson -> archiveBookPerson(event.id)
+            is UiEvent.OpenBookEntrySheet -> openBookEntrySheet(event.personId, event.presetKind, event.editEntryId)
+            UiEvent.CloseBookEntrySheet -> closeBookEntrySheet()
+            is UiEvent.SaveBookEntry -> saveBookEntry(event.draft)
+            is UiEvent.DeleteBookEntry -> deleteBookEntry(event.id)
+            UiEvent.UndoDeleteBookEntry -> undoDeleteBookEntry()
+            UiEvent.ShareBookStatement -> shareBookStatement()
+            UiEvent.ShareBookStatementPdf -> shareBookStatementPdf()
+            is UiEvent.SetBookCurrencyManager -> setBookCurrencyManager(event.open)
+            is UiEvent.SetBookCurrencyEditor -> setBookCurrencyEditor(event.draft)
+            is UiEvent.SaveBookCurrency -> saveBookCurrency(event.draft)
+            is UiEvent.ArchiveBookCurrency -> archiveBookCurrency(event.id)
+            is UiEvent.SetDefaultBookCurrency -> setDefaultBookCurrency(event.id)
+            UiEvent.OpenInventory -> openInventory()
+            UiEvent.CloseInventory -> closeInventory()
+            is UiEvent.SaveItem -> saveItem(event.draft)
+            is UiEvent.ArchiveItem -> archiveItem(event.id)
+            is UiEvent.SetInvoiceSheet -> setInvoiceSheet(event.open, event.type)
+            is UiEvent.SaveInvoice -> saveInvoice(event.draft)
             UiEvent.OpenEmployees -> openEmployees()
             UiEvent.CloseEmployees -> closeEmployees()
             is UiEvent.SetEmployeesEnabled -> setEmployeesEnabled(event.enabled)
@@ -228,6 +268,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     mutableState.update { it.copy(employees = it.employees.copy(employees = employees)) }
                 }
             }
+            launch {
+                book.observePersons(id).collectLatest { persons ->
+                    mutableState.update { it.copy(book = it.book.copy(persons = persons)) }
+                }
+            }
+            launch {
+                book.observeBalances(id).collectLatest { balances ->
+                    mutableState.update { it.copy(book = it.book.copy(balances = balances)) }
+                }
+            }
+            launch {
+                book.observeLastActivity().collectLatest { rows ->
+                    val activity = rows.filter { it.lastAt != null }.associate { it.personId to it.lastAt!! }
+                    mutableState.update { it.copy(book = it.book.copy(lastActivity = activity)) }
+                }
+            }
+            launch {
+                book.observeCurrencies().collectLatest { currencies ->
+                    mutableState.update { it.copy(book = it.book.copy(currencies = currencies)) }
+                }
+            }
+            launch {
+                repo.observeItems(id).collectLatest { items ->
+                    mutableState.update {
+                        it.copy(
+                            inventory = it.inventory.copy(
+                                items = items,
+                                lowStockCount = items.count { item -> item.trackStock && item.qtyMilli <= item.reorderQtyMilli }
+                            )
+                        )
+                    }
+                }
+            }
         }
         loadEmployeeReport()
         refreshTotals()
@@ -248,6 +321,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun selectShop(shop: ShopEntity) {
         mutableState.update { it.copy(shop = shop) }
+        DaftariWidget.saveActiveShop(getApplication(), shop.id)
         bindShop(shop.id)
     }
 
@@ -297,7 +371,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun addShop(name: String) = viewModelScope.launch { repo.createShop(name) }
+    private fun addShop(name: String) = viewModelScope.launch { repo.createShop(name, actorEmployeeId = currentActorId()) }
 
     private fun addParty(event: UiEvent.AddParty) = viewModelScope.launch {
         val shop = state.value.shop ?: return@launch
@@ -309,7 +383,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 event.phone,
                 Money.fromMajor(event.openingMajor, shop.fractionDigits)?.minor ?: 0L,
                 category = event.category,
-                creditLimitMinor = Money.fromMajor(event.limitMajor, shop.fractionDigits)?.minor ?: 0L
+                creditLimitMinor = Money.fromMajor(event.limitMajor, shop.fractionDigits)?.minor ?: 0L,
+                actorEmployeeId = currentActorId()
             )
             refreshAll()
         } catch (error: LedgerException) {
@@ -321,7 +396,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val party = repo.parties.get(event.id) ?: throw LedgerException("الحساب غير موجود")
             val shop = repo.shops.get(party.shopId) ?: state.value.shop
-            repo.updatePartyExtra(event.id, event.category, Money.fromMajor(event.limitMajor, shop?.fractionDigits ?: 2)?.minor ?: 0L)
+            repo.updatePartyExtra(event.id, event.category, Money.fromMajor(event.limitMajor, shop?.fractionDigits ?: 2)?.minor ?: 0L, actorEmployeeId = currentActorId())
             val updated = repo.parties.get(event.id)
             mutableState.update {
                 it.copy(selectedParty = updated ?: it.selectedParty, message = text(R.string.msg_updated))
@@ -342,14 +417,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     when (draft.type) {
                         DocType.SALE -> StaffPermission.RECORD_SALE
                         DocType.EXPENSE -> StaffPermission.RECORD_OUTFLOW
-                        else -> StaffPermission.VIEW_ACCOUNTS
+                        else -> StaffPermission.MANAGE_ACCOUNTS
                     }
                 )
             }
             var partyId = draft.partyId
             if (partyId == null && !draft.newPartyName.isNullOrBlank()) {
                 val kind = if (draft.type in listOf(DocType.SALE, DocType.COLLECT)) PartyKind.CUSTOMER else PartyKind.SUPPLIER
-                partyId = repo.addParty(shop.id, kind, draft.newPartyName.trim())
+                partyId = repo.addParty(shop.id, kind, draft.newPartyName.trim(), actorEmployeeId = actorId)
             }
             repo.postDocument(
                 shopId = shop.id,
@@ -383,13 +458,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (actorId != null) {
                 val permission = if (existing.type == DocType.SALE.name || existing.type == DocType.EXPENSE.name) {
                     if (existing.employeeId == actorId) StaffPermission.EDIT_OWN_SALE else StaffPermission.EDIT_ANY_SALE
-                } else StaffPermission.VIEW_ACCOUNTS
+                } else StaffPermission.MANAGE_ACCOUNTS
                 staff.requirePermission(actorId, permission)
             }
             var partyId = event.partyId
             if (partyId == null && !event.newPartyName.isNullOrBlank()) {
                 val kind = if (existing.type in listOf(DocType.SALE.name, DocType.COLLECT.name)) PartyKind.CUSTOMER else PartyKind.SUPPLIER
-                partyId = repo.addParty(existing.shopId, kind, event.newPartyName.trim())
+                partyId = repo.addParty(existing.shopId, kind, event.newPartyName.trim(), actorEmployeeId = actorId)
             }
             repo.updateDocument(
                 event.id,
@@ -418,7 +493,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (actorId != null) {
                 val permission = if (existing.type == DocType.SALE.name || existing.type == DocType.EXPENSE.name) {
                     if (existing.employeeId == actorId) StaffPermission.DELETE_OWN_SALE else StaffPermission.DELETE_ANY_SALE
-                } else StaffPermission.VIEW_ACCOUNTS
+                } else StaffPermission.MANAGE_ACCOUNTS
                 staff.requirePermission(actorId, permission)
             }
             repo.softDeleteDocument(id, actorEmployeeId = actorId)
@@ -437,7 +512,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (actorId != null) {
                 val permission = if (existing.type == DocType.SALE.name || existing.type == DocType.EXPENSE.name) {
                     if (existing.employeeId == actorId) StaffPermission.DELETE_OWN_SALE else StaffPermission.DELETE_ANY_SALE
-                } else StaffPermission.VIEW_ACCOUNTS
+                } else StaffPermission.MANAGE_ACCOUNTS
                 staff.requirePermission(actorId, permission)
             }
             repo.restoreDocument(id, actorEmployeeId = actorId)
@@ -446,6 +521,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } catch (error: LedgerException) {
             dynamicError(error)
         }
+    }
+
+    private fun loadInvoiceLines(id: Long) = viewModelScope.launch {
+        val lines = repo.documentLines.forDocument(id)
+        mutableState.update { it.copy(invoiceLines = lines) }
+    }
+
+    private fun clearInvoiceLines() {
+        mutableState.update { it.copy(invoiceLines = emptyList()) }
     }
 
     private fun shareReceipt(document: com.daftari.ledger.data.DocumentEntity) {
@@ -469,7 +553,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun closeParty(id: Long) = viewModelScope.launch {
         try {
-            repo.closePartyAccount(id)
+            repo.closePartyAccount(id, actorEmployeeId = currentActorId())
             refreshAll()
             mutableState.update {
                 it.copy(
@@ -486,7 +570,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun commitCsv() = viewModelScope.launch {
         val shop = state.value.shop ?: return@launch
         try {
-            val result = repo.importCsv(shop.id, state.value.csvPreview)
+            val result = repo.importCsv(shop.id, state.value.csvPreview, actorEmployeeId = currentActorId())
             refreshAll()
             mutableState.update {
                 it.copy(
@@ -500,9 +584,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun backupNow() = viewModelScope.launch {
-        val file = services.backupDatabase()
-        mutableState.update {
-            it.copy(shareFile = file, backups = services.listBackups(), message = text(R.string.msg_backup_ready))
+        try {
+            val file = services.backupDatabase()
+            mutableState.update {
+                it.copy(shareFile = file, backups = services.listBackups(), message = text(R.string.msg_backup_ready))
+            }
+        } catch (error: Exception) {
+            message(R.string.msg_backup_failed, error.message.orEmpty())
         }
     }
 
@@ -583,11 +671,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    private fun refreshAll() {
+    internal fun refreshAll() {
         refreshTotals()
         refreshInsights()
         loadSalesLedger()
         DaftariWidget.updateAll(getApplication())
+        AccountsBookWidget.updateAll(getApplication())
     }
 
     internal fun dynamicError(error: Exception) {

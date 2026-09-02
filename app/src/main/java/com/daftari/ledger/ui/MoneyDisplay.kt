@@ -3,6 +3,8 @@ package com.daftari.ledger.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
+import com.daftari.ledger.data.CurrencyEntity
+import com.daftari.ledger.domain.BookMoneyFormatter
 import com.daftari.ledger.domain.Money
 import java.util.Locale
 
@@ -31,5 +33,23 @@ internal fun UiState.displayMoney(minor: Long, locale: Locale): String {
         locale = effectiveLocale,
         currencyCode = shop?.currencyCode,
         includeCurrency = true
+    )
+}
+
+/**
+ * تنسيق مبلغ من دفتر الحسابات بعملته الخاصة (قد تكون عملة أنشأها المستخدم بلا رمز).
+ * يحترم نفس إعدادات الخصوصية والأرقام اللاتينية المستخدمة في بقية التطبيق.
+ */
+@Composable
+internal fun displayBookMoney(minor: Long, currency: CurrencyEntity?): String {
+    val settings = LocalMoneyDisplay.current
+    if (settings.hideBalances) return "••••"
+    val locale = if (settings.latinDigits) Locale.US else LocalConfiguration.current.locales[0]
+    return BookMoneyFormatter.format(
+        minor = minor,
+        fractionDigits = currency?.fractionDigits ?: 2,
+        symbol = currency?.symbol.orEmpty(),
+        latinDigits = settings.latinDigits,
+        locale = locale
     )
 }

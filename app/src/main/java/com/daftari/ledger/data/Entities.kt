@@ -229,7 +229,99 @@ data class SettingsEntity(
     val failedPinAttempts: Int = 0,
     val pinLockedUntil: Long = 0,
     val employeesEnabled: Boolean = false,
-    val currentEmployeeId: Long? = null
+    val currentEmployeeId: Long? = null,
+    /** العملة الافتراضية في دفتر الحسابات؛ null تعني عملة المحل ثم أول عملة. */
+    val defaultCurrencyId: Long? = null
+)
+
+/**
+ * عملة من عملات دفتر الحسابات. ليست محدودة بالعملات الرسمية: يمكن للمستخدم إنشاء
+ * عملة باسم يختاره ورمز يختاره (أو بلا رمز مثل «محلي»)، وعدد خانات عشرية مناسب.
+ */
+@Entity(tableName = "currencies", indices = [Index(value = ["code"], unique = true)])
+data class CurrencyEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val code: String,
+    val name: String,
+    val symbol: String = "",
+    val fractionDigits: Int = 2,
+    val archived: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+/** شخص في دفتر الحسابات (مستقل عن العملاء/الموردين في جدول parties). */
+@Entity(
+    tableName = "book_persons",
+    foreignKeys = [ForeignKey(entity = ShopEntity::class, parentColumns = ["id"], childColumns = ["shopId"], onDelete = ForeignKey.RESTRICT)],
+    indices = [Index("shopId"), Index("name")]
+)
+data class BookPersonEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val name: String,
+    val phone: String = "",
+    val notes: String = "",
+    /** العملة المعتادة لهذا الشخص؛ `null` يعني اتّباع عملة المحل/العملة الافتراضية. */
+    val currencyId: Long? = null,
+    val archived: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * عملية واحدة في دفتر الحسابات.
+ *
+ * - [kind]: نوع العملية المعروض في السجل (`LE` له / `DEBT` عليه / `SETTLEMENT` تسديد).
+ * - [side]: الجانب الفعلي المحفوظ عند التسجيل؛ التسديد يُحفظ بجانب الرصيد الذي قلّصه
+ *   حتى لا يتغير معنى العملية لو حُرّرت عمليات أقدم منها.
+ * - [amountMinor]: مقدار موجب دائمًا بالوحدة الصغرى لعملة [currencyId].
+ */
+@Entity(
+    tableName = "book_entries",
+    foreignKeys = [
+        ForeignKey(entity = BookPersonEntity::class, parentColumns = ["id"], childColumns = ["personId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = CurrencyEntity::class, parentColumns = ["id"], childColumns = ["currencyId"], onDelete = ForeignKey.RESTRICT)
+    ],
+    indices = [Index("personId"), Index("currencyId"), Index("occurredAt")]
+)
+data class BookEntryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val personId: Long,
+    val currencyId: Long,
+    val kind: String,
+    val side: String,
+    val amountMinor: Long,
+    val occurredAt: Long,
+    val details: String = "",
+    val opening: Boolean = false,
+    val createdByEmployeeId: Long? = null,
+    val deletedAt: Long? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/** رصيد شخص في عملة واحدة؛ الصافي = عليه − له (موجب = عليه، سالب = له). */
+data class BookBalanceRow(
+    val personId: Long,
+    val currencyId: Long,
+    val creditMinor: Long,
+    val debtMinor: Long,
+    val settledMinor: Long
+) {
+    val netMinor: Long get() = debtMinor - creditMinor
+}
+
+/** آخر حركة لكل شخص في الدفتر. */
+data class BookActivityRow(
+    val personId: Long,
+    val lastAt: Long?
+)
+
+/** رصيد افتتاحي يُسجَّل كعملية عادية عند إنشاء الشخص. */
+data class BookOpeningBalance(
+    val currencyId: Long,
+    val kind: String,
+    val amountMinor: Long
 )
 
 @Entity(
@@ -329,7 +421,7 @@ data class AgingDocumentRow(
     val invoiceOccurredAt: Long?
 )
 
-/** آخر حركة بيع/تحصيل محسوبة في SQL بدل استعلام مستقل لكل عميل. */
+/** أقدم تاريخ استحقاق لبيع آجل غير مسدَّد (محسوب في SQL بدل استعلام مستقل لكل عميل). */
 data class PartyLastActivityRow(
     @Embedded val party: PartyEntity,
     val lastDate: Long?
@@ -366,6 +458,52 @@ data class AgingRow(
     val b31: Long,
     val b61: Long,
     val b90: Long
+)
+
+@Entity(
+    tableName = "items",
+    foreignKeys = [ForeignKey(entity = ShopEntity::class, parentColumns = ["id"], childColumns = ["shopId"], onDelete = ForeignKey.RESTRICT)],
+    indices = [Index("shopId"), Index(value = ["shopId", "sku"]), Index("name")]
+)
+data class ItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shopId: Long,
+    val name: String,
+    val sku: String = "",
+    val unit: String = "قطعة",
+    val sellPriceMinor: Long = 0,
+    val costPriceMinor: Long = 0,
+    val qtyMilli: Long = 0,
+    val reorderQtyMilli: Long = 0,
+    val trackStock: Boolean = true,
+    val archived: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "document_lines",
+    foreignKeys = [
+        ForeignKey(entity = DocumentEntity::class, parentColumns = ["id"], childColumns = ["documentId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = ItemEntity::class, parentColumns = ["id"], childColumns = ["itemId"], onDelete = ForeignKey.RESTRICT)
+    ],
+    indices = [Index("documentId"), Index("itemId")]
+)
+data class DocumentLineEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val documentId: Long,
+    val itemId: Long,
+    val itemName: String,
+    val qtyMilli: Long,
+    val unitPriceMinor: Long,
+    val lineTotalMinor: Long,
+    val trackStock: Boolean = true
+)
+
+data class InvoiceLineInput(
+    val itemId: Long,
+    val qtyMilli: Long,
+    val unitPriceMinor: Long
 )
 
 data class CsvPreviewRow(

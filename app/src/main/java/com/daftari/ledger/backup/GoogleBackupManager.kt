@@ -34,7 +34,7 @@ class GoogleBackupManager(
         check(settings.linked) { "Link a Google Account first" }
         preferences.setStatus(BackupRunStatus.RUNNING)
         val snapshot = backupManager.createValidatedSnapshot("google-")
-        val inspection = backupManager.inspectDatabase(snapshot)
+        val inspection = BackupManager.inspectDatabase(snapshot)
         val databaseHash = BackupArchive.sha256(snapshot)
         try {
             val existing = drive.list(accessToken).sortedByDescending { it.createdAt }
@@ -85,7 +85,7 @@ class GoogleBackupManager(
             drive.download(accessToken, remote, archive)
             val extracted = BackupArchive.extractAndVerify(archive, File(directory, "extracted"))
             if (extracted.manifest.databaseVersion > AppDb.VERSION) error("Update Daftari before restoring this backup")
-            backupManager.inspectDatabase(extracted.database)
+            BackupManager.inspectDatabase(extracted.database)
             backupManager.restoreFrom(extracted.database)
             val restoredDb = AppDb.get(context)
             restoredDb.settings().get()?.let { current ->

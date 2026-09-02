@@ -11,6 +11,7 @@ import com.daftari.ledger.data.CategoryTotal
 import com.daftari.ledger.data.CsvPreviewRow
 import com.daftari.ledger.data.DatabaseHealthCheck
 import com.daftari.ledger.data.DocumentEntity
+import com.daftari.ledger.data.DocumentLineEntity
 import com.daftari.ledger.data.LedgerRepository
 import com.daftari.ledger.data.PartyEntity
 import com.daftari.ledger.data.ShopEntity
@@ -52,6 +53,7 @@ data class UiState(
     val hasPin: Boolean = false,
     val biometric: Boolean = false,
     val autoBackup: Boolean = false,
+    val backupKeep: Int = 7,
     val hideBalances: Boolean = false,
     val latinDigits: Boolean = true,
     val pinLockedUntil: Long = 0,
@@ -74,9 +76,12 @@ data class UiState(
     val salesLedger: SalesLedgerState = SalesLedgerState(),
     val employees: EmployeeUiState = EmployeeUiState(),
     val googleBackup: GoogleBackupUiState = GoogleBackupUiState(),
+    val inventory: InventoryUiState = InventoryUiState(),
+    val book: AccountsBookUiState = AccountsBookUiState(),
     val healthIssues: List<DatabaseHealthCheck.Issue> = emptyList(),
     val healthCheckedAt: Long = 0,
-    val restartRequested: Boolean = false
+    val restartRequested: Boolean = false,
+    val invoiceLines: List<DocumentLineEntity> = emptyList()
 )
 
 data class PartyStats(
@@ -133,6 +138,8 @@ sealed interface UiEvent {
     ) : UiEvent
     data class DeleteDocument(val id: Long) : UiEvent
     data object UndoDeleteDocument : UiEvent
+    data class LoadInvoiceLines(val documentId: Long) : UiEvent
+    data object ClearInvoiceLines : UiEvent
     data class ShareReceipt(val document: DocumentEntity) : UiEvent
     data class Unlock(val pin: String) : UiEvent
     data object BiometricUnlocked : UiEvent
@@ -155,6 +162,8 @@ sealed interface UiEvent {
     data object RefreshBackups : UiEvent
     data class RestoreBackup(val file: File, val password: String?) : UiEvent
     data class BackupEncrypted(val password: String) : UiEvent
+    data class SetBackupRetention(val keep: Int) : UiEvent
+    data class DeleteBackup(val file: File) : UiEvent
     data class OpenParty(val party: PartyEntity) : UiEvent
     data object ClosePartyDialog : UiEvent
     data class ShareStatement(val party: PartyEntity) : UiEvent
@@ -213,6 +222,44 @@ sealed interface UiEvent {
     ) : UiEvent
     data class ShareSalesDay(val dayStart: Long, val detailed: Boolean) : UiEvent
     data class ExportSalesPeriod(val from: Long, val to: Long, val format: String) : UiEvent
+
+    /**
+     * يُغلق أي شاشة ثانوية مفتوحة فوق التبويبات (دفتر الحسابات، المخزون، النسخ السحابي،
+     * الموظفون). يستعمله شريط التنقّل حتى يظهر التبويب المختار فعلًا، وزر الرجوع.
+     */
+    data object CloseSecondaryScreens : UiEvent
+
+    data object OpenAccountsBook : UiEvent
+    data object CloseAccountsBook : UiEvent
+    data class SearchAccountsBook(val query: String) : UiEvent
+    data class SelectBookPerson(val id: Long) : UiEvent
+    data object CloseBookPerson : UiEvent
+    data class SetBookPersonEditor(val editor: BookPersonEditor?) : UiEvent
+    data class SaveBookPerson(val draft: BookPersonDraft) : UiEvent
+    data class ArchiveBookPerson(val id: Long) : UiEvent
+    data class OpenBookEntrySheet(
+        val personId: Long,
+        val presetKind: com.daftari.ledger.domain.BookEntryKind? = null,
+        val editEntryId: Long? = null
+    ) : UiEvent
+    data object CloseBookEntrySheet : UiEvent
+    data object UndoDeleteBookEntry : UiEvent
+    data class SaveBookEntry(val draft: BookEntryDraft) : UiEvent
+    data class DeleteBookEntry(val id: Long) : UiEvent
+    data object ShareBookStatement : UiEvent
+    data object ShareBookStatementPdf : UiEvent
+    data class SetBookCurrencyManager(val open: Boolean) : UiEvent
+    data class SetBookCurrencyEditor(val draft: BookCurrencyDraft?) : UiEvent
+    data class SaveBookCurrency(val draft: BookCurrencyDraft) : UiEvent
+    data class ArchiveBookCurrency(val id: Long) : UiEvent
+    data class SetDefaultBookCurrency(val id: Long) : UiEvent
+
+    data object OpenInventory : UiEvent
+    data object CloseInventory : UiEvent
+    data class SaveItem(val draft: ItemDraft) : UiEvent
+    data class ArchiveItem(val id: Long) : UiEvent
+    data class SetInvoiceSheet(val open: Boolean, val type: DocType = DocType.SALE) : UiEvent
+    data class SaveInvoice(val draft: InvoiceDraft) : UiEvent
 
     data object OpenEmployees : UiEvent
     data object CloseEmployees : UiEvent
