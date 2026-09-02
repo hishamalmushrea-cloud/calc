@@ -120,7 +120,7 @@ internal fun DocsScreen(state: UiState, onEvent: (UiEvent) -> Unit, padding: Pad
                             Box(
                                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
-                            ) { Text(documentIcon(document.type), fontSize = 18.sp) }
+                            ) { Icon(documentIcon(document.type), contentDescription = null, tint = color, modifier = Modifier.size(22.dp)) }
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(documentTypeLabel(document.type), fontWeight = FontWeight.SemiBold)
